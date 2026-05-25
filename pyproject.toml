@@ -1,0 +1,15 @@
+[project]
+name = "teleport-overlay-tools"
+version = "0.0.0"
+description = "Build orchestration tooling for the teleport Chromium overlay"
+requires-python = ">=3.13"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/tests"]
+pythonpath = ["scripts"]
+
+[tool.uv]
+package = false

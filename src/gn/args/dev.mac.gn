@@ -1,0 +1,13 @@
+# Dev build args for the teleport overlay on macOS (Apple Silicon).
+# Fast iteration: release-ish + component build + minimal symbols.
+target_os = "mac"
+target_cpu = "arm64"
+
+is_debug = false
+is_component_build = true
+symbol_level = 1
+blink_symbol_level = 0
+v8_symbol_level = 0
+
+is_official_build = false
+use_remoteexec = false

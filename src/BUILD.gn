@@ -1,0 +1,21 @@
+# The //teleport additive module, compiled into chrome via a minimal upstream
+# BUILD.gn dep patch (see patches/). A standalone test() target keeps unit
+# tests buildable without patching upstream test targets.
+import("//testing/test.gni")
+
+source_set("teleport") {
+  sources = [
+    "browser/teleport_startup.cc",
+    "browser/teleport_startup.h",
+  ]
+  deps = [ "//base" ]
+}
+
+test("teleport_unittests") {
+  sources = [ "browser/teleport_startup_unittest.cc" ]
+  deps = [
+    ":teleport",
+    "//base/test:run_all_unittests",
+    "//testing/gtest",
+  ]
+}

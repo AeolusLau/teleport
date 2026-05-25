@@ -1,0 +1,21 @@
+diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
+index a8ebab6e15ac1..e03d446e2a91c 100644
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/chrome_browser_main.h"
++#include "teleport/browser/teleport_startup.h"  // teleport overlay
+ 
+ #include <memory>
+ #include <string>
+@@ -1440,6 +1441,8 @@ void ChromeBrowserMainParts::PostCreateThreads() {
+ int ChromeBrowserMainParts::PreMainMessageLoopRun() {
+   TRACE_EVENT0("startup", "ChromeBrowserMainParts::PreMainMessageLoopRun");
+ 
++  teleport::LogStartupBanner();  // teleport overlay
++
+   result_code_ = PreMainMessageLoopRunImpl();
+ 
+   for (auto& chrome_extra_part : chrome_extra_parts_) {

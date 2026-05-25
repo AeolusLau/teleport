@@ -1,0 +1,11 @@
+# Chromium checkout (managed by depot_tools / gclient)
+/chromium
+
+# Build outputs (build/ is a symlink -> chromium/src/out; no trailing slash so the symlink is ignored too)
+/build
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

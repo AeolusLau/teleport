@@ -1,0 +1,12 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 97b17f850c30d..26228663c1ec2 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -1386,6 +1386,7 @@ static_library("browser") {
+   ]
+ 
+   deps = [
++    "//teleport",
+     ":active_use_util",
+     ":browser_features",
+     ":browser_process",
