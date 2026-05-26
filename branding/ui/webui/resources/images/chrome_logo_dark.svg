@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SOURCE FILE. Hand-edit this. All other branding/** files are derived from
+     this SVG by scripts/generate_icons.sh; do NOT hand-edit the derivatives. -->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="yinGradient" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </radialGradient>
+
+    <radialGradient id="yangGradient" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </radialGradient>
+
+    <radialGradient id="glossGradient" cx="30%" cy="30%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.1" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12" />
+      <feOffset dx="0" dy="8" result="offsetblur" />
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3" />
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g transform="translate(512, 512)">
+
+    <circle cx="0" cy="0" r="440" fill="white" />
+
+    <g>
+      <path d="M 0,-400 A 400,400 0 0,0 0,400 A 200,200 0 0,1 0,0 A 200,200 0 0,0 0,-400 Z" fill="url(#yangGradient)" />
+
+      <path d="M 0,-400 A 400,400 0 0,1 0,400 A 200,200 0 0,1 0,0 A 200,200 0 0,0 0,-400 Z" fill="url(#yinGradient)" />
+
+      <circle cx="0" cy="-200" r="60" fill="url(#yinGradient)" />
+
+      <circle cx="0" cy="200" r="60" fill="url(#yangGradient)" />
+    </g>
+
+    <ellipse cx="0" cy="192" rx="360" ry="240" fill="url(#glossGradient)" opacity="0.6" />
+
+  </g>
+</svg>

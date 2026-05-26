@@ -1,0 +1,13 @@
+diff --git a/chrome/app/app-Info.plist b/chrome/app/app-Info.plist
+index 6fada0a2b1a1f..632d8fc73e973 100644
+--- a/chrome/app/app-Info.plist
++++ b/chrome/app/app-Info.plist
+@@ -149,8 +149,6 @@
+ 	<string>${EXECUTABLE_NAME}</string>
+ 	<key>CFBundleIconFile</key>
+ 	<string>app.icns</string>
+-	<key>CFBundleIconName</key>
+-	<string>AppIcon</string>
+ 	<key>CFBundleIdentifier</key>
+ 	<string>${CHROMIUM_BUNDLE_ID}</string>
+ 	<key>CFBundleInfoDictionaryVersion</key>

@@ -6,6 +6,7 @@ order-independent (sorted only for reproducibility). Idempotent and fail-fast.
 from __future__ import annotations
 
 import argparse
+import filecmp
 import shutil
 import subprocess
 import sys
@@ -49,7 +50,14 @@ def apply_branding(branding_dir: Path, src: Path) -> None:
             continue
         dest = src / f.relative_to(branding_dir)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(f, dest)  # whole-file overlay; naturally idempotent
+        # Skip unchanged files (avoid needless rebuilds). Otherwise copy CONTENT
+        # only via copyfile — NOT copy2: copy2 preserves the source mtime, and a
+        # stale mtime makes ninja consider the asset unchanged and skip compiling
+        # it into the binary. copyfile gives the dest a current mtime so ninja
+        # rebuilds it.
+        if dest.exists() and filecmp.cmp(str(f), str(dest), shallow=False):
+            continue
+        shutil.copyfile(str(f), str(dest))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
     if branding.exists():
         print("overlay branding/")
         apply_branding(branding, src)
+    import branding_strings
+    branding_strings.main()
     print("overlay applied.")
     return 0
 

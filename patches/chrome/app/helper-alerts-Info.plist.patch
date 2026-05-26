@@ -1,0 +1,13 @@
+diff --git a/chrome/app/helper-alerts-Info.plist b/chrome/app/helper-alerts-Info.plist
+index 13454227b584c..a1bb91f88f9b4 100644
+--- a/chrome/app/helper-alerts-Info.plist
++++ b/chrome/app/helper-alerts-Info.plist
+@@ -6,8 +6,6 @@
+ 	<string>${CHROMIUM_BUNDLE_ID}.framework.AlertNotificationService</string>
+ 	<key>CFBundleIconFile</key>
+ 	<string>app.icns</string>
+-	<key>CFBundleIconName</key>
+-	<string>AppIcon</string>
+ 	<key>NSUserNotificationAlertStyle</key>
+ 	<string>alert</string>
+ </dict>

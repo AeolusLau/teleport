@@ -1,9 +1,44 @@
+import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
 
 import apply_patches
+
+
+def test_apply_branding_overwrites_with_fresh_mtime(tmp_path: Path):
+    # A stale dest mtime makes ninja skip recompiling, so apply_branding must NOT
+    # preserve the source's (old) mtime — the overwritten file must be "fresh".
+    branding = tmp_path / "branding" / "sub"
+    branding.mkdir(parents=True)
+    srcf = branding / "logo.png"
+    srcf.write_bytes(b"NEW-LOGO")
+    old = time.time() - 100_000
+    os.utime(srcf, (old, old))  # source is intentionally old
+    src = tmp_path / "src" / "sub"
+    src.mkdir(parents=True)
+    dest = (tmp_path / "src" / "sub" / "logo.png")
+    dest.write_bytes(b"OLD-LOGO")
+    apply_patches.apply_branding(tmp_path / "branding", tmp_path / "src")
+    assert dest.read_bytes() == b"NEW-LOGO"
+    assert dest.stat().st_mtime > old + 1000  # fresh mtime, not the source's old one
+
+
+def test_apply_branding_skips_identical_file(tmp_path: Path):
+    branding = tmp_path / "branding"
+    branding.mkdir()
+    (branding / "same.txt").write_bytes(b"X")
+    src = tmp_path / "src"
+    src.mkdir()
+    dest = src / "same.txt"
+    dest.write_bytes(b"X")
+    old = time.time() - 100_000
+    os.utime(dest, (old, old))
+    apply_patches.apply_branding(branding, src)
+    # identical content -> not rewritten -> mtime unchanged (no needless rebuild)
+    assert abs(dest.stat().st_mtime - old) < 2
 
 
 def _git(repo: Path, *args: str) -> str:

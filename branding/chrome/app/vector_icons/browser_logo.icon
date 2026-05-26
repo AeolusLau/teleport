@@ -1,0 +1,25 @@
+// Copyright 2026 BeanSec.
+// Teleport (闪现) product mark — monochrome yin-yang. Rendered in a single
+// tinted color, so the two halves read as a filled "yang" teardrop (outer edge
+// on the LEFT, matching the brand) plus a punched hole in the upper head and a
+// filled dot in the lower head. Orientation mirrors the approved
+// cr:chrome-product glyph. Replaces the upstream Chromium "C" mark.
+// NOTE: the .icon DSL has no preview — verify visually.
+
+CANVAS_DIMENSIONS, 16,
+// yang teardrop (filled): outer LEFT semicircle + S-curve back up the middle.
+MOVE_TO, 8, 1.5,
+ARC_TO, 6.5, 6.5, 0, 0, 0, 8, 14.5,
+ARC_TO, 3.25, 3.25, 0, 0, 1, 8, 8,
+ARC_TO, 3.25, 3.25, 0, 0, 0, 8, 1.5,
+CLOSE,
+// punched hole (reverse winding) in the upper (yang / filled) head.
+MOVE_TO, 8, 3.45,
+ARC_TO, 1.3, 1.3, 0, 1, 0, 8, 6.05,
+ARC_TO, 1.3, 1.3, 0, 1, 0, 8, 3.45,
+CLOSE,
+// filled dot in the lower (yin / empty) head.
+MOVE_TO, 8, 9.95,
+ARC_TO, 1.3, 1.3, 0, 1, 1, 8, 12.55,
+ARC_TO, 1.3, 1.3, 0, 1, 1, 8, 9.95,
+CLOSE,
