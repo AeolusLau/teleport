@@ -7,15 +7,25 @@ source_set("teleport") {
   sources = [
     "browser/teleport_startup.cc",
     "browser/teleport_startup.h",
+    "common/teleport_url_scheme.cc",
+    "common/teleport_url_scheme.h",
   ]
-  deps = [ "//base" ]
+  deps = [
+    "//base",
+    "//content/public/common",
+    "//url",
+  ]
 }
 
 test("teleport_unittests") {
-  sources = [ "browser/teleport_startup_unittest.cc" ]
+  sources = [
+    "browser/teleport_startup_unittest.cc",
+    "common/teleport_url_scheme_unittest.cc",
+  ]
   deps = [
     ":teleport",
     "//base/test:run_all_unittests",
     "//testing/gtest",
+    "//url",
   ]
 }

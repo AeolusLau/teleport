@@ -62,3 +62,19 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 - macOS 顶部菜单 / Finder 显示名当前为 `Teleport`(CFBundleDisplayName=PRODUCT_FULLNAME)。若要菜单也显示「闪现」,需单独覆盖 `CFBundleDisplayName`——后续细化。
 - **纯 "Chrome"(非 "Chromium")文案残留**(如 "Chrome Apps"):本轮只替换 "Chromium";是否一并把 "Chrome"→Teleport 属后续决策(易过度替换)。
 - Windows / Linux 构建、CI、Windows `.ico` / Linux 图标、正式 wordmark:后续 phase。
+
+## teleport:// scheme 别名
+
+启动:`open -n out/mac/arm64/release/Teleport.app --args --disable-field-trial-config`。
+
+| # | 检查 | 期望 |
+|---|---|---|
+| 1 | gtest `teleport_unittests --gtest_filter='TeleportUrlScheme*'` | 6 个全过 |
+| 2 | 输入 `teleport://settings`、`teleport://version`、`teleport://history` | 能打开,内容与 chrome:// 版本一致 |
+| 3 | 输入 `chrome://settings` | 能打开,地址栏显示 `teleport://settings` |
+| 4 | 点击页面内部 `chrome://` 链接 / 打开 `chrome://` 书签 | 地址栏显示 `teleport://`;复制地址栏 URL 得到 `teleport://` |
+| 5 | `teleport://teleport-urls`(或 `chrome://chrome-urls`) | 打开 URL 目录页,地址栏显 `teleport://teleport-urls`;列表标签显 `teleport://`,点击可达 |
+| 6 | DevTools / `chrome://inspect` 远程调试 | 仍正常(未别名 `devtools://`) |
+| 7 | 新标签页 | 地址栏仍为空 |
+
+> 已知限制(本期不做):`teleport://help` 不会重定向到 `settings/help`(短路跳过 `HandleWebUI` 的 host 改写),改用 `teleport://settings/help`;地址栏以外的 URL 显示面(页面信息气泡、状态栏)、chrome-urls 以外的页内 `chrome://` 文本均为后续增量。

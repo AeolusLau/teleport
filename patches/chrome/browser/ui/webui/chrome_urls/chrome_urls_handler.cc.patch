@@ -1,0 +1,25 @@
+diff --git a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
+index 722391dc04be6..5205b4b75bd46 100644
+--- a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
++++ b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
+@@ -16,6 +16,7 @@
+ #include "content/public/browser/internal_webui_config.h"
+ #include "content/public/browser/webui_config_map.h"
+ #include "content/public/common/url_constants.h"
++#include "teleport/common/teleport_url_scheme.h"
+ #include "url/gurl.h"
+ 
+ namespace chrome_urls {
+@@ -95,6 +96,12 @@ void ChromeUrlsHandler::GetUrls(GetUrlsCallback callback) {
+   }
+   // Sort the URLs.
+   std::sort(webui_urls.begin(), webui_urls.end(), &CompareWebuiUrlInfos);
++  // teleport overlay: present chrome:// directory entries as teleport://
++  // (sorting above CHECK-requires chrome://, so rewrite afterwards;
++  // chrome-untrusted:// passes through unchanged).
++  for (auto& url_info : webui_urls) {
++    teleport::RewriteChromeToTeleport(&url_info->url, /*browser_context=*/nullptr);
++  }
+ 
+   chrome_urls::mojom::ChromeUrlsDataPtr result(
+       chrome_urls::mojom::ChromeUrlsData::New());

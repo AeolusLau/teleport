@@ -1,0 +1,26 @@
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index f823433796c5c..b94b8260afabb 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -753,6 +753,8 @@
+ #include "chrome/common/request_header_integrity/request_header_integrity_url_loader_throttle.h"  // nogncheck crbug.com/1125897
+ #endif
+ 
++#include "teleport/common/teleport_url_scheme.h"
++
+ #include "base/win/windows_h_disallowed.h"
+ 
+ using blink::mojom::EffectiveConnectionType;
+@@ -5064,6 +5066,12 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
+     part->BrowserURLHandlerCreated(handler);
+   }
+ 
++  // teleport overlay: rewrite teleport://x -> chrome://x for navigation, and
++  // keep a typed teleport:// URL shown as teleport:// (virtual URL). Inserted
++  // before the chrome:// handlers so the rewritten URL still loads its WebUI.
++  handler->AddHandlerPair(&teleport::RewriteTeleportToChrome,
++                          &teleport::RewriteChromeToTeleport);
++
+   // Handler to rewrite chrome://about and chrome://sync URLs.
+   handler->AddHandlerPair(&HandleChromeAboutAndChromeSyncRewrite,
+                           BrowserURLHandler::null_handler());

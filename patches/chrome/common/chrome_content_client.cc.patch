@@ -1,0 +1,25 @@
+diff --git a/chrome/common/chrome_content_client.cc b/chrome/common/chrome_content_client.cc
+index 12b399993afcd..1d7a5a9530869 100644
+--- a/chrome/common/chrome_content_client.cc
++++ b/chrome/common/chrome_content_client.cc
+@@ -59,6 +59,7 @@
+ #include "ui/base/resource/resource_bundle.h"
+ #include "ui/base/resource/resource_scale_factor.h"
+ #include "url/url_constants.h"
++#include "teleport/common/teleport_url_scheme.h"
+ 
+ #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+     BUILDFLAG(IS_CHROMEOS)
+@@ -201,6 +202,12 @@ static const char* const kChromeStandardURLSchemes[] = {
+ };
+ 
+ void ChromeContentClient::AddAdditionalSchemes(Schemes* schemes) {
++  // teleport overlay: register teleport:// as a first-class alias of chrome://.
++  schemes->standard_schemes.push_back(teleport::kTeleportScheme);
++  schemes->secure_schemes.push_back(teleport::kTeleportScheme);
++  schemes->cors_enabled_schemes.push_back(teleport::kTeleportScheme);
++  schemes->service_worker_schemes.push_back(teleport::kTeleportScheme);
++
+   for (auto* standard_scheme : kChromeStandardURLSchemes)
+     schemes->standard_schemes.push_back(standard_scheme);
+ 

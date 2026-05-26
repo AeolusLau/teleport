@@ -1,0 +1,12 @@
+diff --git a/chrome/common/BUILD.gn b/chrome/common/BUILD.gn
+index 1a692fe440945..0b03d7a44e8e1 100644
+--- a/chrome/common/BUILD.gn
++++ b/chrome/common/BUILD.gn
+@@ -258,6 +258,7 @@ static_library("common_lib") {
+   ]
+ 
+   deps = [
++    "//teleport",
+     "//components/cdm/common:buildflags",
+     "//components/crash/core/app",
+     "//components/google/core/common",

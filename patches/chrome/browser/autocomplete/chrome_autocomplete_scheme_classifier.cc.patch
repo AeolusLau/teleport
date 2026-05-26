@@ -1,0 +1,18 @@
+diff --git a/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc b/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
+index 2f7ea50b69a46..509e9e7ba3348 100644
+--- a/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
++++ b/chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.cc
+@@ -68,6 +68,13 @@ ChromeAutocompleteSchemeClassifier::GetInputTypeForScheme(
+   if (scheme.empty()) {
+     return metrics::OmniboxInputType::EMPTY;
+   }
++  // teleport overlay: teleport:// is our display alias for chrome://. Classify a
++  // typed "teleport://..." as a navigable URL (a BrowserURLHandler rewrites it
++  // to chrome://) instead of letting the omnibox treat it as a search query.
++  // (Literal kept in sync with teleport::kTeleportScheme.)
++  if (base::EqualsCaseInsensitiveASCII(scheme, "teleport")) {
++    return metrics::OmniboxInputType::URL;
++  }
+   if (base::IsStringASCII(scheme) &&
+       (ProfileIOData::IsHandledProtocol(scheme) ||
+        base::EqualsCaseInsensitiveASCII(scheme, content::kViewSourceScheme) ||
