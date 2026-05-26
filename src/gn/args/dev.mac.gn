@@ -12,6 +12,15 @@ v8_symbol_level = 0
 is_official_build = false
 use_remoteexec = false
 
+# Upstream Blink ships a shape-cache consistency self-check behind
+# EXPENSIVE_DCHECKS (ng_shape_cache.h, upstream crbug.com/486945341) that
+# false-fires on CJK text with font fallback and aborts the renderer
+# ("Aw, Snap") on pages like baidu.com. is_official_build=false otherwise
+# defaults enable_expensive_dchecks to true. Drop only the expensive
+# verification class here; regular DCHECKs stay on. Not an overlay bug, and
+# absent from official builds (which build with enable_expensive_dchecks=false).
+enable_expensive_dchecks = false
+
 # Proprietary / platform audio-video codecs. proprietary_codecs enables
 # Chromium's gated codec paths; ffmpeg_branding="Chrome" ships the bundled
 # FFmpeg with the proprietary decoders (H.264/AVC, AAC, MP3). The enable_platform_*

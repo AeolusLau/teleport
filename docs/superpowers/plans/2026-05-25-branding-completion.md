@@ -469,8 +469,8 @@ Run:
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src" && git checkout -- chrome/
 python <repo>/scripts/apply_patches.py
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'
-autoninja -C out/mac/arm64/release chrome
+gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
+autoninja -C out/mac/arm64/dev chrome
 ```
 Expected: 构建成功;产物 `Teleport.app`。
 
@@ -478,7 +478,7 @@ Expected: 构建成功;产物 `Teleport.app`。
 
 Run:
 ```bash
-APP=out/mac/arm64/release/Teleport.app
+APP=out/mac/arm64/dev/Teleport.app
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"   # com.beansec.Teleport
 cmp "$APP/Contents/Resources/app.icns" <repo>/branding/chrome/app/theme/chromium/mac/app.icns && echo icon-ok
 ```

@@ -735,7 +735,7 @@ v8_symbol_level = 0
 is_official_build = false
 use_remoteexec = false
 ```
-> 引用方式:`gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'`。发布版另建模板(后续 phase)。
+> 引用方式:`gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'`。发布版另建模板(后续 phase)。
 
 - [ ] **Step 2: Commit**
 
@@ -778,7 +778,7 @@ Expected: `teleport -> .../src`、`out -> .../build`;两个版本号一致。
 
 - [ ] **Step 3: 验证 GN 是否接受被链接的源码目录(spec §6 风险点)**
 
-Run: `cd chromium/src && gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'`
+Run: `cd chromium/src && gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'`
 Expected: 成功生成,无「source file not inside source root / outside root」类报错。
 > 若失败:启用 spec §6 退路——改为把 `<repo>/src` 拷贝/受管检出成 `chromium/src/teleport` 真实目录(改 `bootstrap.py` 的源码链接为复制),只保留 `out` 链接;记录该决策。
 
@@ -938,7 +938,7 @@ git commit -m "feat: rebrand to 闪现 (display name, icon, bundle name)"
 Run:
 ```bash
 python scripts/apply_patches.py
-cd chromium/src && gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'
+cd chromium/src && gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 ```
 Expected: 成功。
 
@@ -946,23 +946,23 @@ Expected: 成功。
 
 Run(在 `chromium/src`):
 ```bash
-autoninja -C out/mac/arm64/release teleport_unittests
-out/mac/arm64/release/teleport_unittests --gtest_filter='TeleportStartupTest.*'
+autoninja -C out/mac/arm64/dev teleport_unittests
+out/mac/arm64/dev/teleport_unittests --gtest_filter='TeleportStartupTest.*'
 ```
 Expected: `[  PASSED  ] 1 test.`
 > 若想看「红」:临时把 `StartupBanner()` 改为不含 `M148` 再跑,确认失败,再改回。
 
 - [ ] **Step 3: 构建 chrome**
 
-Run(在 `chromium/src`): `autoninja -C out/mac/arm64/release chrome`
-Expected: 构建成功;产物在 `<repo>/build/mac/arm64/release/`(经 out 链接)。
+Run(在 `chromium/src`): `autoninja -C out/mac/arm64/dev chrome`
+Expected: 构建成功;产物在 `<repo>/build/mac/arm64/dev/`(经 out 链接)。
 
 - [ ] **Step 4: 启动并校验 banner 与品牌**
 
 Run:
 ```bash
-ls ../../build/mac/arm64/release/Chromium.app  # 经 out 链接可见
-out/mac/arm64/release/Chromium.app/Contents/MacOS/* --no-sandbox 2>&1 | grep "\[teleport\] 闪现 overlay active (M148)"
+ls ../../build/mac/arm64/dev/Chromium.app  # 经 out 链接可见
+out/mac/arm64/dev/Chromium.app/Contents/MacOS/* --no-sandbox 2>&1 | grep "\[teleport\] 闪现 overlay active (M148)"
 ```
 Expected: 命中 banner 行;应用显示名为「闪现」(关于页 / Dock),磁盘为 `Teleport.app` 系列(ASCII)。
 

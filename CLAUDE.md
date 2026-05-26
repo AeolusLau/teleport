@@ -63,13 +63,13 @@ python scripts/apply_patches.py              # 应用 overlay(幂等)
 
 # 构建(首次数小时;Siso、本地无 RBE)
 cd "$TELEPORT_CHROMIUM_DIR/src"
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'
-autoninja -C out/mac/arm64/release chrome    # 产物 Teleport.app(亦在 <repo>/build/mac/arm64/release/)
+gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
+autoninja -C out/mac/arm64/dev chrome    # 产物 Teleport.app(亦在 <repo>/build/mac/arm64/dev/)
 
 # 测试
 uv run pytest                                # 工具脚本单测(仓库根运行)
-autoninja -C out/mac/arm64/release teleport_unittests && \
-  "$TELEPORT_CHROMIUM_DIR"/src/out/mac/arm64/release/teleport_unittests   # //teleport gtest
+autoninja -C out/mac/arm64/dev teleport_unittests && \
+  "$TELEPORT_CHROMIUM_DIR"/src/out/mac/arm64/dev/teleport_unittests   # //teleport gtest
 
 python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重生成图标
 # 冒烟验证清单见 scripts/smoke_check.md

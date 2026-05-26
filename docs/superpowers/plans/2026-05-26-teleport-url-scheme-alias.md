@@ -26,7 +26,7 @@
 | `patches/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc.patch` | 新建 | chrome-urls 列表标签显示 `teleport://` |
 | `scripts/smoke_check.md` | 改 | 增补 scheme 别名冒烟项 |
 
-**约定**:`src/` 下是 overlay 源码(真实文件,提交进分支);上游改动走 `patches/`(`git diff` 生成、一文件一 patch、镜像上游路径)。环境变量 `TELEPORT_CHROMIUM_DIR=/Users/liulichao/workspace/teleport/chromium`。构建产物在 `out/mac/arm64/release`。
+**约定**:`src/` 下是 overlay 源码(真实文件,提交进分支);上游改动走 `patches/`(`git diff` 生成、一文件一 patch、镜像上游路径)。环境变量 `TELEPORT_CHROMIUM_DIR=/Users/liulichao/workspace/teleport/chromium`。构建产物在 `out/mac/arm64/dev`。
 
 ---
 
@@ -251,8 +251,8 @@ test("teleport_unittests") {
 
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src"
-autoninja -C out/mac/arm64/release teleport_unittests
-./out/mac/arm64/release/teleport_unittests --gtest_filter='TeleportUrlScheme*'
+autoninja -C out/mac/arm64/dev teleport_unittests
+./out/mac/arm64/dev/teleport_unittests --gtest_filter='TeleportUrlScheme*'
 ```
 Expected: 全部 PASS(6 个 `TeleportUrlSchemeTest.*`)。
 
@@ -307,8 +307,8 @@ grep -n "chrome_content_client.cc" "$TELEPORT_CHROMIUM_DIR/src/chrome/common/BUI
 
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src"
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'
-autoninja -C out/mac/arm64/release chrome
+gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
+autoninja -C out/mac/arm64/dev chrome
 ```
 Expected: 编译链接通过(本步仅验证 scheme 登记不破坏构建)。
 
@@ -372,8 +372,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src"
-autoninja -C out/mac/arm64/release chrome
-open -n ./out/mac/arm64/release/Teleport.app --args --disable-field-trial-config
+autoninja -C out/mac/arm64/dev chrome
+open -n ./out/mac/arm64/dev/Teleport.app --args --disable-field-trial-config
 ```
 人工验证:地址栏输入 `teleport://settings`、`teleport://version`、`teleport://history` 均能打开对应页面(内容与 `chrome://` 版本一致)。
 
@@ -442,8 +442,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src"
-autoninja -C out/mac/arm64/release chrome
-open -n ./out/mac/arm64/release/Teleport.app --args --disable-field-trial-config
+autoninja -C out/mac/arm64/dev chrome
+open -n ./out/mac/arm64/dev/Teleport.app --args --disable-field-trial-config
 ```
 人工验证:输入 `chrome://settings` → 能打开且**地址栏显示 `teleport://settings`**;输入 `teleport://settings` → 同样显示 `teleport://settings`;点击页面内部 `chrome://` 链接后地址栏显示 `teleport://`;新标签页地址栏仍为空。
 
@@ -504,8 +504,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ```bash
 cd "$TELEPORT_CHROMIUM_DIR/src"
-autoninja -C out/mac/arm64/release chrome
-open -n ./out/mac/arm64/release/Teleport.app --args --disable-field-trial-config
+autoninja -C out/mac/arm64/dev chrome
+open -n ./out/mac/arm64/dev/Teleport.app --args --disable-field-trial-config
 ```
 人工验证:打开 `teleport://chrome-urls`(或 `chrome://chrome-urls`),列表中的内部页链接标签显示为 `teleport://…`,点击可正常跳转;`chrome-untrusted://` 项保持不变。
 
@@ -562,9 +562,9 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```bash
 cd "$WT" && TELEPORT_CHROMIUM_DIR=/Users/liulichao/workspace/teleport/chromium uv run python scripts/apply_patches.py
 cd "$TELEPORT_CHROMIUM_DIR/src"
-autoninja -C out/mac/arm64/release teleport_unittests chrome
-./out/mac/arm64/release/teleport_unittests --gtest_filter='TeleportUrlScheme*'
-open -n ./out/mac/arm64/release/Teleport.app --args --disable-field-trial-config
+autoninja -C out/mac/arm64/dev teleport_unittests chrome
+./out/mac/arm64/dev/teleport_unittests --gtest_filter='TeleportUrlScheme*'
+open -n ./out/mac/arm64/dev/Teleport.app --args --disable-field-trial-config
 ```
 逐条对照 spec §13 验收标准与 smoke_check 新增项。
 

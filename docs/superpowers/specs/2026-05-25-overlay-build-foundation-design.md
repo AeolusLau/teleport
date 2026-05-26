@@ -83,7 +83,7 @@ teleport/                          # repo 根
 │   ├── apply_patches.py           #   应用 patches/ + branding/ 覆盖(幂等)
 │   └── tests/                     #   仅在有价值处务实地测,不为 TDD 而 TDD
 ├── build/                         # → 链接 → chromium/src/out(gitignore);产物访问入口 build/<os>/<arch>/<build_type>/
-│   └── <os>/<arch>/<build_type>/  #   例:build/mac/arm64/release/
+│   └── <os>/<arch>/<build_type>/  #   例:build/mac/arm64/dev/
 └── .gitignore                     # 忽略 chromium/、build/、__pycache__ 等
 ```
 
@@ -151,8 +151,8 @@ python scripts/bootstrap.py        # 一次性:签出 chromium 到 chromium/、�
 python scripts/sync.py             # gclient sync 到固定 M148
 python scripts/apply_patches.py    # 应用 patches/ 与 branding/ 覆盖
 cd chromium/src
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/dev.mac.gn")'
-autoninja -C out/mac/arm64/release chrome     # 经 autoninja → Siso
+gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
+autoninja -C out/mac/arm64/dev chrome     # 经 autoninja → Siso
 # 运行构建产物,观察 [teleport] banner 与「闪现」品牌
 ```
 
@@ -168,7 +168,7 @@ autoninja -C out/mac/arm64/release chrome     # 经 autoninja → Siso
 
 ## 12. 验证(= definition of done)
 
-1. macOS 上 `autoninja -C out/mac/arm64/release chrome` 构建成功;
+1. macOS 上 `autoninja -C out/mac/arm64/dev chrome` 构建成功;
 2. 启动浏览器,日志出现 `[teleport] 闪现 overlay active (M148)`;
 3. 产品显示名为「闪现」(关于页 / 应用名 / 窗口标题);图标与 bundle 名已替换;磁盘为 `Teleport.app`;
 4. 干净 `sync` 后 `apply_patches.py` 全部干净应用,且可重复幂等。
