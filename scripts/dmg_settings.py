@@ -5,34 +5,39 @@ Invoked by scripts/package_release.py via:
     -D app=<signed Teleport.app> -D icon=<volume .icns> -D background=<tiff> \
     Teleport <out.dmg>
 
-dmgbuild evaluates this file with `defines` (the -D values) in scope. Icon
-positions match the drawn background (brand/dmg/background.png): Teleport.app on
-the left, the Applications symlink on the right.
+dmgbuild evaluates this file with `defines` (the -D values) in scope.
+
+Portrait layout mirroring Chrome's default install window: the app icon on the
+white upper area, a lower rounded card with a big white down-arrow above the
+Applications folder. Geometry MUST stay in sync with scripts/dmg_layout.py
+(which paints the matching background art); scripts/tests/test_dmg_settings.py
+guards the alignment.
 """
 import os.path
 
 app = defines.get("app")  # noqa: F821 (dmgbuild injects `defines`)
 appname = os.path.basename(app)
 
-# Contents of the image: the app plus a named Applications symlink.
+# Contents: the app plus an Applications symlink named with a single space, so
+# Finder shows no label under it (matches Chrome's default install window).
 files = [app]
-symlinks = {"Applications": "/Applications"}
+symlinks = {" ": "/Applications"}
 
-# Volume icon (the app's .icns), and the window background art.
+# Volume icon (the app's .icns) and the window background art.
 icon = defines.get("icon")  # noqa: F821
 background = defines.get("background")  # noqa: F821
 
-# lzma-compressed UDIF (needs macOS 10.15+; our floor is 12.0). Much smaller
-# than zlib UDZO — matches the compactness of Chrome's ULMO pkg-dmg output.
+# lzma-compressed UDIF (needs macOS 10.15+; our floor is 12.0).
 format = "ULMO"
 
-# Icon-view layout. window_rect is ((x, y), (width, height)); the background
-# image is 640x400 to match.
+# Portrait icon-view layout. window_rect is ((x, y), (width, height)); width and
+# height equal the background image size (dmg_layout.W, dmg_layout.H = 480, 556).
+# Position mirrors Chrome's window (its .DS_Store fwi0 origin is (240, 180)).
 default_view = "icon-view"
-window_rect = ((220, 220), (640, 400))
+window_rect = ((240, 180), (480, 556))
 icon_size = 128
-text_size = 13
+text_size = 12
 icon_locations = {
-    appname: (160, 196),
-    "Applications": (480, 196),
+    appname: (240, 122),   # dmg_layout.APP_CENTER  — app icon on the white area
+    " ": (240, 387),       # dmg_layout.APPS_CENTER — Applications folder on card
 }
