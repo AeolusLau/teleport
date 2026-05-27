@@ -11,3 +11,9 @@ __pycache__/
 .pytest_cache/
 
 .claude
+
+# Local release config (holds feed token / signing identity)
+/scripts/release_config.local.toml
+
+# Local packaging staging output
+/dist

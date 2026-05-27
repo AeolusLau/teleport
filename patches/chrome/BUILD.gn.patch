@@ -1,0 +1,40 @@
+diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
+index cc98a1463c539..0cfa5020c951f 100644
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -31,6 +31,7 @@ import("//tools/resources/generate_resource_allowlist.gni")
+ import("//tools/v8_context_snapshot/v8_context_snapshot.gni")
+ import("//ui/gl/features.gni")
+ import("//v8/gni/v8.gni")
++import("//teleport/teleport.gni")  # teleport overlay
+ 
+ assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
+ 
+@@ -535,6 +536,11 @@ if (is_win) {
+       deps += [ ":chromium_updater_privileged_helper" ]
+     }
+ 
++    if (teleport_enable_updater) {
++      # teleport overlay: bundle Sparkle.framework into Contents/Frameworks.
++      deps += [ ":teleport_sparkle_framework" ]
++    }
++
+     if (enable_stripping) {
+       # At link time, preserve the global symbols specified in the .exports
+       # file. All other global symbols will be marked as private. The default
+@@ -689,6 +695,15 @@ if (is_win) {
+     }
+   }
+ 
++  if (teleport_enable_updater) {
++    # teleport overlay: copy the pinned Sparkle.framework (symlinked into the
++    # checkout by scripts/fetch_sparkle.py) into the app's Frameworks dir.
++    bundle_data("teleport_sparkle_framework") {
++      sources = [ "$teleport_sparkle_dir/Sparkle.framework" ]
++      outputs = [ "{{bundle_contents_dir}}/Frameworks/{{source_file_part}}" ]
++    }
++  }
++
+   action("clean_up_old_versions") {
+     script = "//chrome/tools/build/mac/clean_up_old_versions.py"
+ 

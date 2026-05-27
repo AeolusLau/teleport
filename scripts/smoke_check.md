@@ -88,3 +88,28 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 | 7 | 新标签页 | 地址栏仍为空 |
 
 > 已知限制(本期不做):`teleport://help` 不会重定向到 `settings/help`(短路跳过 `HandleWebUI` 的 host 改写),改用 `teleport://settings/help`;地址栏以外的 URL 显示面(页面信息气泡、状态栏)、chrome-urls 以外的页内 `chrome://` 文本均为后续增量。
+
+## dogfood 渠道包 + Sparkle 自动升级(macOS,已端到端验证)
+
+前置见 `CLAUDE.md` 的「渠道包/自动升级」段(Developer ID 证书、notarytool profile、EdDSA 密钥、`scripts/release_config.local.toml`)。发布后用公网 URL 校验,不依赖本地构建产物。
+
+| # | 命令 / 检查 | 期望 | 实测 |
+|---|---|---|---|
+| 1 | `uv run python scripts/package_release.py`(`TELEPORT_CHROMIUM_DIR` 已设) | 构建→签名→公证→样式dmg→appcast→上传,末尾 `published <ver>` | ✅ |
+| 2 | `curl -fsSI <feed>/Teleport-<ver>.dmg` | HTTP 200,`Cache-Control: ...immutable`,~110MB(ULMO) | ✅ |
+| 3 | 下载后 `spctl -a -t install <dmg>` | `accepted` + `source=Notarized Developer ID` | ✅ |
+| 4 | `xcrun stapler validate <dmg>` | `The validate action worked!` | ✅ |
+| 5 | 挂载后 `defaults read .../Teleport.app/Contents/Info SUFeedURL/SUPublicEDKey/CFBundleVersion` | feed URL / 公钥 / semver 正确 | ✅ |
+| 6 | 挂载,Finder 窗口 | 背景图(中文正常)、左 Teleport.app、右**命名的** Applications、卷图标 | ✅ |
+| 7 | 从 dmg 内 `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport 148.0.7778.180`(框架+Sparkle 加载,无崩溃) | ✅ |
+| 8 | `curl -fsS <feed>/appcast.xml \| grep sparkle:version` | 仅列最新版,无 `<sparkle:deltas>` | ✅ |
+
+### 升级闭环(v1→v2,已实测 0.1.0→0.1.1)
+
+1. 发布 v1(如 0.1.0)+ v2(bump `TELEPORT_VERSION`,如 0.1.1)到 OSS;appcast 最新=v2,两个 dmg 均在。
+2. 清理后装 v1:`rm -rf /Applications/Teleport.app && defaults delete com.beansec.Teleport`;下载 `Teleport-0.1.0.dmg` 拖入 /Applications,右键打开;`defaults read .../Info CFBundleShortVersionString` = `0.1.0`。
+3. 运行 v1 → `SUEnableAutomaticChecks` 自动检查 → 弹「有新版本 0.1.1 可用」。(未接「检查更新」菜单;不弹则 `defaults delete com.beansec.Teleport SULastCheckTime` 后重启强制检查。)
+4. 点「更新」→ 下载 v2 → EdDSA + 代码签名校验 → 重启安装(/Applications 可能弹一次管理员密码)。
+5. 确认:`defaults read /Applications/Teleport.app/Contents/Info CFBundleShortVersionString` = `0.1.1`。✅ 实测通过。
+
+> 排错:升级失败看 Console.app 搜 `Sparkle`;崩溃于框架加载(`no LC_RPATH's found`)= rpath 丢失;公证失败看 `notarytool log <uuid>`。

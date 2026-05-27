@@ -62,3 +62,27 @@ def test_chromium_src_default(monkeypatch):
     src = _lib.chromium_src()
     assert src.name == "src"
     assert src.parent.name == "chromium"
+
+
+def test_deps_cache_dir_honors_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEPORT_DEPS_DIR", str(tmp_path / "d"))
+    assert _lib.deps_cache_dir() == tmp_path / "d"
+
+
+def test_deps_cache_dir_default(monkeypatch):
+    monkeypatch.delenv("TELEPORT_DEPS_DIR", raising=False)
+    d = _lib.deps_cache_dir()
+    assert d.name == "deps" and d.parent.name == "teleport"
+
+
+def test_sha256_of_known_vectors(tmp_path):
+    empty = tmp_path / "empty"
+    empty.write_bytes(b"")
+    assert _lib.sha256_of(empty) == (
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    )
+    abc = tmp_path / "abc"
+    abc.write_bytes(b"abc")
+    assert _lib.sha256_of(abc) == (
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    )

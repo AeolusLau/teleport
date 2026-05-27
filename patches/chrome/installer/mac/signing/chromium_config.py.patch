@@ -1,0 +1,16 @@
+diff --git a/chrome/installer/mac/signing/chromium_config.py b/chrome/installer/mac/signing/chromium_config.py
+index 933690858aac8..254484fcbb375 100644
+--- a/chrome/installer/mac/signing/chromium_config.py
++++ b/chrome/installer/mac/signing/chromium_config.py
+@@ -15,3 +15,11 @@ class ChromiumCodeSignConfig(BuildPropsCodeSignConfig):
+     @property
+     def provisioning_profile_basename(self):
+         return None
++
++    @property
++    def run_spctl_assess(self):
++        # validate_app runs `spctl --assess` BEFORE notarization, so a
++        # to-be-notarized Developer ID build is always rejected there as
++        # "Unnotarized Developer ID". Skip the premature check; the final
++        # notarized + stapled dmg is assessed separately after packaging.
++        return False

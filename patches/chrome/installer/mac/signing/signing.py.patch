@@ -1,0 +1,16 @@
+diff --git a/chrome/installer/mac/signing/signing.py b/chrome/installer/mac/signing/signing.py
+index 1e9cff5e169d7..906b098477b51 100644
+--- a/chrome/installer/mac/signing/signing.py
++++ b/chrome/installer/mac/signing/signing.py
+@@ -24,7 +24,10 @@ class InvalidAppGeometryException(ValueError):
+ class Invoker(invoker.Base):
+ 
+     def codesign(self, config, product, path):
+-        command = ['codesign', '--sign', config.identity]
++        # --force so already-signed embedded components (e.g. the third-party
++        # Sparkle.framework and its XPC services) are re-signed with our
++        # identity; a no-op for the unsigned binaries produced by the build.
++        command = ['codesign', '--force', '--sign', config.identity]
+         if config.notarize.should_notarize():
+             # If the products will be notarized, the signature requires a secure
+             # timestamp.

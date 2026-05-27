@@ -1,12 +1,25 @@
 # The //teleport additive module, compiled into chrome via a minimal upstream
 # BUILD.gn dep patch (see patches/). A standalone test() target keeps unit
 # tests buildable without patching upstream test targets.
+import("//teleport/teleport.gni")
 import("//testing/test.gni")
+
+# The Chrome framework links Sparkle via @rpath but ships with no LC_RPATH of
+# its own. Add one resolving @rpath to the app's Contents/Frameworks (where
+# Sparkle.framework sits), relative to the framework binary at
+# Frameworks/<Name>.framework/Versions/<V>/<Name>. Applied via
+# all_dependent_configs so it lands on the chrome framework's link; the same
+# rpath landing on the thin exe/helpers is harmless (they don't load Sparkle).
+config("sparkle_rpath") {
+  ldflags = [ "-Wl,-rpath,@loader_path/../../.." ]
+}
 
 source_set("teleport") {
   sources = [
     "browser/teleport_startup.cc",
     "browser/teleport_startup.h",
+    "common/teleport_feed_url.cc",
+    "common/teleport_feed_url.h",
     "common/teleport_url_scheme.cc",
     "common/teleport_url_scheme.h",
   ]
@@ -15,11 +28,34 @@ source_set("teleport") {
     "//content/public/common",
     "//url",
   ]
+  if (is_mac) {
+    # Always expose the updater entry points so app_controller_mac.mm can call
+    # them unconditionally. With the updater on, the real Sparkle-backed .mm is
+    # built; otherwise a no-op stub keeps dev builds free of Sparkle.
+    sources += [ "browser/mac/teleport_updater.h" ]
+    if (teleport_enable_updater) {
+      sources += [ "browser/mac/teleport_updater.mm" ]
+
+      # Set Sparkle link settings DIRECTLY on the source_set, NOT via
+      # all_dependent_configs: that propagates along every dep edge (including
+      # bundle_data) and leaked -framework Sparkle into the thin main executable,
+      # tripping verify_dynamic_libraries. As target link settings,
+      # framework_dirs/frameworks flow only to the binary that links these
+      # objects (chrome_framework), not to the exe that merely bundles it.
+      # framework_dirs also gives -F for the .mm compile (<Sparkle/Sparkle.h>).
+      framework_dirs = [ teleport_sparkle_dir ]
+      frameworks = [ "Sparkle.framework" ]
+      all_dependent_configs = [ ":sparkle_rpath" ]
+    } else {
+      sources += [ "browser/mac/teleport_updater_stub.cc" ]
+    }
+  }
 }
 
 test("teleport_unittests") {
   sources = [
     "browser/teleport_startup_unittest.cc",
+    "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",
   ]
   deps = [

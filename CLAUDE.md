@@ -25,7 +25,7 @@ fairyland 用**奇幻代号**作规范标识符(`sigil`/`realm`/`warden`/`prism`
 - **加法为主**:`src/` 是 overlay 纯源码,构建期以符号名 **`teleport`** 链接进 `chromium/src/teleport`,成为 GN 模块 `//teleport`,经一个最小上游 patch 编进 chrome。
 - **改上游为辅**:文本改动走 `patches/`(`git apply`),整文件/二进制资源走 `branding/`(覆盖拷贝)。
 - 上游基线钉死在 `CHROMIUM_VERSION`(当前 **148.0.7778.180**);M150 非稳定,后续再升级。
-- **当前进度**:macOS overlay 基础**已构建并验证**——品牌化 `Teleport.app`、自定义 `//teleport` 启动 banner、图标、单测均通过。Windows/Linux/国产 OS/CI 为后续 phase。
+- **当前进度**:macOS overlay 基础**已构建并验证**——品牌化 `Teleport.app`、自定义 `//teleport` 启动 banner、图标、单测均通过;**macOS dogfood 渠道包 + Sparkle 自动升级已端到端跑通**(签名/公证/样式 dmg/OSS 分发,实测 0.1.0→0.1.1 自动升级)。Windows/Linux/国产 OS/CI 为后续 phase。
 
 ## 仓库布局
 
@@ -75,6 +75,19 @@ python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重�
 # 冒烟验证清单见 scripts/smoke_check.md
 ```
 
+### 渠道包 / 自动升级(dogfood,已端到端验证)
+
+official 构建 + Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 直连分发,已跑通(实测 0.1.0→0.1.1 自动升级)。前置:Developer ID Application 证书在 keychain、`xcrun notarytool store-credentials` 存好 profile、EdDSA 密钥(`<sparkle>/bin/generate_keys`)、`scripts/release_config.local.toml`(见 `.example`,gitignored)。
+
+```bash
+python scripts/fetch_sparkle.py                  # 钉版本拉 Sparkle.framework(SHA256 校验,落 ~/.cache/teleport/deps,真实拷贝进检出)
+gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'
+printf '0.1.2\n' > TELEPORT_VERSION              # 每次发版 bump(semver,单调递增)并提交
+uv run python scripts/package_release.py         # 构建→签名→公证→样式dmg(dmgbuild/ULMO)→appcast→上传OSS
+uv run python scripts/package_release.py --no-upload   # 仅本地构建+签名+公证(测试,跳过版本护栏)
+python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重生背景(uv run --with pillow)
+```
+
 ## 关键 gotcha
 
 - **chromium 检出位置**:默认 `<repo>/chromium`,可用 `$TELEPORT_CHROMIUM_DIR` 覆盖——几百 GB 检出不该绑定在每个 worktree 里。
@@ -87,6 +100,13 @@ python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重�
 - **源码 symlink**:`src/` 经符号链接挂进 `chromium/src/teleport`,M148 上 GN + clang 已验证可正常解析与编译(无需退路)。
 - **M148 注入点**(实现期已确认):`chrome/browser/BUILD.gn` 的 `static_library("browser")` deps 加 `//teleport`;启动 banner 调用在 `chrome/browser/chrome_browser_main.cc` 的 `PreMainMessageLoopRun`。
 - **运行 dev 构建加 `--disable-field-trial-config`**:dev 构建(`is_official_build=false`)会自动套用 `testing/variations/fieldtrial_testing_config.json`,强开一批实验特性,部分未完成会崩溃。已知:`UsePersistentCacheForCodeCache` 在加载页面时,生成代码缓存经沙箱 SQLite VFS 的 WAL 路径命中 `NOTREACHED` 而 abort。dev 运行加 `--disable-field-trial-config`(或精确 `--disable-features=UsePersistentCacheForCodeCache`)。**非 overlay 问题**,stable/official 构建不强开。
+- **从 worktree 跑发布脚本必须 `export TELEPORT_CHROMIUM_DIR=...`**:否则 `_lib` 默认到 `<worktree>/chromium` 假路径(fetch_sparkle 会把框架桥到错误位置)。
+- **Sparkle 集成**:GN arg `teleport_enable_updater`(official 开/dev 关);`fetch_sparkle.py` 把框架**真实拷贝**进检出 `//third_party/teleport_sparkle`(符号链接会被 GN 原样拷进 .app → dmg 内死链);框架链接 Sparkle 必须有 LC_RPATH(`//teleport` 的 `sparkle_rpath` config,`@loader_path/../../..`),否则启动即崩溃(`no LC_RPATH's found`);`frameworks` 直接设在 source_set 上(用 `all_dependent_configs` 会把 `-framework Sparkle` 泄漏进主 exe,触发 `verify_dynamic_libraries`)。
+- **签名/公证**:复用 `chrome/installer/mac/signing`,入口是**生成的「Teleport Packaging」目录里的** `sign_chrome.py`(源码树那份缺 build_props);品牌/版本从 build_props 自动取(无需 fork 配置);patch 了 `chromium_config`(`run_spctl_assess=False`,公证前 spctl 必失败)、`signing.py`(codesign 加 `--force`,重签已签的 Sparkle)、`parts.py`(把 Sparkle 框架+Autoupdate+Updater.app+XPC 用我们的 Developer ID 重签,否则公证报「no secure timestamp / not a valid Developer ID」)。通知凭据经 `--notary-arg=--keychain-profile`。
+- **dmg 样式**:用 `dmgbuild`(`scripts/dmg_settings.py` + `brand/dmg/background.tiff`)出背景/命名 Applications/卷图标,`format=ULMO`(lzma,~105MB);Chrome 自带 pkg-dmg 样式资源仅 Google 品牌有,故改走 dmgbuild。背景 CJK 字体 fallback 含 STHeiti(PingFang 不一定在,缺则 tofu)。
+- **版本**:`TELEPORT_VERSION`(semver)单一事实来源,签名前 `plutil` 戳进 `CFBundleVersion`(Sparkle 比较版)+`CFBundleShortVersionString`;dmg 改名为 `Teleport-<semver>.dmg`(签名模块按 Chromium 版本命名会跨版本撞车);appcast 只列最新版(`package_release` 裁到当前 dmg,避免 `--maximum-deltas 0` 仍残留的 delta 悬挂引用)。
+- **EdDSA 私钥**仅在 login keychain + 离线备份(`generate_keys -x`),**绝不入库**;丢失靠 Developer-ID 兜底的密钥轮换(仅 dmg、一次只换一个锚,绝不同时换 Developer ID 和 EdDSA)。Sparkle 用 Ed25519,Secure Enclave 只支持 P-256,故密钥不走 SEP。
+- **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`。
 
 ## 目标平台
 
@@ -103,7 +123,7 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 
 - 后端服务代号(在 fairyland 内)、浏览器↔后端**策略下发协议**(传输/格式/鉴权)。
 - Windows / Linux 构建(注入从 symlink 换 junction 或受管检出)、国产 OS 适配。
-- 代码签名、打包、分发、自动更新。
+- ~~代码签名、打包、分发、自动更新~~ → **macOS dogfood 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
 - CI(构建缓存与产物策略)。
 - patch 的创建/刷新/冲突处理工具链(当前只做「应用」)。
 - 完整 rebrand(`CFBundleDisplayName`=闪现、各平台图标/安装包等)。
@@ -111,4 +131,5 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 ## 参考材料
 
 - 本仓库:`docs/superpowers/specs/2026-05-25-overlay-build-foundation-design.md`、`docs/superpowers/plans/2026-05-25-overlay-build-foundation.md`、`scripts/smoke_check.md`。
+- 渠道包/自动升级:`docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`、`docs/superpowers/plans/2026-05-26-macos-dogfood-channel.md`、`docs/dogfood-install.md`。
 - 同级:`../fairyland/CLAUDE.md`、`../fairyland/README.md`(服务端工程约定基线)。

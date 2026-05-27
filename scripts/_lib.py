@@ -1,6 +1,7 @@
 """Shared helpers for the teleport overlay build scripts."""
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -9,6 +10,25 @@ from pathlib import Path
 def repo_root() -> Path:
     """teleport repo root (the dir containing this scripts/ folder)."""
     return Path(__file__).resolve().parent.parent
+
+
+def deps_cache_dir() -> Path:
+    """External deps cache (Sparkle, etc.). Honors $TELEPORT_DEPS_DIR;
+    defaults to ~/.cache/teleport/deps. Shared across worktrees; gitignored
+    (lives outside the repo)."""
+    env = os.environ.get("TELEPORT_DEPS_DIR")
+    if env:
+        return Path(env)
+    return Path.home() / ".cache" / "teleport" / "deps"
+
+
+def sha256_of(path: Path) -> str:
+    """Hex SHA-256 of a file's contents (streamed)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def chromium_dir(root: Path | None = None) -> Path:

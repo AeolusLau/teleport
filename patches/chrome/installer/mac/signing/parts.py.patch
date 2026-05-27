@@ -1,0 +1,63 @@
+diff --git a/chrome/installer/mac/signing/parts.py b/chrome/installer/mac/signing/parts.py
+index 30ec16279cd9d..f6a7357d20d98 100644
+--- a/chrome/installer/mac/signing/parts.py
++++ b/chrome/installer/mac/signing/parts.py
+@@ -111,6 +111,58 @@ def get_parts(config):
+                 options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
+                 sign_with_identifier=True,
+                 verify_options=verify_options),
++        # teleport overlay: re-sign the embedded Sparkle.framework and its
++        # nested executables/XPC services with our Developer ID + secure
++        # timestamp + hardened runtime. Sparkle's own (third-party) signatures
++        # fail Apple notarization ("does not include a secure timestamp" / "not
++        # signed with a valid Developer ID certificate"), and Sparkle's runtime
++        # team-identifier checks require the framework and its XPC services to
++        # share our team. Preserve their bundle identifiers
++        # (sign_with_identifier defaults False; identifier_requirement=False) so
++        # Sparkle still finds its services by id. Listed inner-first so they
++        # sign before the framework (inside-out); the framework signs in the
++        # same pre-app loop because its key is not 'framework'.
++        'sparkle-autoupdate':
++            CodeSignedProduct(
++                '{}/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate'
++                .format(config.app_dir),
++                'org.sparkle-project.Sparkle.Autoupdate',
++                options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++                identifier_requirement=False,
++                verify_options=verify_options),
++        'sparkle-updater-app':
++            CodeSignedProduct(
++                '{}/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app'
++                .format(config.app_dir),
++                'org.sparkle-project.Sparkle.Updater',
++                options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++                identifier_requirement=False,
++                verify_options=verify_options),
++        'sparkle-downloader-xpc':
++            CodeSignedProduct(
++                '{}/Contents/Frameworks/Sparkle.framework/Versions/B/'
++                'XPCServices/Downloader.xpc'.format(config.app_dir),
++                'org.sparkle-project.Sparkle.Downloader',
++                options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++                identifier_requirement=False,
++                verify_options=verify_options),
++        'sparkle-installer-xpc':
++            CodeSignedProduct(
++                '{}/Contents/Frameworks/Sparkle.framework/Versions/B/'
++                'XPCServices/Installer.xpc'.format(config.app_dir),
++                'org.sparkle-project.Sparkle.Installer',
++                options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++                identifier_requirement=False,
++                verify_options=verify_options),
++        'sparkle-framework':
++            CodeSignedProduct(
++                '{}/Contents/Frameworks/Sparkle.framework'.format(
++                    config.app_dir),
++                'org.sparkle-project.Sparkle',
++                # Framework dylib: hardened-runtime option flags are
++                # meaningless, as for the Chrome framework above.
++                identifier_requirement=False,
++                verify_options=verify_options),
+     }
+ 
+     if config.enable_updater:

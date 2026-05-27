@@ -1,0 +1,12 @@
+# Build args/paths for the //teleport overlay, kept in a .gni so upstream
+# BUILD.gn files (e.g. //chrome) can import and reference them — a build arg
+# is only in scope in files that declare it or import its declaration.
+
+declare_args() {
+  # Enable the Sparkle-based auto-updater. On for official channel builds
+  # (release.mac.gn); off for dev so the dev workflow needs no framework/signing.
+  teleport_enable_updater = false
+}
+
+# Inside-checkout dir where fetch_sparkle.py symlinks the pinned framework.
+teleport_sparkle_dir = "//third_party/teleport_sparkle"
