@@ -32,13 +32,25 @@ fairyland 用**奇幻代号**作规范标识符(`sigil`/`realm`/`warden`/`prism`
 ```
 src/                       overlay 源码 → 构建期链接为 chromium/src/teleport(GN //teleport)
   BUILD.gn                 //teleport:teleport(source_set)+ teleport_unittests(test)
-  browser/teleport_startup.{h,cc,_unittest.cc}
-  gn/args/dev.mac.gn       开发期 GN args 模板
+  teleport.gni             共享 GN args/路径(teleport_enable_updater、sparkle 目录;供上游 BUILD.gn import)
+  browser/teleport_startup.{h,cc,_unittest.cc}   启动 banner 钩子
+  browser/mac/teleport_updater.{h,mm}+_stub.cc   Sparkle 更新器入口(StartMacUpdater/CheckForUpdatesNow)
+  common/teleport_url_scheme.{h,cc,_unittest.cc} teleport:// 方案别名 + teleport-urls 主机重写
+  common/teleport_feed_url.{h,cc,_unittest.cc}   appcast feed 仅允许 https 校验
+  gn/args/dev.mac.gn       开发期 GN args 模板(updater 关)
+  gn/args/release.mac.gn   official 渠道 GN args 模板(updater 开)
 scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   bootstrap.py             建/定位 chromium 检出 + 建两个链接(可 --skip-sync)
   sync.py                  gclient sync 到 CHROMIUM_VERSION + 版本校验
   apply_patches.py         应用 patches/ + branding/(幂等、fail-fast)
   generate_icons.py        brand/teleport.svg → macOS app.icns(经 uv 拉 resvg-py/icnsutil)
+  branding_strings.py      rebrand chromium_strings.grd + zh .xtb 的产品/公司名(→ 闪现)
+  fetch_sparkle.py         钉版本拉 Sparkle.framework(SHA256 校验,真实拷进检出)
+  package_release.py       发版主入口:构建→签名→公证→样式 dmg→appcast→上传 OSS
+  _release.py              发布 helper:semver 解析/比较 + appcast 护栏
+  gen_dmg_background.py     重生 dmg 背景;dmg_settings.py/dmg_layout.py 为 dmgbuild 配置与窗口几何
+  preview_dmg_window.py    本地预览 dmg 窗口布局做视觉 QA(不出 dmg)
+  release_config.local.toml.example  发布配置样板(本地副本 gitignored)
   _lib.py, tests/          路径/链接 helper + pytest
   smoke_check.md           构建与冒烟检查清单
 patches/                   一文件一 patch,镜像 chromium/src 路径(注入/启动钩子/BRANDING/strings)
@@ -95,7 +107,7 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **一文件一 patch**:每个 `.patch` 只改一个上游文件、文件名镜像其在 `chromium/src` 下的路径;顺序无关;同文件多处改动累加进同一 patch。
 - **Python 工具链**:系统 python 是 3.9 且无 pytest;统一用 `uv`(`pyproject.toml` 中 `requires-python>=3.13`、`[tool.uv] package=false`)。
 - **`.gitignore`**:用 `/build`(无尾斜杠)才能忽略 `build` 这个**符号链接**;`/chromium` 同理。
-- **两层品牌**:磁盘/标识符 = `Teleport`(BRANDING `PRODUCT_FULLNAME` → `Teleport.app`、`org.teleport.Teleport`);应用内显示名 = `闪现`(`chrome/app/chromium_strings.grd` 的 `IDS_PRODUCT_NAME`)。macOS 菜单/Finder 名当前仍是 Teleport(`CFBundleDisplayName` 未单独覆盖,后续细化)。
+- **两层品牌**:磁盘/标识符 = `Teleport`(BRANDING `PRODUCT_FULLNAME` → `Teleport.app`、`org.teleport.Teleport`);应用内显示名 = `闪现`(`chrome/app/chromium_strings.grd` 的 `IDS_PRODUCT_NAME`);macOS 菜单/Finder 名 = `闪现`(`CFBundleDisplayName` 已覆盖)。
 - **TDD 范围**:产品代码(`//teleport` C++)走 TDD(gtest);构建/工具脚本不强求 TDD,仅在有价值处务实地写 pytest。
 - **源码 symlink**:`src/` 经符号链接挂进 `chromium/src/teleport`,M148 上 GN + clang 已验证可正常解析与编译(无需退路)。
 - **M148 注入点**(实现期已确认):`chrome/browser/BUILD.gn` 的 `static_library("browser")` deps 加 `//teleport`;启动 banner 调用在 `chrome/browser/chrome_browser_main.cc` 的 `PreMainMessageLoopRun`。
@@ -126,7 +138,7 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 - ~~代码签名、打包、分发、自动更新~~ → **macOS dogfood 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
 - CI(构建缓存与产物策略)。
 - patch 的创建/刷新/冲突处理工具链(当前只做「应用」)。
-- 完整 rebrand(`CFBundleDisplayName`=闪现、各平台图标/安装包等)。
+- 完整 rebrand(各平台图标/安装包等)。
 
 ## 参考材料
 

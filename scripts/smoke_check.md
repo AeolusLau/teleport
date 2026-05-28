@@ -59,6 +59,8 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 |---|---|---|
 | grit 预检 | `autoninja -C out/... chrome/app:branded_strings` 成功 | ✅ |
 | bundle id | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` = `com.beansec.Teleport` | ✅ |
+| 菜单显示名 | `PlistBuddy -c 'Print :CFBundleDisplayName' Teleport.app/Contents/Info.plist` = `闪现` | ✅ |
+| 版权 | `grep COPYRIGHT chrome/app/theme/chromium/BRANDING` 含 `BeanSec` | ✅ |
 | app 图标 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` 一致 | ✅ |
 | en 文案 | `strings .../en.lproj/locale.pak \| grep -i "BeanSec\|Teleport"` 出现 Teleport / BeanSec / "Make Teleport the default browser" | ✅ |
 | 运行 | `Teleport --disable-field-trial-config …` 启动有 banner、0 FATAL | ✅ |
@@ -69,7 +71,6 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 ## 仍待人工确认 / 后续
 
 - zh-CN/zh-TW 关于页文案与 logo 的 GUI 目视确认(自动检查已覆盖 en pak + bundle/icon + xtb 重写)。
-- macOS 顶部菜单 / Finder 显示名当前为 `Teleport`(CFBundleDisplayName=PRODUCT_FULLNAME)。若要菜单也显示「闪现」,需单独覆盖 `CFBundleDisplayName`——后续细化。
 - **纯 "Chrome"(非 "Chromium")文案残留**(如 "Chrome Apps"):本轮只替换 "Chromium";是否一并把 "Chrome"→Teleport 属后续决策(易过度替换)。
 - Windows / Linux 构建、CI、Windows `.ico` / Linux 图标、正式 wordmark:后续 phase。
 

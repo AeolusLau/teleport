@@ -2,6 +2,15 @@ diff --git a/chrome/app/app-Info.plist b/chrome/app/app-Info.plist
 index 6fada0a2b1a1f..632d8fc73e973 100644
 --- a/chrome/app/app-Info.plist
 +++ b/chrome/app/app-Info.plist
+@@ -5,7 +5,7 @@
+ 	<key>CFBundleDevelopmentRegion</key>
+ 	<string>en</string>
+ 	<key>CFBundleDisplayName</key>
+-	<string>${EXECUTABLE_NAME}</string>
++	<string>闪现</string>
+ 	<key>CFBundleDocumentTypes</key>
+ 	<array>
+ 		<dict>
 @@ -149,8 +149,6 @@
  	<string>${EXECUTABLE_NAME}</string>
  	<key>CFBundleIconFile</key>
