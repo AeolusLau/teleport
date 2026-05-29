@@ -20,6 +20,14 @@ from pathlib import Path
 
 from _lib import chromium_dir, chromium_src, create_dir_link, repo_root
 
+# checkout_pgo_profiles=True makes `gclient sync` run chromium's own DEPS hooks
+# that download BOTH PGO profile sets the release build needs:
+#   * Chrome PGO       -> tools/update_pgo_profiles.py (--target mac-arm)
+#   * V8 builtins PGO  -> v8/tools/builtins-pgo/download_profiles.py
+# Both hooks are gated on this single var (the v8-standalone-only
+# checkout_v8_builtins_pgo_profiles is NOT used here). release.mac.gn sets
+# chrome_pgo_phase=2, which hard-requires both profiles, so fetching them at sync
+# time via the upstream hooks keeps it reproducible without a bespoke script.
 GCLIENT_SOLUTION = """\
 solutions = [
   {
@@ -27,10 +35,25 @@ solutions = [
     "url": "https://chromium.googlesource.com/chromium/src.git",
     "managed": False,
     "custom_deps": {},
-    "custom_vars": {},
+    "custom_vars": {
+      "checkout_pgo_profiles": True,
+    },
   },
 ]
 """
+
+
+def ensure_gclient(path: Path) -> None:
+    """Write the canonical .gclient, or rewrite it when it predates the
+    checkout_pgo_profiles custom_var. Idempotent: a no-op once the var is set.
+
+    The .gclient is fully managed by this script (gitignored, generated), so
+    rewriting from the template is safe."""
+    if path.exists() and "checkout_pgo_profiles" in path.read_text():
+        return
+    verb = "updated" if path.exists() else "wrote"
+    path.write_text(GCLIENT_SOLUTION)
+    print(f"{verb} {path} (enabled checkout_pgo_profiles)")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,10 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 
     chromium = chromium_dir(root)
     chromium.mkdir(parents=True, exist_ok=True)
-    gclient_file = chromium / ".gclient"
-    if not gclient_file.exists():
-        gclient_file.write_text(GCLIENT_SOLUTION)
-        print(f"wrote {gclient_file}")
+    ensure_gclient(chromium / ".gclient")
 
     if not args.skip_sync:
         print("running initial gclient sync (this may take a long time)...")

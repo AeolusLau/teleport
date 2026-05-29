@@ -10,10 +10,15 @@ is_official_build = true
 is_component_build = false
 use_remoteexec = false
 
-# is_official_build enables PGO by default, which needs the per-milestone
-# pgo_profiles data (gclient custom_var checkout_pgo_profiles). dogfood doesn't
-# need profile-guided optimization, so disable PGO to avoid that download.
-chrome_pgo_phase = 0
+# Profile-guided optimization, so dogfood runtime perf tracks the production
+# config (PGO is the main perf gap between an official no-PGO build and shipping
+# Chrome). is_official_build defaults this to 2 on mac; set explicitly for
+# clarity. phase=2 hard-requires two profile sets in the checkout: the Chrome PGO
+# profile (chrome/build/pgo_profiles/, asserted at `gn gen`) and the V8 builtins
+# PGO profile (v8/tools/builtins-pgo/profiles/, a mksnapshot build input). Both
+# are fetched by `gclient sync` via chromium's DEPS hooks, enabled by the
+# checkout_pgo_profiles=True custom_var that bootstrap.py writes into .gclient.
+chrome_pgo_phase = 2
 
 # Enable the Sparkle auto-updater (compiles browser/mac/teleport_updater.mm and
 # links Sparkle.framework; requires `python scripts/fetch_sparkle.py` first).

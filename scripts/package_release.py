@@ -17,6 +17,7 @@ Hosting is plain OSS over HTTPS (no CDN), so two base locations are split:
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tomllib
@@ -32,9 +33,33 @@ _REQUIRED = (
     "feed_url",
     "download_base_url",
     "oss_upload_target",
-    "codesign_identity",
     "notary_profile",
 )
+
+
+def _detect_codesign_identity() -> str:
+    """Find the unique 'Developer ID Application' certificate in the keychain.
+
+    Refuses to guess when more than one such identity exists -- the caller must
+    then disambiguate by setting `codesign_identity` explicitly in the config.
+    """
+    r = subprocess.run(
+        ["security", "find-identity", "-v", "-p", "codesigning"],
+        capture_output=True, text=True, check=True,
+    )
+    matches = re.findall(r'"(Developer ID Application: [^"]+)"', r.stdout)
+    if not matches:
+        raise SystemExit(
+            "no 'Developer ID Application' certificate found in keychain"
+        )
+    if len(matches) > 1:
+        found = "\n  ".join(matches)
+        raise SystemExit(
+            "multiple 'Developer ID Application' certificates found in "
+            "keychain; refusing to guess. Set codesign_identity explicitly "
+            "in release_config.local.toml to one of:\n  " + found
+        )
+    return matches[0]
 
 
 def load_config(path: Path) -> dict:
@@ -44,6 +69,8 @@ def load_config(path: Path) -> dict:
     missing = [k for k in _REQUIRED if not cfg.get(k)]
     if missing:
         raise SystemExit(f"release config missing keys: {', '.join(missing)}")
+    if not cfg.get("codesign_identity"):
+        cfg["codesign_identity"] = _detect_codesign_identity()
     return cfg
 
 

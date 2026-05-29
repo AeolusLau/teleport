@@ -12,8 +12,8 @@ download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<toke
 # OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
 oss_upload_target = "oss://<bucket>/dogfood/<token>/"
 
-# Developer ID Application identity (security find-identity output).
-codesign_identity = "Developer ID Application: <Name> (<TEAMID>)"
+# Developer ID Application identity (auto-detected from keychain if omitted).
+# codesign_identity = "Developer ID Application: <Name> (<TEAMID>)"
 
 # notarytool keychain profile name (Task 2 Step 2).
 notary_profile = "teleport-notary"
