@@ -29,6 +29,12 @@ void StartMacUpdater() {
       initWithStartingUpdater:YES
               updaterDelegate:nil
            userDriverDelegate:nil];
+  // Kick off a silent check now, on top of Sparkle's hourly scheduled check
+  // (SUScheduledCheckInterval). The scheduler only fires when the interval has
+  // elapsed since the last check, so without this a relaunch within the hour
+  // would not check at all. checkForUpdatesInBackground shows no UI and honors
+  // SUEnableAutomaticChecks (set in Info.plist at packaging time).
+  [g_controller.updater checkForUpdatesInBackground];
 }
 
 void CheckForUpdatesNow() {
