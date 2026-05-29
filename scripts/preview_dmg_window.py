@@ -4,7 +4,7 @@
 Composites the real app icon, the system Applications folder + alias badge, and
 the Finder-style app label onto the generated background, at the exact icon
 positions read from scripts/dmg_settings.py and the size from
-scripts/dmg_layout.py — WITHOUT running a multi-hour package_release build. Use
+scripts/dmg_layout.py — WITHOUT running a multi-hour package build. Use
 it to eyeball alignment/colors against Chrome's default install window.
 
 Run: uv run --with pillow python scripts/preview_dmg_window.py

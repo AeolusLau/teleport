@@ -46,7 +46,11 @@ scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   generate_icons.py        brand/teleport.svg → macOS app.icns(经 uv 拉 resvg-py/icnsutil)
   branding_strings.py      rebrand chromium_strings.grd + zh .xtb 的产品/公司名(→ 闪现)
   fetch_sparkle.py         钉版本拉 Sparkle.framework(SHA256 校验,真实拷进检出)
-  package_release.py       发版主入口:构建→签名→公证→样式 dmg→appcast→上传 OSS
+  package.py               打包主入口:--channel(默认 dev,仅构建)/--distribute(发布,仅 main)
+  _build.py                渠道注册表(dev/dogfood)+ autoninja 构建步骤
+  _package.py              stamp 版本/注入 Sparkle 键 + 签名 .app + 样式 dmg(签名/公证/staple)
+  _publish.py              发布护栏(分支/干净树/tag+feed 双查)+ appcast + OSS 上传 + 打 v<semver> tag
+  _config.py               嵌套 [channel.x] 发布配置加载 + 分级 key 校验
   _release.py              发布 helper:semver 解析/比较 + appcast 护栏
   gen_dmg_background.py     重生 dmg 背景;dmg_settings.py/dmg_layout.py 为 dmgbuild 配置与窗口几何
   preview_dmg_window.py    本地预览 dmg 窗口布局做视觉 QA(不出 dmg)
@@ -98,8 +102,9 @@ python scripts/fetch_sparkle.py                  # 钉版本拉 Sparkle.framewor
 python scripts/sync.py                           # 触发 chromium DEPS 的两个 PGO hook(幂等)
 gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'
 printf '0.1.2\n' > TELEPORT_VERSION              # 每次发版 bump(semver,单调递增)并提交
-uv run python scripts/package_release.py         # 构建→签名→公证→样式dmg(dmgbuild/ULMO)→appcast→上传OSS
-uv run python scripts/package_release.py --no-upload   # 仅本地构建+签名+公证(测试,跳过版本护栏)
+uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
+uv run python scripts/package.py --channel dogfood        # 本地渠道包:构建+签名+公证+样式dmg,不发布
+uv run python scripts/package.py --channel dogfood --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
 python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重生背景(uv run --with pillow)
 ```
 
@@ -120,7 +125,7 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **PGO(release 开,dev 关)**:`release.mac.gn` 设 `chrome_pgo_phase=2`(贴近生产性能;这是 official 无 PGO 包与正式 Chrome 的主要性能差)。`chrome_pgo_phase=2` 同时令 V8 `v8_enable_builtins_optimization` 自动开启,所以**两套 profile 都是构建硬依赖**:① Chrome 顶层 PGO(`chrome/build/pgo_profiles/`,`gn gen` 时 `update_pgo_profiles.py get_profile_path` 解析+断言,缺则 hard-assert);② V8 builtins PGO(`v8/tools/builtins-pgo/profiles/`,arm64 复用 `x64.profile`,该文件是 mksnapshot 的 build source 且带 `--abort-on-bad-builtin-profile-data`,缺则**构建步骤直接失败**,不会静默降级)。两者都**不随构建自动下载**,但都能由 `gclient sync` 拉:chromium 顶层 DEPS 有两个 hook(`update_pgo_profiles.py` + `v8/tools/builtins-pgo/download_profiles.py`),**均仅由 `checkout_pgo_profiles` 一个 var 门控**(`checkout_v8_builtins_pgo_profiles` 是 standalone V8 专用,这里用不上;且 `src/v8` 不在 chromium 的 `recursedeps` 里,V8 自己的 hook 不会跑)。`bootstrap.py` 已把 `checkout_pgo_profiles=True` 写进 `.gclient`,故 `python scripts/sync.py` 会一并拉好两套 profile(用 `src/third_party/depot_tools`)。PGO 会显著拉长 release 编译时间。
 - **签名/公证**:复用 `chrome/installer/mac/signing`,入口是**生成的「Teleport Packaging」目录里的** `sign_chrome.py`(源码树那份缺 build_props);品牌/版本从 build_props 自动取(无需 fork 配置);patch 了 `chromium_config`(`run_spctl_assess=False`,公证前 spctl 必失败)、`signing.py`(codesign 加 `--force`,重签已签的 Sparkle)、`parts.py`(把 Sparkle 框架+Autoupdate+Updater.app+XPC 用我们的 Developer ID 重签,否则公证报「no secure timestamp / not a valid Developer ID」)。通知凭据经 `--notary-arg=--keychain-profile`。
 - **dmg 样式**:用 `dmgbuild`(`scripts/dmg_settings.py` + `brand/dmg/background.tiff`)出背景/命名 Applications/卷图标,`format=ULMO`(lzma,~105MB);Chrome 自带 pkg-dmg 样式资源仅 Google 品牌有,故改走 dmgbuild。背景 CJK 字体 fallback 含 STHeiti(PingFang 不一定在,缺则 tofu)。
-- **版本**:`TELEPORT_VERSION`(semver)单一事实来源,签名前 `plutil` 戳进 `CFBundleVersion`(Sparkle 比较版)+`CFBundleShortVersionString`;dmg 改名为 `Teleport-<semver>.dmg`(签名模块按 Chromium 版本命名会跨版本撞车);appcast 只列最新版(`package_release` 裁到当前 dmg,避免 `--maximum-deltas 0` 仍残留的 delta 悬挂引用)。
+- **版本**:`TELEPORT_VERSION`(semver)单一事实来源,签名前 `plutil` 戳进 `CFBundleVersion`(Sparkle 比较版)+`CFBundleShortVersionString`;dmg 改名为 `Teleport-<semver>.dmg`(签名模块按 Chromium 版本命名会跨版本撞车);appcast 只列最新版(`package` 裁到当前 dmg,避免 `--maximum-deltas 0` 仍残留的 delta 悬挂引用)。 发布时给当前 commit 打 `v<semver>` annotated tag 并 push 到 remote(默认 origin);tag 在上传成功后才打,tag 或线上 feed 任一已含该版本即拒绝发布。
 - **EdDSA 私钥**仅在 login keychain + 离线备份(`generate_keys -x`),**绝不入库**;丢失靠 Developer-ID 兜底的密钥轮换(仅 dmg、一次只换一个锚,绝不同时换 Developer ID 和 EdDSA)。Sparkle 用 Ed25519,Secure Enclave 只支持 P-256,故密钥不走 SEP。
 - **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`。
 

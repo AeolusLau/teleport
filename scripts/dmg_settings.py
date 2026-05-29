@@ -1,6 +1,6 @@
 """dmgbuild settings for the Teleport dogfood disk image.
 
-Invoked by scripts/package_release.py via:
+Invoked by scripts/package.py via:
   dmgbuild -s scripts/dmg_settings.py \
     -D app=<signed Teleport.app> -D icon=<volume .icns> -D background=<tiff> \
     Teleport <out.dmg>

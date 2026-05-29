@@ -96,7 +96,7 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 | # | 命令 / 检查 | 期望 | 实测 |
 |---|---|---|---|
-| 1 | `uv run python scripts/package_release.py`(`TELEPORT_CHROMIUM_DIR` 已设) | 构建→签名→公证→样式dmg→appcast→上传,末尾 `published <ver>` | ✅ |
+| 1 | `uv run python scripts/package.py --channel dogfood --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (dogfood), tagged v<ver>` | ✅ |
 | 2 | `curl -fsSI <feed>/Teleport-<ver>.dmg` | HTTP 200,`Cache-Control: ...immutable`,~110MB(ULMO) | ✅ |
 | 3 | 下载后 `spctl -a -t install <dmg>` | `accepted` + `source=Notarized Developer ID` | ✅ |
 | 4 | `xcrun stapler validate <dmg>` | `The validate action worked!` | ✅ |

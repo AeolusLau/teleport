@@ -1,19 +1,23 @@
 # Copy to scripts/release_config.local.toml (gitignored) and fill in.
+#
+# Top-level keys are account-shared across channels; [channel.<name>] holds
+# the per-channel publish settings.
 
-# Sparkle public EdDSA key (base64) printed by generate_keys (Task 1).
-public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
-
-# Appcast feed URL (public https; the OSS native endpoint + unguessable token).
-feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/appcast.xml"
-
-# Public https base the appcast download links + SUFeedURL point at (trailing /).
-download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/"
-
-# OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
-oss_upload_target = "oss://<bucket>/dogfood/<token>/"
+# notarytool keychain profile name (xcrun notarytool store-credentials).
+notary_profile = "teleport-notary"
 
 # Developer ID Application identity (auto-detected from keychain if omitted).
 # codesign_identity = "Developer ID Application: <Name> (<TEAMID>)"
 
-# notarytool keychain profile name (Task 2 Step 2).
-notary_profile = "teleport-notary"
+# Git remote the v<semver> release tag is pushed to (default: origin).
+# git_remote = "origin"
+
+[channel.dogfood]
+# Sparkle public EdDSA key (base64) printed by generate_keys.
+public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
+# Appcast feed URL (public https; the OSS native endpoint + unguessable token).
+feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/appcast.xml"
+# Public https base the appcast download links + SUFeedURL point at (trailing /).
+download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/"
+# OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
+oss_upload_target = "oss://<bucket>/dogfood/<token>/"
