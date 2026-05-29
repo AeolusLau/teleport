@@ -105,3 +105,26 @@ def test_detect_codesign_multiple_raises(monkeypatch):
     assert "codesign_identity" in msg
     assert "Acme Inc (T1234)" in msg
     assert "Beta LLC (T5678)" in msg
+
+
+# ---------------------------------------------------------------------------
+# stamp_and_inject (hermetic: capture plutil calls instead of touching a plist)
+# ---------------------------------------------------------------------------
+
+
+def test_stamp_and_inject_sets_hourly_check_interval(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(
+        package_release.subprocess,
+        "run",
+        lambda argv, **kw: calls.append(argv),
+    )
+    cfg = {"feed_url": "https://h/a.xml", "public_ed_key": "k"}
+    package_release.stamp_and_inject(tmp_path / "Teleport.app", "0.1.3", cfg)
+
+    interval = next(
+        c for c in calls if "SUScheduledCheckInterval" in c
+    )
+    assert interval[:4] == ["plutil", "-replace", "SUScheduledCheckInterval", "-integer"]
+    assert interval[4] == "3600"
+    assert package_release._CHECK_INTERVAL_SECONDS == 3600

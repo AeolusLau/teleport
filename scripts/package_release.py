@@ -82,6 +82,11 @@ def fetch_live_appcast(feed_url: str) -> str | None:
         return None  # first release: no feed yet
 
 
+# dogfood checks for updates hourly instead of Sparkle's 1-day default
+# (SUDefaultUpdateCheckInterval). 3600s is Sparkle's enforced minimum.
+_CHECK_INTERVAL_SECONDS = 3600
+
+
 def stamp_and_inject(app: Path, version: str, cfg: dict) -> None:
     info = app / "Contents" / "Info.plist"
     sets = {
@@ -94,6 +99,11 @@ def stamp_and_inject(app: Path, version: str, cfg: dict) -> None:
         subprocess.run(["plutil", "-replace", key, "-string", val, str(info)], check=True)
     subprocess.run(
         ["plutil", "-replace", "SUEnableAutomaticChecks", "-bool", "YES", str(info)],
+        check=True,
+    )
+    subprocess.run(
+        ["plutil", "-replace", "SUScheduledCheckInterval", "-integer",
+         str(_CHECK_INTERVAL_SECONDS), str(info)],
         check=True,
     )
 
