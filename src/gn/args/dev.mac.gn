@@ -37,3 +37,8 @@ enable_platform_ac3_eac3_audio = true     # Dolby Digital AC-3 / E-AC-3
 enable_platform_ac4_audio = true          # Dolby AC-4
 enable_platform_dts_audio = true          # DTS / DTS-X
 enable_platform_mpeg_h_audio = true       # MPEG-H 3D Audio
+
+# Pin every base::Feature to its compiled default (see release.mac.gn). Also
+# permanently fixes the UsePersistentCacheForCodeCache renderer abort: dev runs
+# no longer need --disable-field-trial-config (passing it becomes a no-op).
+disable_fieldtrial_testing_config = true

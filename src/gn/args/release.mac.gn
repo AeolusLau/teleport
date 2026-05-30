@@ -1,7 +1,7 @@
 # Official channel build args for the teleport overlay on macOS (Apple Silicon).
 # Distinct out dir from dev (out/mac/arm64/release). One build serves all
 # channels; channel identity (feed URL / bundle id) is applied at packaging
-# time by scripts/package_release.py — see the dogfood channel spec §3.4.
+# time by scripts/package_release.py — see the canary channel spec §3.4.
 target_os = "mac"
 target_cpu = "arm64"
 
@@ -10,7 +10,7 @@ is_official_build = true
 is_component_build = false
 use_remoteexec = false
 
-# Profile-guided optimization, so dogfood runtime perf tracks the production
+# Profile-guided optimization, so canary runtime perf tracks the production
 # config (PGO is the main perf gap between an official no-PGO build and shipping
 # Chrome). is_official_build defaults this to 2 on mac; set explicitly for
 # clarity. phase=2 hard-requires two profile sets in the checkout: the Chrome PGO
@@ -33,3 +33,10 @@ enable_platform_ac3_eac3_audio = true
 enable_platform_ac4_audio = true
 enable_platform_dts_audio = true
 enable_platform_mpeg_h_audio = true
+
+# Pin every base::Feature to its compiled default: disable the compiled-in
+# fieldtrial_testing_config (the only field-trial source for an unbranded build,
+# which fetches no variations seed). Keeps distributed channels free of
+# unexpected experiments. Independent of channel (channel only filters seed
+# studies, of which we have none).
+disable_fieldtrial_testing_config = true

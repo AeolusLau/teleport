@@ -1,12 +1,12 @@
-# macOS dogfood 通道包 + 自动升级 — 设计
+# macOS canary 通道包 + 自动升级 — 设计
 
 > **状态**:已批准设计(brainstorm 产出)。
-> **日期**:2026-05-26。**分支**:`worktree-macos-dogfood-channel`。
+> **日期**:2026-05-26。**分支**:`worktree-macos-canary-channel`。
 > **上游**:M148(`148.0.7778.180`)。**平台**:仅 macOS(Apple Silicon)。
 
 ## 1. 目标
 
-为内部团队提供一条可分发、**具备自动升级能力**的 dogfood 通道包:首次分发之后,新版本通过自动升级触达,无需手动重新下载安装。一次性打通"编译 official → 打包 → Developer ID 签名 → 公证 → 托管 → 升级触达"的完整流水线。
+为内部团队提供一条可分发、**具备自动升级能力**的 canary 通道包:首次分发之后,新版本通过自动升级触达,无需手动重新下载安装。一次性打通"编译 official → 打包 → Developer ID 签名 → 公证 → 托管 → 升级触达"的完整流水线。
 
 ## 2. 范围
 
@@ -27,14 +27,14 @@
 - **全静默后台升级**(Chrome 式):地基前向兼容,后续翻开关即可,**不需要废弃任何本期工作**。
 - **Omaha 4 / `chrome/updater` + 自建 Omaha 服务器**:留给未来面向企业批量部署的 phase。
 - 增量(delta)更新;Intel / universal binary;Windows / Linux。
-- CI(本仓库 CI 尚未建立);崩溃 / 隐私上报;多通道实装(结构留口,只上 dogfood 单通道)。
+- CI(本仓库 CI 尚未建立);崩溃 / 隐私上报;多通道实装(结构留口,只上 canary 单通道)。
 - 完整 rebrand(`CFBundleDisplayName`=闪现、产品 semver 命名策略等)——版本号形式 `0.1.0` 已前向兼容,rebrand 时只换名字、版本形式不动。
 
 ## 3. 方案决策
 
 ### 3.1 Sparkle 而非 Omaha
 
-对象存储是静态托管,服务不了 Omaha 的动态 JSON 请求/响应协议;静态托管下实质只能用 Sparkle。Sparkle 2 的静态 appcast + EdDSA 签名正好契合,且是 macOS 生态最成熟方案(Brave、Vivaldi 均用)。自建 Omaha(rebrand `chrome/updater` + 自建并运维 Omaha 服务器 + root 特权助手)为周到月级工程,并自背一块提权攻击面(参见 CVE-2026-7997),dogfood 阶段严重过度设计。
+对象存储是静态托管,服务不了 Omaha 的动态 JSON 请求/响应协议;静态托管下实质只能用 Sparkle。Sparkle 2 的静态 appcast + EdDSA 签名正好契合,且是 macOS 生态最成熟方案(Brave、Vivaldi 均用)。自建 Omaha(rebrand `chrome/updater` + 自建并运维 Omaha 服务器 + root 特权助手)为周到月级工程,并自背一块提权攻击面(参见 CVE-2026-7997),canary 阶段严重过度设计。
 
 ### 3.2 提示 + 一键升级,装 /Applications,无 root 助手
 
@@ -44,15 +44,15 @@
 
 ### 3.3 桶访问:公开可读 + 难猜路径 + EdDSA
 
-dogfood 阶段取最简:对象公开可读,但 appcast/产物路径含**不可猜测的随机段**,完整性由 **EdDSA 签名 + Sparkle 代码签名校验**保证。已知取舍:拿到 URL 者可下载到内部构建。若未来需要真正访问控制,需引入鉴权端点(Sparkle 对带鉴权 feed 支持弱),会把方案推向后端服务——超出 dogfood 范围。
+canary 阶段取最简:对象公开可读,但 appcast/产物路径含**不可猜测的随机段**,完整性由 **EdDSA 签名 + Sparkle 代码签名校验**保证。已知取舍:拿到 URL 者可下载到内部构建。若未来需要真正访问控制,需引入鉴权端点(Sparkle 对带鉴权 feed 支持弱),会把方案推向后端服务——超出 canary 范围。
 
 ### 3.4 通道与构建:编译一次,按通道分别打包签名
 
-dogfood / beta / stable 三通道(未来)是**同一份源码**(同 M148 + 同 overlay),差异只在:① 更新 feed(`SUFeedURL`)② app 身份(bundle ID,使多通道并存、各收各的更新)③ 可选显示名/图标 ④ 何时把某构建"晋级"到该通道。这些差异**都不是编译期的**:feed URL 与 bundle ID 在 Info.plist 里、被代码签名封死,故在**打包签名阶段**烘焙;in-app 通道标识(若做)走**运行期**读 Info.plist(同 Chrome `GetChannel()`)。
+canary / beta / stable 三通道(未来)是**同一份源码**(同 M148 + 同 overlay),差异只在:① 更新 feed(`SUFeedURL`)② app 身份(bundle ID,使多通道并存、各收各的更新)③ 可选显示名/图标 ④ 何时把某构建"晋级"到该通道。这些差异**都不是编译期的**:feed URL 与 bundle ID 在 Info.plist 里、被代码签名封死,故在**打包签名阶段**烘焙;in-app 通道标识(若做)走**运行期**读 Info.plist(同 Chrome `GetChannel()`)。
 
 因此模型为:**编译一次(共享 `out/mac/arm64/release`,数小时)→ 按通道分别打包+签名+公证**,各通道产出各自的 dmg + 各自的 appcast(同 Chrome 签名模块"一次构建、多份 distribution")。**不为每个通道单独编译**;只有出现编译期差异(不同 feature flags 等,本项目没有)才需分别编译。"晋级"= 把已编译版本用目标通道身份打包并发到该通道 feed,stable 只是更新更慢。
 
-**本期**:仅 dogfood 单通道 = 一次编译、一份 distribution;架构按"编译一次 → 打 N 份"预留,加 beta/stable 时不改编译,只在打包/签名层加通道配置。
+**本期**:仅 canary 单通道 = 一次编译、一份 distribution;架构按"编译一次 → 打 N 份"预留,加 beta/stable 时不改编译,只在打包/签名层加通道配置。
 
 ## 4. 架构与 overlay 落点
 
@@ -105,7 +105,7 @@ dogfood / beta / stable 三通道(未来)是**同一份源码**(同 M148 + 同 o
   2. 扩展 `parts.py`,把 Sparkle 的 XPC 服务/Autoupdate 加进需签名组件清单,纳入 inside-out 顺序。
   3. 在签名模块的 bundle 定制阶段(签名前)写入 `TELEPORT_VERSION` 的版本。
 - **entitlements**:复用 Chrome 现成 `app-entitlements.plist` 等;Sparkle 组件配最小 entitlements(进 `branding/` 或签名配置)。
-- **`package_release.py` 串联**:official 构建(`autoninja -C out/mac/arm64/release chrome`)→ 调签名 driver,**按目标通道**套 Info.plist(feed URL / bundle ID / 通道标识)+ 可选图标后签名+公证+装订+dmg → 版本护栏校验 → `generate_appcast` → 上传对象存储。本期只产出 dogfood 一份 distribution。
+- **`package_release.py` 串联**:official 构建(`autoninja -C out/mac/arm64/release chrome`)→ 调签名 driver,**按目标通道**套 Info.plist(feed URL / bundle ID / 通道标识)+ 可选图标后签名+公证+装订+dmg → 版本护栏校验 → `generate_appcast` → 上传对象存储。本期只产出 canary 一份 distribution。
 
 ### 5.5 发布与 appcast
 
@@ -113,7 +113,7 @@ dogfood / beta / stable 三通道(未来)是**同一份源码**(同 M148 + 同 o
 - **对象存储布局**(单通道,留口给未来多通道):
 
   ```
-  <bucket>/dogfood/<unguessable-token>/
+  <bucket>/canary/<unguessable-token>/
     appcast.xml          ← 短缓存 TTL(新版尽快被发现)
     Teleport-0.1.0.dmg   ← 不可变、长缓存(文件名带 semver)
     Teleport-0.1.1.dmg
@@ -142,11 +142,11 @@ dogfood / beta / stable 三通道(未来)是**同一份源码**(同 M148 + 同 o
 涉及两套独立密钥:**Apple Developer ID**(苹果身份,签名+公证)与 **Sparkle EdDSA**(升级 feed 防伪)。
 
 - **备份(首要)**:EdDSA 私钥不能只躺在发版机 login Keychain。用 `generate_keys -x <file>` 导出,加密存离线 + 密码管理器。Developer ID 证书丢失可经 Apple 吊销并重新签发(Team ID 不变,现网信任不断),恢复性较好。
-  - **不走 Secure Enclave**:Sparkle 用 Ed25519,而 Secure Enclave 只支持 P-256 ECC,**Ed25519 无法由 SEP 托管**;Developer ID 私钥为 RSA,同样非 SEP 托管。两把钥匙都走 Keychain + 离线备份,硬件级非导出托管只能靠外部 HSM/智能卡且 Sparkle 无集成,dogfood 不做。
+  - **不走 Secure Enclave**:Sparkle 用 Ed25519,而 Secure Enclave 只支持 P-256 ECC,**Ed25519 无法由 SEP 托管**;Developer ID 私钥为 RSA,同样非 SEP 托管。两把钥匙都走 Keychain + 离线备份,硬件级非导出托管只能靠外部 HSM/智能卡且 Sparkle 无集成,canary 不做。
 - **EdDSA 私钥丢失的恢复路径 = 密钥轮换**:因包同时有 Developer ID 代码签名,Sparkle 升级校验有两个独立信任锚,允许**一次只换一个**。丢了 EdDSA 私钥时,发"恢复更新":用新 EdDSA 密钥 + 新 `SUPublicEDKey`,但**仍用同一 Developer ID 签名**;现网版本经未变的代码签名接受该更新,从此信任新 EdDSA 密钥。
 - **不预埋多公钥**:Sparkle 不支持静态多公钥信任列表(仅为提案),无需也无法靠"备用公钥"恢复;Developer-ID 兜底的轮换才是机制。
 - **两条硬约束**:① 轮换的代码签名兜底**仅对 dmg 生效,新版 Sparkle 对 zip/tar 不再支持**——这是选 dmg 作升级产物的又一条理由;② **绝不同时换 Developer ID 与 EdDSA**(两锚皆失配则现网彻底升不动),要换一次只换一个、待全员升级后再换另一个。
-- **跨通道/架构/平台密钥策略**:Developer ID 身份所有通道/架构共用一个(通道靠 bundle ID 区分);同一产品不同架构(arm64 / 未来 Intel)共用同一 EdDSA 密钥;EdDSA 为 Sparkle/macOS 专属,未来 Windows/Linux 各用各的更新器与密钥、不共用。通道层面:dogfood / 内部阶段所有通道共用一把 EdDSA 密钥(最简);将来 stable 面向更广受众时,建议给 stable 单独一把以缩小爆炸半径。
+- **跨通道/架构/平台密钥策略**:Developer ID 身份所有通道/架构共用一个(通道靠 bundle ID 区分);同一产品不同架构(arm64 / 未来 Intel)共用同一 EdDSA 密钥;EdDSA 为 Sparkle/macOS 专属,未来 Windows/Linux 各用各的更新器与密钥、不共用。通道层面:canary / 内部阶段所有通道共用一把 EdDSA 密钥(最简);将来 stable 面向更广受众时,建议给 stable 单独一把以缩小爆炸半径。
 
 ## 8. 错误处理
 

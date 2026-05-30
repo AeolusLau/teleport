@@ -1,8 +1,8 @@
-# Chrome 风格 dogfood dmg 背景实现计划
+# Chrome 风格 canary dmg 背景实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 dogfood dmg 打开后的窗口做成 macOS 版 Google Chrome 默认安装窗口的观感(竖版纯白底、下方岩蓝圆角卡片含大白下箭头、应用程序文件夹带别名角标、普通黑字标签)。
+**Goal:** 把 canary dmg 打开后的窗口做成 macOS 版 Google Chrome 默认安装窗口的观感(竖版纯白底、下方岩蓝圆角卡片含大白下箭头、应用程序文件夹带别名角标、普通黑字标签)。
 
 **Architecture:** 几何/配色集中到一个无第三方依赖的纯模块 `scripts/dmg_layout.py`,作为"背景美术"与"Finder 图标摆放"两边的唯一事实来源;`gen_dmg_background.py` 据此只画静态美术(白底 + 卡片 + 箭头),`dmg_settings.py` 据此摆放真实图标并隐藏文件夹标签;pytest 守护两边对齐(纯逻辑,免 PIL),渲染与最终窗口靠合成预览图人工比对。
 
@@ -93,7 +93,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'dmg_layout'`
 - [ ] **Step 3: 实现 `scripts/dmg_layout.py`**
 
 ```python
-"""Single source of truth for the dogfood dmg window geometry & colors.
+"""Single source of truth for the canary dmg window geometry & colors.
 
 Both scripts/gen_dmg_background.py (paints the static background art) and
 scripts/dmg_settings.py (places the Finder icons) must agree on these numbers,
@@ -224,7 +224,7 @@ Expected: FAIL — 现有 `dmg_settings.py` 是横版 `window_rect=((220,220),(6
 - [ ] **Step 3: 重写 `scripts/dmg_settings.py`**
 
 ```python
-"""dmgbuild settings for the Teleport dogfood disk image.
+"""dmgbuild settings for the Teleport canary disk image.
 
 Invoked by scripts/package_release.py via:
   dmgbuild -s scripts/dmg_settings.py \
@@ -292,7 +292,7 @@ git commit -m "feat(dmg): portrait Chrome-style window layout + hidden Apps labe
 
 ```python
 #!/usr/bin/env python3
-"""Generate the dogfood dmg background image (brand/dmg/background.png).
+"""Generate the canary dmg background image (brand/dmg/background.png).
 
 Paints only the static art for a Chrome-style portrait install window: a white
 canvas and a lower rounded card with a big white down-arrow. The app icon, the
@@ -380,7 +380,7 @@ git commit -m "feat(dmg): repaint background as Chrome-style white canvas + arro
 
 ```python
 #!/usr/bin/env python3
-"""Assemble a preview of the dogfood dmg window for visual QA.
+"""Assemble a preview of the canary dmg window for visual QA.
 
 Composites the real app icon, the system Applications folder + alias badge, and
 the Finder-style app label onto the generated background, at the exact icon

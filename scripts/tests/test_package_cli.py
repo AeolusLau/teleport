@@ -53,7 +53,7 @@ def test_dev_build_stamps_version_after_build(monkeypatch, capsys):
 
 
 def _stub_distributable(monkeypatch, order, *, distribute):
-    """Stub every side-effecting call package.main makes for a dogfood run,
+    """Stub every side-effecting call package.main makes for a canary run,
     recording call order. Returns nothing; assertions live in the test."""
     monkeypatch.setattr(package, "read_teleport_version", lambda: "1.2.3")
     monkeypatch.setattr(package, "build",
@@ -66,7 +66,7 @@ def _stub_distributable(monkeypatch, order, *, distribute):
     }
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: dict(cfg))
     monkeypatch.setattr(package._package, "stamp_and_inject",
-                        lambda app, v, c: order.append(("stamp", v)))
+                        lambda app, v, c, ch: order.append(("stamp", v, ch)))
     monkeypatch.setattr(package._package, "sign_app",
                         lambda app, ud, ident: order.append(("sign", ident)))
 
@@ -92,7 +92,7 @@ def _stub_distributable(monkeypatch, order, *, distribute):
 def test_distribute_runs_guards_before_build_and_tags_after_upload(monkeypatch, capsys):
     order = []
     _stub_distributable(monkeypatch, order, distribute=True)
-    rc = package.main(["--channel", "dogfood", "--distribute"])
+    rc = package.main(["--channel", "canary", "--distribute"])
     assert rc == 0
     names = [c[0] for c in order]
     # fail-fast: all three guards precede the build
@@ -104,13 +104,14 @@ def test_distribute_runs_guards_before_build_and_tags_after_upload(monkeypatch, 
     assert names.index("upload") < names.index("tag_and_push")
     assert ("generate_appcast", "Teleport-1.2.3.dmg") in order
     assert ("tag_and_push", "1.2.3", "origin") in order
-    assert "published 1.2.3 (dogfood)" in capsys.readouterr().out
+    assert ("stamp", "1.2.3", "canary") in order
+    assert "published 1.2.3 (canary)" in capsys.readouterr().out
 
 
 def test_distribute_local_without_publish_stops_after_dmg(monkeypatch, capsys):
     order = []
     _stub_distributable(monkeypatch, order, distribute=False)
-    rc = package.main(["--channel", "dogfood"])  # no --distribute
+    rc = package.main(["--channel", "canary"])  # no --distribute
     assert rc == 0
     names = [c[0] for c in order]
     assert "dmg" in names
@@ -118,11 +119,11 @@ def test_distribute_local_without_publish_stops_after_dmg(monkeypatch, capsys):
     assert "not published" in capsys.readouterr().out
 
 
-def test_dogfood_distribute_dry_run_has_no_side_effects(monkeypatch, capsys):
+def test_canary_distribute_dry_run_has_no_side_effects(monkeypatch, capsys):
     order = []
     _stub_distributable(monkeypatch, order, distribute=True)
     # If any guard/build/network stub fires, it appends to order — must stay empty.
-    rc = package.main(["--channel", "dogfood", "--distribute", "--dry-run"])
+    rc = package.main(["--channel", "canary", "--distribute", "--dry-run"])
     assert rc == 0
     assert order == []  # dry-run did not build, guard, fetch, sign, tag, or upload
     out = capsys.readouterr().out

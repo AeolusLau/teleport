@@ -32,22 +32,21 @@ autoninja -C out/mac/arm64/dev chrome           # 首次数小时
 ```bash
 BIN=out/mac/arm64/dev/Teleport.app/Contents/MacOS/Teleport
 "$BIN" --user-data-dir=/tmp/tp --no-first-run --no-default-browser-check \
-       --disable-field-trial-config \
        --enable-logging --log-file=/tmp/tp.log --v=1 >/dev/null 2>&1 &
 PID=$!; sleep 12; kill "$PID"; wait "$PID" 2>/dev/null
 grep -a "\[teleport\]" /tmp/tp.log
 # 期望:...INFO:../../teleport/browser/teleport_startup.cc:12] [teleport] 闪现 overlay active (M148)
 ```
 
-> **dev 构建务必加 `--disable-field-trial-config`**:否则 `fieldtrial_testing_config.json` 会强开实验特性,部分未完成会崩溃(如 `UsePersistentCacheForCodeCache` 加载页面时经沙箱 SQLite VFS 的 WAL 路径命中 `NOTREACHED`)。亦可精确 `--disable-features=UsePersistentCacheForCodeCache`。
+> dev/release 构建均已通过 GN `disable_fieldtrial_testing_config=true` 钉死字段试验,运行不再需要 `--disable-field-trial-config`(传了也是 no-op)。
 
 ## dev 构建已知崩溃(非 overlay 问题,正式构建无)
 
 dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensive_dchecks` 默认 true,把上游一批「重型自检」断言编进来。已知会在正常浏览中误触发、abort 渲染进程("页面崩溃" / Aw Snap)的:
 
-- **`ng_shape_cache.h:243` 的 `DCHECK_EQ(*cached_result, *other_shape_result)`** —— 字体 shaping 缓存的一致性自检。CJK 文本(如 baidu)在字体 fallback 解析上有不确定性,缓存结果(仅存无 fallback 的)与重算结果的字体引用对不上而触发(两次 dump 字形完全一致,差异在 `ToString` 不打印的字段);属上游已知脆弱点 `crbug.com/486945341`。栈顶常是 JS 读 `Element::innerText` → 强制同步 layout → shaping。**编译期 `#if EXPENSIVE_DCHECKS_ARE_ON()` 守卫,运行时 `--disable-features` / `--disable-field-trial-config` 关不掉**。
+- **`ng_shape_cache.h:243` 的 `DCHECK_EQ(*cached_result, *other_shape_result)`** —— 字体 shaping 缓存的一致性自检。CJK 文本(如 baidu)在字体 fallback 解析上有不确定性,缓存结果(仅存无 fallback 的)与重算结果的字体引用对不上而触发(两次 dump 字形完全一致,差异在 `ToString` 不打印的字段);属上游已知脆弱点 `crbug.com/486945341`。栈顶常是 JS 读 `Element::innerText` → 强制同步 layout → shaping。**编译期 `#if EXPENSIVE_DCHECKS_ARE_ON()` 守卫,运行时 `--disable-features` 关不掉**。
   - 处置:`gn/args/dev.mac.gn` 已设 `enable_expensive_dchecks = false`(只关重型自检,保留普通 DCHECK)。改该 arg 后需重新 `gn gen` + 增量构建(改 buildflag → 一波较大增量重编,非从头);验证:重跑 baidu 反复搜索,不再出现 `ng_shape_cache.h:243` 的 FATAL。
-- **`UsePersistentCacheForCodeCache`** —— 见上「抓启动 banner」note:由 `fieldtrial_testing_config.json` 强开,经沙箱 SQLite VFS 的 WAL 路径命中 `NOTREACHED`。这个是运行时 feature,加 `--disable-field-trial-config`(或精确 `--disable-features=UsePersistentCacheForCodeCache`)即可关。
+- **`UsePersistentCacheForCodeCache`** —— 曾由 `fieldtrial_testing_config.json` 在 dev 构建时强开,经沙箱 SQLite VFS 的 WAL 路径命中 `NOTREACHED`。现已通过 GN `disable_fieldtrial_testing_config=true` 钉死,dev 构建不再强开此 feature。
 
 > 共同点:均为上游在「非 official + DCHECK」构建下才暴露的问题,与 overlay 无关(`patches/`、`src/` 未碰 shaping/font/dcheck;崩溃栈无 `teleport::` 帧),stable/official 构建均不出现。
 
@@ -63,7 +62,7 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | 版权 | `grep COPYRIGHT chrome/app/theme/chromium/BRANDING` 含 `BeanSec` | ✅ |
 | app 图标 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` 一致 | ✅ |
 | en 文案 | `strings .../en.lproj/locale.pak \| grep -i "BeanSec\|Teleport"` 出现 Teleport / BeanSec / "Make Teleport the default browser" | ✅ |
-| 运行 | `Teleport --disable-field-trial-config …` 启动有 banner、0 FATAL | ✅ |
+| 运行 | `Teleport …` 启动有 banner、0 FATAL | ✅ |
 | 幂等 | `branding_strings.py` 二次运行 = 0 ids remapped | ✅ |
 
 GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"BeanSec";各处 product logo = 我方标记。
@@ -76,7 +75,7 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 ## teleport:// scheme 别名
 
-启动:`open -n out/mac/arm64/dev/Teleport.app --args --disable-field-trial-config`。
+启动:`open -n out/mac/arm64/dev/Teleport.app`。
 
 | # | 检查 | 期望 |
 |---|---|---|
@@ -90,13 +89,13 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 > 已知限制(本期不做):`teleport://help` 不会重定向到 `settings/help`(短路跳过 `HandleWebUI` 的 host 改写),改用 `teleport://settings/help`;地址栏以外的 URL 显示面(页面信息气泡、状态栏)、chrome-urls 以外的页内 `chrome://` 文本均为后续增量。
 
-## dogfood 渠道包 + Sparkle 自动升级(macOS,已端到端验证)
+## canary 渠道包 + Sparkle 自动升级(macOS,已端到端验证)
 
 前置见 `CLAUDE.md` 的「渠道包/自动升级」段(Developer ID 证书、notarytool profile、EdDSA 密钥、`scripts/release_config.local.toml`)。发布后用公网 URL 校验,不依赖本地构建产物。
 
 | # | 命令 / 检查 | 期望 | 实测 |
 |---|---|---|---|
-| 1 | `uv run python scripts/package.py --channel dogfood --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (dogfood), tagged v<ver>` | ✅ |
+| 1 | `uv run python scripts/package.py --channel canary --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (canary), tagged v<ver>` | ✅ |
 | 2 | `curl -fsSI <feed>/Teleport-<ver>.dmg` | HTTP 200,`Cache-Control: ...immutable`,~110MB(ULMO) | ✅ |
 | 3 | 下载后 `spctl -a -t install <dmg>` | `accepted` + `source=Notarized Developer ID` | ✅ |
 | 4 | `xcrun stapler validate <dmg>` | `The validate action worked!` | ✅ |
@@ -117,14 +116,15 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 ## About 页 / 版本 / 更新(macOS,本次新增,待人工冒烟)
 
-前置:release 包经 `package.py` stamp(dev 见 #1)或 dogfood 打包;检查更新需 feed 可用(dogfood 渠道)。运行 release/official 包无需 `--disable-field-trial-config`。
+前置:release 包经 `package.py` stamp(dev 见 #1)或 canary 打包;检查更新需 feed 可用(canary 渠道)。dev/release/official 构建均已钉死字段试验,无需 `--disable-field-trial-config`。
 
 | # | 检查 | 期望 |
 |---|---|---|
 | 1 | dev(`uv run python scripts/package.py --channel dev` 后)`chrome://settings/help` 版本行 | `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`,不含 `148.x` |
 | 2 | dev `chrome://version` 首行值 | `<TELEPORT_VERSION>`(非 `148.x`);**UA 行仍含 `Chrome/148`**(未误伤兼容性) |
 | 3 | 裸 `autoninja chrome`(未经 package.py stamp)版本 | `0.0.0-dev`,绝不暴露 chromium 版本号 |
-| 4 | dogfood 打包后版本行 | 含「正式版本」+ `arm64` + 真实 Teleport 版本 |
+| 4 | canary 打包后版本行 | 含「正式版本」+ `arm64` + 真实 Teleport 版本 |
+| 4.1 | canary 包 `chrome://version` 通道行(Channel) | 显示 `canary`(非空/`unknown`),据此升级徽标走 1 小时档 |
 | 5 | About 页「检查更新」- 无更新 | 转圈 →「已是最新版本」 |
 | 6 | About 页「检查更新」- 有更新 | 转圈 → 下载进度 →「重启以更新」按钮 |
 | 7 | 有更新就绪时工具栏主菜单按钮 | 升级小圆点 + 菜单「重启以更新」项 |

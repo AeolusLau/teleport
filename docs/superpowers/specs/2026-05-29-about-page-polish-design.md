@@ -3,7 +3,7 @@
 - 状态:设计稿(待评审)
 - 日期:2026-05-29
 - 范围:仅 macOS(Apple Silicon)。Windows/Linux 为后续 phase。
-- 关联:`docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`(Sparkle/打包/分发基线)。
+- 关联:`docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`(Sparkle/打包/分发基线)。
 
 ## 1. 背景与目标
 
@@ -30,7 +30,7 @@
 - 不改全局 `version_info::GetVersionNumber()`(User-Agent 的 `Chrome/148` 必须保持,否则伤网站兼容)。
 - 不实现反馈上报的自有后端(后续单独对接;本次仅复用上游 `OpenFeedbackDialog`)。
 - 不做 Windows/Linux。
-- 不做 beta/stable 多通道、全静默后台升级等(沿用既有 dogfood 基线)。
+- 不做 beta/stable 多通道、全静默后台升级等(沿用既有 canary 基线)。
 
 ## 2. 总体架构决策:Sparkle 统一为单一 updater(方案 A)
 
@@ -64,7 +64,7 @@ SPUUpdater* updater = [[SPUUpdater alloc]
 - **若读到的值等于编译期 chromium 版本**(`version_info::GetVersionNumber()`),说明该 bundle 未被 stamp(裸 `autoninja chrome`,未走 package.py),回退为占位符 `0.0.0-dev`。
 - 否则返回 bundle 里的值(即 `TELEPORT_VERSION`)。
 
-> 这样无需按 `is_official_build` 分支:dev/dogfood 经 package.py stamp 后都显示真实 Teleport 版本(见 §4.4 给 dev 补 stamp),只有未打包的裸构建才显示占位符,且任何情况下都不会暴露 chromium 版本号。
+> 这样无需按 `is_official_build` 分支:dev/canary 经 package.py stamp 后都显示真实 Teleport 版本(见 §4.4 给 dev 补 stamp),只有未打包的裸构建才显示占位符,且任何情况下都不会暴露 chromium 版本号。
 
 两个展示点覆盖(均在同一文件 `chrome/browser/ui/webui/version/version_ui.cc`):
 
@@ -211,7 +211,7 @@ void AttemptRelaunch() {
 
 1. dev(经 package.py):About 页显示 `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`;chrome://version 首行值为 Teleport 版本。
 2. 裸 `autoninja chrome`:About 页显示 `0.0.0-dev`,不出现 chromium 版本号。
-3. dogfood 打包:版本行显示 `正式版本` + `arm64` + Teleport 版本。
+3. canary 打包:版本行显示 `正式版本` + `arm64` + Teleport 版本。
 4. 检查更新-无更新:转圈 → 「已是最新版本」。
 5. 检查更新-有更新:转圈 → 下载/更新进度 → 「重启以更新」按钮出现;主菜单按钮小圆点 + 菜单「重启以更新」项出现。
 6. 点 About「重启」或主菜单升级项 → Sparkle 安装并重启到新版本(端到端,沿用 0.1.x 升级验证方式)。

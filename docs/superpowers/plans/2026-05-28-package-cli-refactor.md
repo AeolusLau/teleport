@@ -29,7 +29,7 @@
 | `scripts/tests/test_publish.py` | Create | _publish 单测 |
 | `scripts/tests/test_package_cli.py` | Create | package.py 入口决策单测 |
 | `scripts/tests/test_package_release.py` | Delete | 被上面拆分取代 |
-| `scripts/release_config.local.toml.example` | Modify | 改嵌套 `[channel.dogfood]` 形态 |
+| `scripts/release_config.local.toml.example` | Modify | 改嵌套 `[channel.canary]` 形态 |
 | `CLAUDE.md` | Modify | 更新 layout 描述 + 命令块 + 版本注 |
 | `scripts/smoke_check.md` | Modify | 更新发布命令 |
 | `scripts/dmg_settings.py` | Modify | 注释里 `package_release.py` → `package.py` |
@@ -58,7 +58,7 @@ _NESTED = (
     'notary_profile = "p"\n'
     'codesign_identity = "Developer ID Application: X (T)"\n'
     "\n"
-    "[channel.dogfood]\n"
+    "[channel.canary]\n"
     'public_ed_key = "k"\n'
     'feed_url = "https://h.example.com/a/appcast.xml"\n'
     'download_base_url = "https://h.example.com/a/"\n'
@@ -69,7 +69,7 @@ _NESTED = (
 def test_load_channel_config_merges_shared_and_channel(tmp_path):
     p = tmp_path / "c.toml"
     p.write_text(_NESTED)
-    cfg = _config.load_channel_config(p, "dogfood")
+    cfg = _config.load_channel_config(p, "canary")
     assert cfg["notary_profile"] == "p"
     assert cfg["feed_url"].startswith("https://")
     assert cfg["oss_upload_target"].startswith("oss://")
@@ -85,13 +85,13 @@ def test_load_channel_config_missing_section_raises(tmp_path):
 
 def test_load_channel_config_missing_file_raises(tmp_path):
     with pytest.raises(SystemExit, match="missing"):
-        _config.load_channel_config(tmp_path / "nope.toml", "dogfood")
+        _config.load_channel_config(tmp_path / "nope.toml", "canary")
 
 
 def test_load_channel_config_respects_explicit_git_remote(tmp_path):
     p = tmp_path / "c.toml"
-    p.write_text('git_remote = "upstream"\n[channel.dogfood]\nfeed_url="x"\n')
-    cfg = _config.load_channel_config(p, "dogfood")
+    p.write_text('git_remote = "upstream"\n[channel.canary]\nfeed_url="x"\n')
+    cfg = _config.load_channel_config(p, "canary")
     assert cfg["git_remote"] == "upstream"
 
 
@@ -203,8 +203,8 @@ def test_resolve_dev():
     assert ch.targets == ("chrome",)
 
 
-def test_resolve_dogfood():
-    ch = _build.resolve_channel("dogfood")
+def test_resolve_canary():
+    ch = _build.resolve_channel("canary")
     assert ch.distributable is True
     assert ch.out == "out/mac/arm64/release"
     assert ch.targets == ("chrome", "chrome/installer/mac")
@@ -220,7 +220,7 @@ def test_build_runs_autoninja(monkeypatch):
     monkeypatch.setattr(_build.subprocess, "run",
                         lambda argv, **kw: calls.append((argv, kw)))
     monkeypatch.setattr(_build, "chromium_src", lambda: "/fake/src")
-    ch = _build.resolve_channel("dogfood")
+    ch = _build.resolve_channel("canary")
     _build.build("out/x", ch)
     argv, kw = calls[0]
     assert argv == ["autoninja", "-C", "out/x", "chrome", "chrome/installer/mac"]
@@ -262,8 +262,8 @@ class Channel:
 
 CHANNELS = {
     "dev": Channel("dev", "out/mac/arm64/dev", False, ("chrome",)),
-    "dogfood": Channel(
-        "dogfood", "out/mac/arm64/release", True,
+    "canary": Channel(
+        "canary", "out/mac/arm64/release", True,
         ("chrome", "chrome/installer/mac"),
     ),
 }
@@ -404,7 +404,7 @@ from pathlib import Path
 from _lib import deps_cache_dir, repo_root
 from fetch_sparkle import SPARKLE_VERSION
 
-# dogfood checks for updates hourly instead of Sparkle's 1-day default
+# canary checks for updates hourly instead of Sparkle's 1-day default
 # (SUDefaultUpdateCheckInterval). 3600s is Sparkle's enforced minimum.
 _CHECK_INTERVAL_SECONDS = 3600
 
@@ -953,7 +953,7 @@ Expected: PASS（4 passed）
 - [ ] **Step 5: dry-run 冒烟(可分发渠道,需配置文件;无则跳过此步)**
 
 若本地已有 `scripts/release_config.local.toml`:
-Run: `uv run python scripts/package.py --channel dogfood --dry-run`
+Run: `uv run python scripts/package.py --channel canary --dry-run`
 Expected: 打印含 `stamp version` / `dmgbuild` 的计划,不构建。
 
 - [ ] **Step 6: 提交**
@@ -996,15 +996,15 @@ notary_profile = "teleport-notary"
 # Git remote the v<semver> release tag is pushed to (default: origin).
 # git_remote = "origin"
 
-[channel.dogfood]
+[channel.canary]
 # Sparkle public EdDSA key (base64) printed by generate_keys.
 public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
 # Appcast feed URL (public https; the OSS native endpoint + unguessable token).
-feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/appcast.xml"
+feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/appcast.xml"
 # Public https base the appcast download links + SUFeedURL point at (trailing /).
-download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/"
+download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/"
 # OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
-oss_upload_target = "oss://<bucket>/dogfood/<token>/"
+oss_upload_target = "oss://<bucket>/canary/<token>/"
 ```
 
 - [ ] **Step 3: 更新 `CLAUDE.md`**
@@ -1016,7 +1016,7 @@ oss_upload_target = "oss://<bucket>/dogfood/<token>/"
 替换为:
 ```
   package.py               打包主入口:--channel(默认 dev,仅构建)/--distribute(发布,仅 main)
-  _build.py                渠道注册表(dev/dogfood)+ autoninja 构建步骤
+  _build.py                渠道注册表(dev/canary)+ autoninja 构建步骤
   _package.py              stamp 版本/注入 Sparkle 键 + 签名 .app + 样式 dmg(签名/公证/staple)
   _publish.py              发布护栏(分支/干净树/tag+feed 双查)+ appcast + OSS 上传 + 打 v<semver> tag
   _config.py               嵌套 [channel.x] 发布配置加载 + 分级 key 校验
@@ -1030,8 +1030,8 @@ uv run python scripts/package_release.py --no-upload   # 仅本地构建+签名+
 替换为:
 ```
 uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
-uv run python scripts/package.py --channel dogfood        # 本地渠道包:构建+签名+公证+样式dmg,不发布
-uv run python scripts/package.py --channel dogfood --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
+uv run python scripts/package.py --channel canary        # 本地渠道包:构建+签名+公证+样式dmg,不发布
+uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
 ```
 
 3c. 版本注(原第 123 行)中 `package_release` 改为 `package`,并补充 tag:
@@ -1045,7 +1045,7 @@ uv run python scripts/package.py --channel dogfood --distribute  # 发布(仅 ma
 ```
 替换为:
 ```
-| 1 | `uv run python scripts/package.py --channel dogfood --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (dogfood), tagged v<ver>` | ✅ |
+| 1 | `uv run python scripts/package.py --channel canary --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (canary), tagged v<ver>` | ✅ |
 ```
 
 - [ ] **Step 5: 更新代码注释引用**

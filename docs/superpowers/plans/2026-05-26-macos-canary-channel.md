@@ -1,8 +1,8 @@
-# macOS dogfood 通道包 + 自动升级 实现计划
+# macOS canary 通道包 + 自动升级 实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 macOS(Apple Silicon)产出可分发、能自动升级的 dogfood 通道包:编译 official → 打包 → Developer ID 签名 → 公证 → 对象存储托管 → Sparkle 提示+一键升级。
+**Goal:** 为 macOS(Apple Silicon)产出可分发、能自动升级的 canary 通道包:编译 official → 打包 → Developer ID 签名 → 公证 → 对象存储托管 → Sparkle 提示+一键升级。
 
 **Architecture:** Sparkle 2 静态 appcast + EdDSA 签名;app 装 `/Applications`;复用 Chrome 的 `chrome/installer/mac/signing/` 做签名/公证/dmg;一个 GN 开关 `teleport_enable_updater` 把 updater 关在 official 构建;Sparkle.framework 钉版本拉取到全局缓存、符号链接桥进检出;`TELEPORT_VERSION` 单一 semver 既作显示版也作 Sparkle 比较版。
 
@@ -82,7 +82,7 @@ Expected: `Credentials saved to Keychain.`(profile 名 `teleport-notary` 供后�
 
 - [ ] **Step 3: 创建对象存储桶 + 难猜路径前缀(手动,厂商自选)**
 
-无统一命令。要点:公开可读、HTTPS、路径含不可猜测随机段,例如 `dogfood/<token>/`。记录基址 `https://<host>/dogfood/<token>/` 供 feed URL。
+无统一命令。要点:公开可读、HTTPS、路径含不可猜测随机段,例如 `canary/<token>/`。记录基址 `https://<host>/canary/<token>/` 供 feed URL。
 
 ---
 
@@ -577,7 +577,7 @@ namespace teleport {
 namespace {
 
 TEST(TeleportFeedUrlTest, AcceptsHttps) {
-  EXPECT_TRUE(IsSecureFeedUrl("https://example.com/dogfood/tok/appcast.xml"));
+  EXPECT_TRUE(IsSecureFeedUrl("https://example.com/canary/tok/appcast.xml"));
 }
 
 TEST(TeleportFeedUrlTest, RejectsHttp) {
@@ -899,7 +899,7 @@ git commit -m "feat(updater): start Sparkle at launch + wire Check-for-Updates m
 # Official channel build args for the teleport overlay on macOS (Apple Silicon).
 # Distinct out dir from dev (out/mac/arm64/release). One build serves all
 # channels; channel identity (feed URL / bundle id) is applied at packaging
-# time by scripts/package_release.py — see the dogfood channel spec §3.4.
+# time by scripts/package_release.py — see the canary channel spec §3.4.
 target_os = "mac"
 target_cpu = "arm64"
 
@@ -954,7 +954,7 @@ Run: `sed -n '1,80p' "$SRC/chrome/installer/mac/signing/config.py"; echo ---; se
 编辑 `$SRC/chrome/installer/mac/signing/config.py`(或其引用的 brand 配置),设置:
 - 签名 `identity` = Task 2 记录的 `Developer ID Application: <Name> (<TEAMID>)`。
 - product/bundle id = `org.teleport.Teleport`(与 BRANDING 的 `MAC_BUNDLE_ID` 一致;Run `grep -n MAC_BUNDLE_ID "$SRC/chrome/app/theme/chromium/BRANDING"` 核对)。
-- 单一 distribution(dogfood),无 channel 后缀。
+- 单一 distribution(canary),无 channel 后缀。
 
 具体字段名以 Step 1 实际为准;保持「最小改动让模块认得 teleport 身份」。
 
@@ -1029,10 +1029,10 @@ git commit -m "feat(signing): sign nested Sparkle XPC/Autoupdate components"
 public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
 
 # Appcast feed URL (object storage, https, includes the unguessable token).
-feed_url = "https://<host>/dogfood/<token>/appcast.xml"
+feed_url = "https://<host>/canary/<token>/appcast.xml"
 
 # Base https URL the dmg + appcast are uploaded under (trailing slash).
-upload_base_url = "https://<host>/dogfood/<token>/"
+upload_base_url = "https://<host>/canary/<token>/"
 
 # Developer ID Application identity (security find-identity output).
 codesign_identity = "Developer ID Application: <Name> (<TEAMID>)"
@@ -1161,7 +1161,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Build + sign + publish a teleport dmg")
     p.add_argument("--out", default="out/mac/arm64/release")
     p.add_argument("--config", type=Path, default=repo_root() / "scripts" / "release_config.local.toml")
-    p.add_argument("--updates-dir", type=Path, default=repo_root() / "dist" / "dogfood")
+    p.add_argument("--updates-dir", type=Path, default=repo_root() / "dist" / "canary")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
 
@@ -1212,7 +1212,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-> 注:`signing.driver` 的精确参数名以 Task 12 Step 1 读到的 `driver.py`/`standard_invoker.py` 为准;Step 6 的 dry-run + Task 16 的真跑会校准。`dist/dogfood/` 为本地暂存(应 gitignore,见 Step 5)。
+> 注:`signing.driver` 的精确参数名以 Task 12 Step 1 读到的 `driver.py`/`standard_invoker.py` 为准;Step 6 的 dry-run + Task 16 的真跑会校准。`dist/canary/` 为本地暂存(应 gitignore,见 Step 5)。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -1246,25 +1246,25 @@ git commit -m "feat(release): package_release.py build+sign+publish orchestrator
 - [ ] **Step 2: 跑完整打包(数小时首次构建 + 公证等待)**
 
 Run: `uv run python scripts/package_release.py`
-Expected: 末尾打印产物路径;`dist/dogfood/Teleport-0.1.0.dmg` 与 `appcast.xml` 生成。若 `signing.driver` 参数不符,据报错对照 `driver.py` 修正 Task 15 Step 3 的命令并重跑。
+Expected: 末尾打印产物路径;`dist/canary/Teleport-0.1.0.dmg` 与 `appcast.xml` 生成。若 `signing.driver` 参数不符,据报错对照 `driver.py` 修正 Task 15 Step 3 的命令并重跑。
 
 - [ ] **Step 3: 验证签名 / 公证 / 装订**
 
-Run: `codesign --verify --deep --strict --verbose=2 dist/dogfood/Teleport.app 2>&1 | tail`
+Run: `codesign --verify --deep --strict --verbose=2 dist/canary/Teleport.app 2>&1 | tail`
 Expected: `valid on disk` / `satisfies its Designated Requirement`。
-Run: `spctl -a -vvv -t install dist/dogfood/Teleport-0.1.0.dmg`
+Run: `spctl -a -vvv -t install dist/canary/Teleport-0.1.0.dmg`
 Expected: `accepted` + `source=Notarized Developer ID`。
-Run: `xcrun stapler validate dist/dogfood/Teleport-0.1.0.dmg`
+Run: `xcrun stapler validate dist/canary/Teleport-0.1.0.dmg`
 Expected: `The validate action worked!`。
 
 - [ ] **Step 4: 验证版本与 Sparkle 键已注入**
 
-Run: `defaults read "$(pwd)/dist/dogfood/Teleport.app/Contents/Info" CFBundleVersion; defaults read "$(pwd)/dist/dogfood/Teleport.app/Contents/Info" SUFeedURL`
+Run: `defaults read "$(pwd)/dist/canary/Teleport.app/Contents/Info" CFBundleVersion; defaults read "$(pwd)/dist/canary/Teleport.app/Contents/Info" SUFeedURL`
 Expected: `0.1.0` 与配置里的 feed URL。
 
 - [ ] **Step 5: 上传到对象存储(手动 / 厂商 CLI)**
 
-把 `dist/dogfood/Teleport-0.1.0.dmg` 与 `appcast.xml` 传到 `upload_base_url`;appcast.xml 设短缓存、dmg 设长缓存/immutable。
+把 `dist/canary/Teleport-0.1.0.dmg` 与 `appcast.xml` 传到 `upload_base_url`;appcast.xml 设短缓存、dmg 设长缓存/immutable。
 Verify: `curl -fsSLI "<feed_url>"` 返回 200;`curl -fsSL "<feed_url>" | head` 含 `sparkle:edSignature`。
 
 ---
@@ -1274,12 +1274,12 @@ Verify: `curl -fsSLI "<feed_url>"` 返回 200;`curl -fsSL "<feed_url>" | head` �
 ### Task 17: 首次分发引导文档
 
 **Files:**
-- Create: `docs/dogfood-install.md`
+- Create: `docs/canary-install.md`
 
 - [ ] **Step 1: 写引导**
 
 ```markdown
-# 闪现 / Teleport dogfood 安装指南
+# 闪现 / Teleport canary 安装指南
 
 1. 下载 `Teleport-<版本>.dmg`(链接:<分发链接>)。
 2. 打开 dmg,把 **Teleport** 拖入「应用程序 / Applications」。
@@ -1290,8 +1290,8 @@ Verify: `curl -fsSLI "<feed_url>"` 返回 200;`curl -fsSL "<feed_url>" | head` �
 - [ ] **Step 2: 提交**
 
 ```bash
-git add docs/dogfood-install.md
-git commit -m "docs: dogfood first-install guide"
+git add docs/canary-install.md
+git commit -m "docs: canary first-install guide"
 ```
 
 ---
@@ -1319,7 +1319,7 @@ Expected: 全程无报错;`spctl`/EdDSA 校验通过(若失败,Console.app 搜 `
 
 - [ ] **Step 4: 把闭环步骤写进 `scripts/smoke_check.md`**
 
-追加一节「dogfood 升级闭环」,含 Step 1–3 的命令与期望、以及回滚预案(下架/替换 appcast 条目;必要时 `minimumAutoupdateVersion`)。
+追加一节「canary 升级闭环」,含 Step 1–3 的命令与期望、以及回滚预案(下架/替换 appcast 条目;必要时 `minimumAutoupdateVersion`)。
 
 - [ ] **Step 5: 提交**
 

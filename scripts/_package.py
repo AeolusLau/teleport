@@ -12,7 +12,7 @@ from pathlib import Path
 from _lib import deps_cache_dir, repo_root
 from fetch_sparkle import SPARKLE_VERSION
 
-# dogfood checks for updates hourly instead of Sparkle's 1-day default
+# canary checks for updates hourly instead of Sparkle's 1-day default
 # (SUDefaultUpdateCheckInterval). 3600s is Sparkle's enforced minimum.
 _CHECK_INTERVAL_SECONDS = 3600
 
@@ -63,15 +63,23 @@ def sparkle_bin(name: str) -> Path:
     return deps_cache_dir() / "sparkle" / SPARKLE_VERSION / "bin" / name
 
 
-def stamp_and_inject(app: Path, version: str, cfg: dict) -> None:
-    """Stamp version + inject Sparkle keys into the app's Info.plist (pre-sign)."""
-    info = app / "Contents" / "Info.plist"
-    sets = {
+def sparkle_plist_string_keys(version: str, cfg: dict, channel_name: str) -> dict[str, str]:
+    """The string-valued Info.plist keys stamped for a distributable channel:
+    version fields, the Sparkle feed/key, and the TeleportChannel marker that
+    drives chrome::GetChannel() at runtime."""
+    return {
         **version_plist_keys(version),
         "SUFeedURL": cfg["feed_url"],
         "SUPublicEDKey": cfg["public_ed_key"],
+        "TeleportChannel": channel_name,
     }
-    for key, val in sets.items():
+
+
+def stamp_and_inject(app: Path, version: str, cfg: dict, channel_name: str) -> None:
+    """Stamp version + Sparkle keys + the TeleportChannel marker into the app's
+    Info.plist (pre-sign)."""
+    info = app / "Contents" / "Info.plist"
+    for key, val in sparkle_plist_string_keys(version, cfg, channel_name).items():
         subprocess.run(["plutil", "-replace", key, "-string", val, str(info)], check=True)
     subprocess.run(
         ["plutil", "-replace", "SUEnableAutomaticChecks", "-bool", "YES", str(info)],

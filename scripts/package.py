@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Build -> stamp -> sign -> styled dmg (notarized).
     build(out, channel)
-    _package.stamp_and_inject(app, version, cfg)
+    _package.stamp_and_inject(app, version, cfg, channel.name)
     _package.sign_app(app, updates_dir, cfg["codesign_identity"])
     target_dmg = _package.build_styled_dmg(
         updates_dir, version, cfg["codesign_identity"], cfg["notary_profile"])

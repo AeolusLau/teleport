@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble a preview of the dogfood dmg window for visual QA.
+"""Assemble a preview of the canary dmg window for visual QA.
 
 Composites the real app icon, the system Applications folder + alias badge, and
 the Finder-style app label onto the generated background, at the exact icon

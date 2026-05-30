@@ -18,6 +18,8 @@ source_set("teleport") {
   sources = [
     "browser/teleport_startup.cc",
     "browser/teleport_startup.h",
+    "common/teleport_channel.cc",
+    "common/teleport_channel.h",
     "common/teleport_feed_url.cc",
     "common/teleport_feed_url.h",
     "common/teleport_url_scheme.cc",
@@ -25,9 +27,9 @@ source_set("teleport") {
     "common/teleport_version.cc",
     "common/teleport_version.h",
   ]
+  public_deps = [ "//components/version_info" ]
   deps = [
     "//base",
-    "//components/version_info",
     "//content/public/common",
     "//url",
   ]
@@ -36,6 +38,7 @@ source_set("teleport") {
     # them unconditionally. With the updater on, the real Sparkle-backed .mm is
     # built; otherwise a no-op stub keeps dev builds free of Sparkle.
     sources += [ "browser/mac/teleport_updater.h" ]
+    sources += [ "common/teleport_channel_mac.mm" ]
     sources += [ "common/teleport_version_mac.mm" ]
     if (teleport_enable_updater) {
       sources += [
@@ -63,6 +66,7 @@ source_set("teleport") {
 test("teleport_unittests") {
   sources = [
     "browser/teleport_startup_unittest.cc",
+    "common/teleport_channel_unittest.cc",
     "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",
     "common/teleport_version_unittest.cc",

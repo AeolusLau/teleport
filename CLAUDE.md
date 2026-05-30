@@ -25,7 +25,7 @@ fairyland 用**奇幻代号**作规范标识符(`sigil`/`realm`/`warden`/`prism`
 - **加法为主**:`src/` 是 overlay 纯源码,构建期以符号名 **`teleport`** 链接进 `chromium/src/teleport`,成为 GN 模块 `//teleport`,经一个最小上游 patch 编进 chrome。
 - **改上游为辅**:文本改动走 `patches/`(`git apply`),整文件/二进制资源走 `branding/`(覆盖拷贝)。
 - 上游基线钉死在 `CHROMIUM_VERSION`(当前 **148.0.7778.180**);M150 非稳定,后续再升级。
-- **当前进度**:macOS overlay 基础**已构建并验证**——品牌化 `Teleport.app`、自定义 `//teleport` 启动 banner、图标、单测均通过;**macOS dogfood 渠道包 + Sparkle 自动升级已端到端跑通**(签名/公证/样式 dmg/OSS 分发,实测 0.1.0→0.1.1 自动升级)。Windows/Linux/国产 OS/CI 为后续 phase。
+- **当前进度**:macOS overlay 基础**已构建并验证**——品牌化 `Teleport.app`、自定义 `//teleport` 启动 banner、图标、单测均通过;**macOS canary 渠道包 + Sparkle 自动升级已端到端跑通**(签名/公证/样式 dmg/OSS 分发,实测 0.1.0→0.1.1 自动升级)。Windows/Linux/国产 OS/CI 为后续 phase。
 
 ## 仓库布局
 
@@ -47,7 +47,7 @@ scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   branding_strings.py      rebrand chromium_strings.grd + zh .xtb 的产品/公司名(→ 闪现)
   fetch_sparkle.py         钉版本拉 Sparkle.framework(SHA256 校验,真实拷进检出)
   package.py               打包主入口:--channel(默认 dev,仅构建)/--distribute(发布,仅 main)
-  _build.py                渠道注册表(dev/dogfood)+ autoninja 构建步骤
+  _build.py                渠道注册表(dev/canary)+ autoninja 构建步骤
   _package.py              stamp 版本/注入 Sparkle 键 + 签名 .app + 样式 dmg(签名/公证/staple)
   _publish.py              发布护栏(分支/干净树/tag+feed 双查)+ appcast + OSS 上传 + 打 v<semver> tag
   _config.py               嵌套 [channel.x] 发布配置加载 + 分级 key 校验
@@ -91,7 +91,7 @@ python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重�
 # 冒烟验证清单见 scripts/smoke_check.md
 ```
 
-### 渠道包 / 自动升级(dogfood,已端到端验证)
+### 渠道包 / 自动升级(canary,已端到端验证)
 
 official 构建 + Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 直连分发,已跑通(实测 0.1.0→0.1.1 自动升级)。前置:Developer ID Application 证书在 keychain、`xcrun notarytool store-credentials` 存好 profile、EdDSA 密钥(`<sparkle>/bin/generate_keys`)、`scripts/release_config.local.toml`(见 `.example`,gitignored)。
 
@@ -103,8 +103,8 @@ python scripts/sync.py                           # 触发 chromium DEPS 的两�
 gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'
 printf '0.1.2\n' > TELEPORT_VERSION              # 每次发版 bump(semver,单调递增)并提交
 uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
-uv run python scripts/package.py --channel dogfood        # 本地渠道包:构建+签名+公证+样式dmg,不发布
-uv run python scripts/package.py --channel dogfood --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
+uv run python scripts/package.py --channel canary        # 本地渠道包:构建+签名+公证+样式dmg,不发布
+uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
 python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重生背景(uv run --with pillow)
 ```
 
@@ -127,7 +127,7 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **dmg 样式**:用 `dmgbuild`(`scripts/dmg_settings.py` + `brand/dmg/background.tiff`)出背景/命名 Applications/卷图标,`format=ULMO`(lzma,~105MB);Chrome 自带 pkg-dmg 样式资源仅 Google 品牌有,故改走 dmgbuild。背景 CJK 字体 fallback 含 STHeiti(PingFang 不一定在,缺则 tofu)。
 - **版本**:`TELEPORT_VERSION`(semver)单一事实来源,签名前 `plutil` 戳进 `CFBundleVersion`(Sparkle 比较版)+`CFBundleShortVersionString`;dmg 改名为 `Teleport-<semver>.dmg`(签名模块按 Chromium 版本命名会跨版本撞车);appcast 只列最新版(`package` 裁到当前 dmg,避免 `--maximum-deltas 0` 仍残留的 delta 悬挂引用)。 发布时给当前 commit 打 `v<semver>` annotated tag 并 push 到 remote(默认 origin);tag 在上传成功后才打,tag 或线上 feed 任一已含该版本即拒绝发布。
 - **EdDSA 私钥**仅在 login keychain + 离线备份(`generate_keys -x`),**绝不入库**;丢失靠 Developer-ID 兜底的密钥轮换(仅 dmg、一次只换一个锚,绝不同时换 Developer ID 和 EdDSA)。Sparkle 用 Ed25519,Secure Enclave 只支持 P-256,故密钥不走 SEP。
-- **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`。
+- **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`。
 
 ## 目标平台
 
@@ -144,7 +144,7 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 
 - 后端服务代号(在 fairyland 内)、浏览器↔后端**策略下发协议**(传输/格式/鉴权)。
 - Windows / Linux 构建(注入从 symlink 换 junction 或受管检出)、国产 OS 适配。
-- ~~代码签名、打包、分发、自动更新~~ → **macOS dogfood 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
+- ~~代码签名、打包、分发、自动更新~~ → **macOS canary 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
 - CI(构建缓存与产物策略)。
 - patch 的创建/刷新/冲突处理工具链(当前只做「应用」)。
 - 完整 rebrand(各平台图标/安装包等)。
@@ -152,5 +152,5 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 ## 参考材料
 
 - 本仓库:`docs/superpowers/specs/2026-05-25-overlay-build-foundation-design.md`、`docs/superpowers/plans/2026-05-25-overlay-build-foundation.md`、`scripts/smoke_check.md`。
-- 渠道包/自动升级:`docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`、`docs/superpowers/plans/2026-05-26-macos-dogfood-channel.md`、`docs/dogfood-install.md`。
+- 渠道包/自动升级:`docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`、`docs/superpowers/plans/2026-05-26-macos-canary-channel.md`、`docs/canary-install.md`。
 - 同级:`../fairyland/CLAUDE.md`、`../fairyland/README.md`(服务端工程约定基线)。

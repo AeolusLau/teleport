@@ -1029,7 +1029,7 @@ cd "$TELEPORT_CHROMIUM_DIR/src"
 gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'
 autoninja -C out/mac/arm64/release chrome
 ```
-冒烟需要可用的 appcast feed(已配置 dogfood)。打开 `chrome://settings/help`,点检查更新:
+冒烟需要可用的 appcast feed(已配置 canary)。打开 `chrome://settings/help`,点检查更新:
 - 无新版本:转圈 → 「已是最新版本」(UPDATED)。
 - 有新版本:转圈 → 下载进度 → 出现「重启以更新」按钮(NEARLY_UPDATED)。
 (「重启」按钮的安装动作在 Task 6 接线;本任务先验证状态展示;此时点击按钮走默认 chrome 重启,尚不应用 Sparkle 更新。)
@@ -1429,7 +1429,7 @@ git commit -m "feat(about): show Report an issue / Privacy policy / Terms of Ser
 
 - [ ] dev(经 `package.py --channel dev` stamp 后):chrome://settings/help 版本行 = `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`;chrome://version 首行值 = `<TELEPORT_VERSION>`,不出现 `148.x`。
 - [ ] 裸 `autoninja chrome`(未 stamp):版本显示 `0.0.0-dev`,不出现 chromium 版本号。
-- [ ] dogfood 打包:版本行含「正式版本」+ `arm64` + 真实 Teleport 版本。
+- [ ] canary 打包:版本行含「正式版本」+ `arm64` + 真实 Teleport 版本。
 - [ ] 检查更新 - 无更新:转圈 → 「已是最新版本」。
 - [ ] 检查更新 - 有更新:转圈 → 进度 → 「重启以更新」按钮;同时工具栏主菜单按钮升级小圆点 + 菜单「重启以更新」项出现。
 - [ ] 点 About「重启」或主菜单升级项 → Sparkle 安装并重启到新版本。
@@ -1451,7 +1451,7 @@ autoninja -C out/mac/arm64/dev teleport_unittests && \
 
 - [ ] **Step 3: 按清单逐项手动冒烟**
 
-按 Step 1 清单实测,全部勾选通过。端到端升级用「低版本装机 + 高版本发 feed」法(参考 dogfood 渠道 spec 与既有 0.1.x 验证)。
+按 Step 1 清单实测,全部勾选通过。端到端升级用「低版本装机 + 高版本发 feed」法(参考 canary 渠道 spec 与既有 0.1.x 验证)。
 
 - [ ] **Step 4: Commit**
 

@@ -22,8 +22,8 @@ class Channel:
 
 CHANNELS = {
     "dev": Channel("dev", "out/mac/arm64/dev", False, ("chrome",)),
-    "dogfood": Channel(
-        "dogfood", "out/mac/arm64/release", True,
+    "canary": Channel(
+        "canary", "out/mac/arm64/release", True,
         ("chrome", "chrome/installer/mac"),
     ),
 }

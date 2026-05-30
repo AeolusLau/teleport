@@ -6,7 +6,7 @@ namespace teleport {
 namespace {
 
 TEST(TeleportFeedUrlTest, AcceptsHttps) {
-  EXPECT_TRUE(IsSecureFeedUrl("https://example.com/dogfood/tok/appcast.xml"));
+  EXPECT_TRUE(IsSecureFeedUrl("https://example.com/canary/tok/appcast.xml"));
 }
 
 TEST(TeleportFeedUrlTest, RejectsHttp) {

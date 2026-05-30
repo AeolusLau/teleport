@@ -6,7 +6,7 @@ _NESTED = (
     'notary_profile = "p"\n'
     'codesign_identity = "Developer ID Application: X (T)"\n'
     "\n"
-    "[channel.dogfood]\n"
+    "[channel.canary]\n"
     'public_ed_key = "k"\n'
     'feed_url = "https://h.example.com/a/appcast.xml"\n'
     'download_base_url = "https://h.example.com/a/"\n'
@@ -17,7 +17,7 @@ _NESTED = (
 def test_load_channel_config_merges_shared_and_channel(tmp_path):
     p = tmp_path / "c.toml"
     p.write_text(_NESTED)
-    cfg = _config.load_channel_config(p, "dogfood")
+    cfg = _config.load_channel_config(p, "canary")
     assert cfg["notary_profile"] == "p"
     assert cfg["feed_url"].startswith("https://")
     assert cfg["oss_upload_target"].startswith("oss://")
@@ -33,13 +33,13 @@ def test_load_channel_config_missing_section_raises(tmp_path):
 
 def test_load_channel_config_missing_file_raises(tmp_path):
     with pytest.raises(SystemExit, match="missing"):
-        _config.load_channel_config(tmp_path / "nope.toml", "dogfood")
+        _config.load_channel_config(tmp_path / "nope.toml", "canary")
 
 
 def test_load_channel_config_respects_explicit_git_remote(tmp_path):
     p = tmp_path / "c.toml"
-    p.write_text('git_remote = "upstream"\n[channel.dogfood]\nfeed_url="x"\n')
-    cfg = _config.load_channel_config(p, "dogfood")
+    p.write_text('git_remote = "upstream"\n[channel.canary]\nfeed_url="x"\n')
+    cfg = _config.load_channel_config(p, "canary")
     assert cfg["git_remote"] == "upstream"
 
 

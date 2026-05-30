@@ -1,4 +1,4 @@
-"""Single source of truth for the dogfood dmg window geometry & colors.
+"""Single source of truth for the canary dmg window geometry & colors.
 
 Both scripts/gen_dmg_background.py (paints the static background art) and
 scripts/dmg_settings.py (places the Finder icons) must agree on these numbers,

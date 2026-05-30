@@ -1,12 +1,12 @@
-# 设计:dogfood dmg 复刻 Chrome 默认安装窗口观感
+# 设计:canary dmg 复刻 Chrome 默认安装窗口观感
 
 - 状态:已批准(brainstorming 产出)
 - 日期:2026-05-27
-- 关联:`docs/superpowers/specs/2026-05-26-macos-dogfood-channel-design.md`(渠道包/自动升级)
+- 关联:`docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`(渠道包/自动升级)
 
 ## 背景与动机
 
-当前 dogfood dmg 的背景由 `scripts/gen_dmg_background.py` 用 PIL 程序化绘制:浅灰垂直渐变 + 一行标题文字(`闪现 · Teleport`)+ 一个扁平蓝色横向箭头 + 一行中文提示。横版布局(640×400),图标左右排列。实测观感粗糙——扁平箭头无质感、渐变发灰、整体不像成熟产品安装包。
+当前 canary dmg 的背景由 `scripts/gen_dmg_background.py` 用 PIL 程序化绘制:浅灰垂直渐变 + 一行标题文字(`闪现 · Teleport`)+ 一个扁平蓝色横向箭头 + 一行中文提示。横版布局(640×400),图标左右排列。实测观感粗糙——扁平箭头无质感、渐变发灰、整体不像成熟产品安装包。
 
 目标:把安装窗口做成 **macOS 版 Google Chrome 安装 dmg 的默认观感**(竖版、纯白底、下方淡色圆角卡片含大白下箭头、应用程序文件夹带别名角标),并以 Teleport 品牌微调配色。
 

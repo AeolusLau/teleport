@@ -11,8 +11,9 @@ def test_resolve_dev():
     assert ch.targets == ("chrome",)
 
 
-def test_resolve_dogfood():
-    ch = _build.resolve_channel("dogfood")
+def test_resolve_canary():
+    ch = _build.resolve_channel("canary")
+    assert ch.name == "canary"
     assert ch.distributable is True
     assert ch.out == "out/mac/arm64/release"
     assert ch.targets == ("chrome", "chrome/installer/mac")
@@ -28,7 +29,7 @@ def test_build_runs_autoninja(monkeypatch):
     monkeypatch.setattr(_build.subprocess, "run",
                         lambda argv, **kw: calls.append((argv, kw)))
     monkeypatch.setattr(_build, "chromium_src", lambda: "/fake/src")
-    ch = _build.resolve_channel("dogfood")
+    ch = _build.resolve_channel("canary")
     _build.build("out/x", ch)
     argv, kw = calls[0]
     assert argv == ["autoninja", "-C", "out/x", "chrome", "chrome/installer/mac"]

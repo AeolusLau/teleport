@@ -1,8 +1,20 @@
 diff --git a/chrome/common/BUILD.gn b/chrome/common/BUILD.gn
-index 1a692fe440945..0b03d7a44e8e1 100644
+index 1a692fe440945..5a81ef8e76bdc 100644
 --- a/chrome/common/BUILD.gn
 +++ b/chrome/common/BUILD.gn
-@@ -258,6 +258,7 @@ static_library("common_lib") {
+@@ -71,7 +71,10 @@ source_set("channel_info") {
+     "channel_info.h",
+   ]
+   configs += [ "//build/config/compiler:wexit_time_destructors" ]
+-  deps = [ "//build:branding_buildflags" ]
++  deps = [
++    "//build:branding_buildflags",
++    "//teleport",
++  ]
+   public_deps = [
+     "//base",
+     "//components/version_info",
+@@ -258,6 +261,7 @@ static_library("common_lib") {
    ]
  
    deps = [

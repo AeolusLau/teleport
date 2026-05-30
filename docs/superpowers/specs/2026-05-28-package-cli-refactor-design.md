@@ -1,12 +1,12 @@
 # 设计:`package_release.py` → `package.py` 重构
 
-> 目标:把"构建 / 签名 / 公证 / stamp / 发布"从一条写死的 dogfood 流水线,重构成
+> 目标:把"构建 / 签名 / 公证 / stamp / 发布"从一条写死的 canary 流水线,重构成
 > **以参数驱动的多渠道打包工具**——默认本地打 dev 包,可选渠道,显式 `--distribute`
 > 才发布;发布仅限 main 分支、自动打版本 tag、阻止重复发布。
 
 ## 背景
 
-现状 `scripts/package_release.py` 是一条写死的 dogfood/release 流水线:固定用
+现状 `scripts/package_release.py` 是一条写死的 canary/release 流水线:固定用
 `out/mac/arm64/release`(official + PGO + updater)→ stamp 版本/注入 Sparkle key →
 chrome 签名模块 → 样式 dmg(签名/公证/staple)→ appcast 版本护栏 → `generate_appcast` →
 ossutil 上传 OSS。`--no-upload` 跳过上传与版本护栏,`--dry-run` 只打印计划。"已发布"
@@ -53,7 +53,7 @@ ossutil 上传 OSS。`--no-upload` 跳过上传与版本护栏,`--dry-run` 只�
 ## CLI 与渠道模型
 
 ```
-python scripts/package.py [--channel dev|dogfood] [--distribute] [--dry-run]
+python scripts/package.py [--channel dev|canary] [--distribute] [--dry-run]
                           [--config PATH] [--out DIR] [--updates-dir DIR]
 ```
 
@@ -66,7 +66,7 @@ python scripts/package.py [--channel dev|dogfood] [--distribute] [--dry-run]
 | channel | out 目录 | distributable | autoninja 目标 |
 |---|---|---|---|
 | `dev` | `out/mac/arm64/dev` | ✗ | `chrome` |
-| `dogfood` | `out/mac/arm64/release` | ✓ | `chrome chrome/installer/mac` |
+| `canary` | `out/mac/arm64/release` | ✓ | `chrome chrome/installer/mac` |
 
 - 脚本**不做 `gn gen`**(沿用现状:人工先 `gn gen`,release 渠道还要拉 PGO);渠道只决定
   out 目录、是否可分发、构建目标。
@@ -78,8 +78,8 @@ python scripts/package.py [--channel dev|dogfood] [--distribute] [--dry-run]
 | 命令 | 行为 |
 |---|---|
 | `package.py`(默认 dev) | 仅 `autoninja … chrome`,产出 `Teleport.app`。不签名/不 dmg/不发布。 |
-| `package.py --channel dogfood` | 构建 → stamp → 签名 → 公证 → 样式 dmg,**本地停**(测渠道包)。不 appcast/上传/tag。 |
-| `package.py --channel dogfood --distribute` | 上面 + 发布护栏 + appcast + OSS 上传 + 打 tag + push。 |
+| `package.py --channel canary` | 构建 → stamp → 签名 → 公证 → 样式 dmg,**本地停**(测渠道包)。不 appcast/上传/tag。 |
+| `package.py --channel canary --distribute` | 上面 + 发布护栏 + appcast + OSS 上传 + 打 tag + push。 |
 | `--distribute` 用在 dev | **报错**:dev 渠道不可分发。 |
 
 ## 配置(嵌套 `[channel.x]`)
@@ -90,11 +90,11 @@ notary_profile = "teleport-notary"
 # codesign_identity = "Developer ID Application: <Name> (<TEAMID>)"   # 省略则自动探测
 # git_remote = "origin"   # 省略默认 origin
 
-[channel.dogfood]
+[channel.canary]
 public_ed_key      = "PASTE_BASE64_PUBLIC_KEY"
-feed_url           = "https://<bucket>.../dogfood/<token>/appcast.xml"
-download_base_url  = "https://<bucket>.../dogfood/<token>/"
-oss_upload_target  = "oss://<bucket>/dogfood/<token>/"
+feed_url           = "https://<bucket>.../canary/<token>/appcast.xml"
+download_base_url  = "https://<bucket>.../canary/<token>/"
+oss_upload_target  = "oss://<bucket>/canary/<token>/"
 ```
 
 - **dev 完全不读配置文件**:默认 `package.py`(dev)不依赖 `release_config.local.toml`。
@@ -138,8 +138,8 @@ oss_upload_target  = "oss://<bucket>/dogfood/<token>/"
 ## 迁移 / 杂项
 
 - `package_release.py` → `package.py`;更新 CLAUDE.md 全部引用、`scripts/smoke_check.md`(若涉及)、测试 import。
-- 更新 CLAUDE.md "渠道包/自动升级"命令块:`--no-upload` → `--channel dogfood`;
-  发布 → `--channel dogfood --distribute`;dev 本地包 → `package.py`(默认)。
+- 更新 CLAUDE.md "渠道包/自动升级"命令块:`--no-upload` → `--channel canary`;
+  发布 → `--channel canary --distribute`;dev 本地包 → `package.py`(默认)。
 - `release_config.local.toml.example` 改嵌套形态。`/dist` 已忽略,无需改。
 
 ## 非目标(YAGNI)

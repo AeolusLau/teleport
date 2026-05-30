@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the dogfood dmg background image (brand/dmg/background.png).
+"""Generate the canary dmg background image (brand/dmg/background.png).
 
 Paints only the static art for a Chrome-style portrait install window: a white
 canvas and a lower rounded card with a big white down-arrow. The app icon, the

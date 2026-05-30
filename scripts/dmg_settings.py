@@ -1,4 +1,4 @@
-"""dmgbuild settings for the Teleport dogfood disk image.
+"""dmgbuild settings for the Teleport canary disk image.
 
 Invoked by scripts/package.py via:
   dmgbuild -s scripts/dmg_settings.py \

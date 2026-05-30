@@ -72,7 +72,7 @@ def test_stamp_and_inject_sets_hourly_check_interval(monkeypatch, tmp_path):
     monkeypatch.setattr(_package.subprocess, "run",
                         lambda argv, **kw: calls.append(argv))
     cfg = {"feed_url": "https://h/a.xml", "public_ed_key": "k"}
-    _package.stamp_and_inject(tmp_path / "Teleport.app", "0.1.3", cfg)
+    _package.stamp_and_inject(tmp_path / "Teleport.app", "0.1.3", cfg, "canary")
 
     interval = next(c for c in calls if "SUScheduledCheckInterval" in c)
     assert interval[:4] == ["plutil", "-replace", "SUScheduledCheckInterval", "-integer"]
@@ -85,7 +85,7 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
     monkeypatch.setattr(_package.subprocess, "run",
                         lambda argv, **kw: calls.append(argv))
     cfg = {"feed_url": "https://h/a.xml", "public_ed_key": "edkey"}
-    _package.stamp_and_inject(tmp_path / "Teleport.app", "1.2.3", cfg)
+    _package.stamp_and_inject(tmp_path / "Teleport.app", "1.2.3", cfg, "canary")
 
     # Build a lookup {key: argv} for plutil -replace calls
     plist_calls = {
@@ -101,6 +101,7 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
         "CFBundleVersion": ("-string", "1.2.3"),
         "SUFeedURL": ("-string", "https://h/a.xml"),
         "SUPublicEDKey": ("-string", "edkey"),
+        "TeleportChannel": ("-string", "canary"),
         "SUEnableAutomaticChecks": ("-bool", "YES"),
         "SUScheduledCheckInterval": ("-integer", "3600"),
     }.items():
@@ -111,3 +112,18 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
         assert argv[5].endswith("Teleport.app/Contents/Info.plist"), (
             f"{key}: plist path {argv[5]!r} does not end with expected suffix"
         )
+
+
+# ---------------------------------------------------------------------------
+# sparkle_plist_string_keys
+# ---------------------------------------------------------------------------
+
+
+def test_sparkle_plist_string_keys_includes_channel_marker():
+    cfg = {"feed_url": "https://h/appcast.xml", "public_ed_key": "k"}
+    keys = _package.sparkle_plist_string_keys("0.1.5", cfg, "canary")
+    assert keys["TeleportChannel"] == "canary"
+    assert keys["CFBundleShortVersionString"] == "0.1.5"
+    assert keys["CFBundleVersion"] == "0.1.5"
+    assert keys["SUFeedURL"] == "https://h/appcast.xml"
+    assert keys["SUPublicEDKey"] == "k"

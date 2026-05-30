@@ -12,12 +12,12 @@ notary_profile = "teleport-notary"
 # Git remote the v<semver> release tag is pushed to (default: origin).
 # git_remote = "origin"
 
-[channel.dogfood]
+[channel.canary]
 # Sparkle public EdDSA key (base64) printed by generate_keys.
 public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
 # Appcast feed URL (public https; the OSS native endpoint + unguessable token).
-feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/appcast.xml"
+feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/appcast.xml"
 # Public https base the appcast download links + SUFeedURL point at (trailing /).
-download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/dogfood/<token>/"
+download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/"
 # OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
-oss_upload_target = "oss://<bucket>/dogfood/<token>/"
+oss_upload_target = "oss://<bucket>/canary/<token>/"
