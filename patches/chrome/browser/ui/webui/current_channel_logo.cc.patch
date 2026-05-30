@@ -1,0 +1,16 @@
+diff --git a/chrome/browser/ui/webui/current_channel_logo.cc b/chrome/browser/ui/webui/current_channel_logo.cc
+index 70f983e5c683e..4eb640720c6a0 100644
+--- a/chrome/browser/ui/webui/current_channel_logo.cc
++++ b/chrome/browser/ui/webui/current_channel_logo.cc
+@@ -29,7 +29,10 @@ int CurrentChannelLogoResourceId() {
+     case version_info::Channel::DEV:
+     case version_info::Channel::BETA:
+     case version_info::Channel::STABLE:
+-      CHECK_IS_TEST();
++      // teleport overlay: unbranded Teleport reports a real distribution channel
++      // (e.g. CANARY) in production, where upstream assumes only tests reach
++      // here (CHECK_IS_TEST). Unbranded builds have no per-channel logos, so
++      // fall through to the default product logo instead of aborting.
+       [[fallthrough]];
+ #endif
+     case version_info::Channel::UNKNOWN:
