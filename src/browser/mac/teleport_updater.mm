@@ -57,6 +57,14 @@ class SparkleUpdater {
       return;
     }
     [driver_ setStatusSink:std::move(sink)];
+    if ([driver_ hasPendingUpdate]) {
+      // An update is already downloaded and staged, awaiting relaunch. Sparkle
+      // won't re-run its callbacks for a fresh check while that session is held,
+      // so a (re)opened About page would receive no status. Re-surface the
+      // "ready to relaunch" state to the new sink instead of starting a check.
+      [driver_ resurfaceStagedStateToSink];
+      return;
+    }
     [updater_ checkForUpdates];
   }
 

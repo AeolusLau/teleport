@@ -23,6 +23,13 @@
 // True if an update is staged and the install+relaunch reply is held.
 - (BOOL)hasPendingUpdate;
 
+// Re-reports the staged "ready to relaunch" state to the current sink. Sparkle
+// does not re-run its callbacks for a fresh check while a download is staged
+// and awaiting the relaunch reply, so an About page (re)opened in that window
+// would otherwise receive no status event. Call after setStatusSink: when
+// hasPendingUpdate is YES.
+- (void)resurfaceStagedStateToSink;
+
 // Invokes the held reply to install + relaunch. No-op if none pending.
 - (void)installPendingUpdateAndRelaunch;
 

@@ -31,6 +31,12 @@
   }
 }
 
+- (void)resurfaceStagedStateToSink {
+  [self reportStage:teleport::UpdateStage::kReadyToRelaunch
+           progress:0
+            message:u""];
+}
+
 - (void)reportStage:(teleport::UpdateStage)stage
            progress:(int)progress
             message:(const std::u16string&)message {
