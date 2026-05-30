@@ -45,14 +45,17 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             f"channel {channel.name!r} is not distributable; --distribute not allowed")
 
-    # ---- non-distributable channel (dev): build only ----
+    # ---- non-distributable channel (dev): build + stamp version ----
     if not channel.distributable:
+        app = chromium_src() / out / "Teleport.app"
         if args.dry_run:
-            print(f"DRY RUN: autoninja -C {out} {' '.join(channel.targets)}  "
+            print(f"DRY RUN: autoninja -C {out} {' '.join(channel.targets)} + "
+                  f"stamp version {version} into {app}/Contents/Info.plist  "
                   f"(build only, channel {channel.name})")
             return 0
         build(out, channel)
-        print(f"built {channel.name} app at {chromium_src() / out / 'Teleport.app'}")
+        _package.stamp_version_only(app, version)
+        print(f"built {channel.name} app at {app} (version {version})")
         return 0
 
     # ---- distributable channel ----

@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index 97b17f850c30d..26228663c1ec2 100644
+index 97b17f850c30d..97d578c5f1e67 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
 @@ -1386,6 +1386,7 @@ static_library("browser") {
@@ -10,3 +10,12 @@ index 97b17f850c30d..26228663c1ec2 100644
      ":active_use_util",
      ":browser_features",
      ":browser_process",
+@@ -6078,6 +6079,8 @@ static_library("browser") {
+       "accessibility/caption_settings_dialog_mac.cc",
+       "app_controller_mac.h",
+       "app_controller_mac.mm",
++      "//teleport/browser/mac/teleport_update_buildstate.h",
++      "//teleport/browser/mac/teleport_update_buildstate.mm",
+       "browser_process_platform_part_mac.h",
+       "browser_process_platform_part_mac.mm",
+       "chrome_browser_application_mac.h",

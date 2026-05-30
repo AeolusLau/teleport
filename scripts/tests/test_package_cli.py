@@ -30,9 +30,26 @@ def test_dev_build_invokes_build_only(monkeypatch, capsys):
     monkeypatch.setattr(package, "read_teleport_version", lambda: "9.9.9")
     calls = []
     monkeypatch.setattr(package, "build", lambda out, ch: calls.append((out, ch.name)))
+    monkeypatch.setattr(package._package, "stamp_version_only",
+                        lambda app, v: calls.append(("stamp_version_only", v)))
     rc = package.main([])  # default channel = dev, no distribute
     assert rc == 0
-    assert calls == [("out/mac/arm64/dev", "dev")]
+    assert ("out/mac/arm64/dev", "dev") in calls
+    assert ("stamp_version_only", "9.9.9") in calls
+
+
+def test_dev_build_stamps_version_after_build(monkeypatch, capsys):
+    monkeypatch.setattr(package, "read_teleport_version", lambda: "0.1.3")
+    order = []
+    monkeypatch.setattr(package, "build",
+                        lambda out, ch: order.append(("build", ch.name)))
+    monkeypatch.setattr(package._package, "stamp_version_only",
+                        lambda app, v: order.append(("stamp", v)))
+    rc = package.main([])
+    assert rc == 0
+    assert order.index(("build", "dev")) < order.index(("stamp", "0.1.3"))
+    out = capsys.readouterr().out
+    assert "0.1.3" in out
 
 
 def _stub_distributable(monkeypatch, order, *, distribute):

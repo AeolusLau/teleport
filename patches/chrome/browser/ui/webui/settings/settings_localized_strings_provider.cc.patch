@@ -1,0 +1,32 @@
+diff --git a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+index a0c5ecb6455e6..f14b593f6877b 100644
+--- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
++++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+@@ -302,10 +302,9 @@ void AddAboutStrings(content::WebUIDataSource* html_source, Profile* profile) {
+   // Top level About Page strings.
+   static constexpr webui::LocalizedString kLocalizedStrings[] = {
+       {"aboutProductLogoAlt", IDS_SHORT_PRODUCT_LOGO_ALT_TEXT},
+-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
++      // teleport overlay: always show these links (placeholder URLs for now).
+       {"aboutReportAnIssue", IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE},
+       {"aboutPrivacyPolicy", IDS_SETTINGS_ABOUT_PAGE_PRIVACY_POLICY},
+-#endif
+       {"aboutRelaunch", IDS_SETTINGS_ABOUT_PAGE_RELAUNCH},
+       {"aboutUpgradeCheckStarted", IDS_SETTINGS_ABOUT_UPGRADE_CHECK_STARTED},
+       {"aboutUpgradeRelaunch", IDS_SETTINGS_UPGRADE_SUCCESSFUL_RELAUNCH},
+@@ -359,12 +358,10 @@ void AddAboutStrings(content::WebUIDataSource* html_source, Profile* profile) {
+   html_source->AddString("aboutObsoleteSystemURL",
+                          ObsoleteSystem::GetLinkURL());
+ 
+-#if BUILDFLAG(GOOGLE_CHROME_BRANDING) || \
+-    BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+-  html_source->AddString("aboutTermsURL", chrome::kChromeUITermsURL);
++  // teleport overlay: show Terms of Service with a placeholder URL.
++  html_source->AddString("aboutTermsURL", "https://teleport.example.com/terms");
+   html_source->AddLocalizedString("aboutProductTos",
+-                                  IDS_ABOUT_TERMS_OF_SERVICE);
+-#endif
++                                  IDS_SETTINGS_ABOUT_PAGE_TERMS_OF_SERVICE);
+ }
+ 
+ void AddAiStrings(content::WebUIDataSource* html_source) {

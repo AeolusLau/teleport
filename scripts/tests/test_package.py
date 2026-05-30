@@ -6,6 +6,18 @@ import _package
 
 
 # ---------------------------------------------------------------------------
+# version_plist_keys
+# ---------------------------------------------------------------------------
+
+
+def test_version_plist_keys_sets_both_version_fields():
+    assert _package.version_plist_keys("0.1.3") == {
+        "CFBundleShortVersionString": "0.1.3",
+        "CFBundleVersion": "0.1.3",
+    }
+
+
+# ---------------------------------------------------------------------------
 # detect_codesign_identity (hermetic: fake `security find-identity` stdout)
 # ---------------------------------------------------------------------------
 

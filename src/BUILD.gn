@@ -22,9 +22,12 @@ source_set("teleport") {
     "common/teleport_feed_url.h",
     "common/teleport_url_scheme.cc",
     "common/teleport_url_scheme.h",
+    "common/teleport_version.cc",
+    "common/teleport_version.h",
   ]
   deps = [
     "//base",
+    "//components/version_info",
     "//content/public/common",
     "//url",
   ]
@@ -33,8 +36,13 @@ source_set("teleport") {
     # them unconditionally. With the updater on, the real Sparkle-backed .mm is
     # built; otherwise a no-op stub keeps dev builds free of Sparkle.
     sources += [ "browser/mac/teleport_updater.h" ]
+    sources += [ "common/teleport_version_mac.mm" ]
     if (teleport_enable_updater) {
-      sources += [ "browser/mac/teleport_updater.mm" ]
+      sources += [
+        "browser/mac/teleport_sparkle_user_driver.h",
+        "browser/mac/teleport_sparkle_user_driver.mm",
+        "browser/mac/teleport_updater.mm",
+      ]
 
       # Set Sparkle link settings DIRECTLY on the source_set, NOT via
       # all_dependent_configs: that propagates along every dep edge (including
@@ -57,6 +65,7 @@ test("teleport_unittests") {
     "browser/teleport_startup_unittest.cc",
     "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",
+    "common/teleport_version_unittest.cc",
   ]
   deps = [
     ":teleport",

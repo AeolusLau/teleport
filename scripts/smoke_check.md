@@ -114,3 +114,22 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 5. 确认:`defaults read /Applications/Teleport.app/Contents/Info CFBundleShortVersionString` = `0.1.1`。✅ 实测通过。
 
 > 排错:升级失败看 Console.app 搜 `Sparkle`;崩溃于框架加载(`no LC_RPATH's found`)= rpath 丢失;公证失败看 `notarytool log <uuid>`。
+
+## About 页 / 版本 / 更新(macOS,本次新增,待人工冒烟)
+
+前置:release 包经 `package.py` stamp(dev 见 #1)或 dogfood 打包;检查更新需 feed 可用(dogfood 渠道)。运行 release/official 包无需 `--disable-field-trial-config`。
+
+| # | 检查 | 期望 |
+|---|---|---|
+| 1 | dev(`uv run python scripts/package.py --channel dev` 后)`chrome://settings/help` 版本行 | `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`,不含 `148.x` |
+| 2 | dev `chrome://version` 首行值 | `<TELEPORT_VERSION>`(非 `148.x`);**UA 行仍含 `Chrome/148`**(未误伤兼容性) |
+| 3 | 裸 `autoninja chrome`(未经 package.py stamp)版本 | `0.0.0-dev`,绝不暴露 chromium 版本号 |
+| 4 | dogfood 打包后版本行 | 含「正式版本」+ `arm64` + 真实 Teleport 版本 |
+| 5 | About 页「检查更新」- 无更新 | 转圈 →「已是最新版本」 |
+| 6 | About 页「检查更新」- 有更新 | 转圈 → 下载进度 →「重启以更新」按钮 |
+| 7 | 有更新就绪时工具栏主菜单按钮 | 升级小圆点 + 菜单「重启以更新」项 |
+| 8 | 点 About「重启」或主菜单升级项 | Sparkle 安装并重启到新版本 |
+| 9 | 底部链接 Report an issue | 打开原生反馈对话框 |
+| 10 | 底部链接 Privacy policy / Terms of Service | 各自打开占位 URL(`teleport.example.com/...`) |
+| 11 | 回归:无待装更新时点重启 | 走普通 `AttemptRestart`,行为正常 |
+| 12 | 回归:后台静默升级闭环 | 仍正常(架构 A 统一 updater 后重点回归项) |

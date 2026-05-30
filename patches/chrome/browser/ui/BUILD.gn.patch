@@ -1,0 +1,35 @@
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+index 5907498d01115..4fb333756fd25 100644
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -27,6 +27,7 @@ import("//third_party/protobuf/proto_library.gni")
+ import("//tools/metrics/generate_allowlist_from_histograms_file.gni")
+ import("//ui/base/ui_features.gni")
+ import("//ui/views/features.gni")
++import("//teleport/teleport.gni")
+ 
+ assert(enable_supervised_users)
+ assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
+@@ -251,6 +252,7 @@ static_library("ui") {
+   ]
+ 
+   deps = [
++    "//teleport",
+     ":browser_element_identifiers",
+     ":ui_features",
+     ":url_identity",
+@@ -3369,6 +3371,14 @@ static_library("ui") {
+       ]
+     }
+ 
++    if (teleport_enable_updater) {
++      # The teleport Sparkle-backed VersionUpdater replaces the upstream mac
++      # (Omaha-based) one; compiled here so it can see chrome headers without a
++      # GN dependency cycle on //teleport.
++      sources -= [ "webui/help/version_updater_mac.mm" ]
++      sources += [ "//teleport/browser/mac/teleport_version_updater.mm" ]
++    }
++
+     # Any circular includes must depend on the target "//chrome/browser:browser_public_dependencies".
+     allow_circular_includes_from += [ "//chrome/browser/apps/app_shim" ]
+ 

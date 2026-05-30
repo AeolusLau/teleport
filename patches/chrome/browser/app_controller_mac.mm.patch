@@ -1,19 +1,21 @@
 diff --git a/chrome/browser/app_controller_mac.mm b/chrome/browser/app_controller_mac.mm
-index 210308ebaa5de..68a19be47f013 100644
+index 210308ebaa5de..63290a9a3775f 100644
 --- a/chrome/browser/app_controller_mac.mm
 +++ b/chrome/browser/app_controller_mac.mm
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  // found in the LICENSE file.
  
  #import "chrome/browser/app_controller_mac.h"
 +#import "teleport/browser/mac/teleport_updater.h"  // teleport overlay
++#import "teleport/browser/mac/teleport_update_buildstate.h"  // teleport overlay
  
  #include <AppKit/AppKit.h>
  #include <dispatch/dispatch.h>
-@@ -1221,6 +1222,8 @@ - (void)applicationDidFinishLaunching:(NSNotification*)notify {
+@@ -1221,6 +1223,9 @@ - (void)applicationDidFinishLaunching:(NSNotification*)notify {
  
    [self setUpdateCheckInterval];
  
++  teleport::InstallUpdateReadyBuildStateBridge();  // teleport overlay
 +  teleport::StartMacUpdater();  // teleport overlay: start Sparkle auto-update
 +
    // If enabled, keep Chrome alive when apps are open instead of quitting all

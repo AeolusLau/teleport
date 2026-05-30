@@ -17,6 +17,25 @@ from fetch_sparkle import SPARKLE_VERSION
 _CHECK_INTERVAL_SECONDS = 3600
 
 
+def version_plist_keys(version: str) -> dict[str, str]:
+    """The Info.plist version fields stamped for any channel (Sparkle compares
+    CFBundleVersion; CFBundleShortVersionString is the user-facing string)."""
+    return {
+        "CFBundleShortVersionString": version,
+        "CFBundleVersion": version,
+    }
+
+
+def stamp_version_only(app: Path, version: str) -> None:
+    """Stamp just the version fields into the app's Info.plist (no Sparkle keys,
+    no signing). Used by the dev channel so dev builds also display the real
+    Teleport version on the About page / chrome://version."""
+    info = app / "Contents" / "Info.plist"
+    for key, val in version_plist_keys(version).items():
+        subprocess.run(["plutil", "-replace", key, "-string", val, str(info)],
+                       check=True)
+
+
 def detect_codesign_identity() -> str:
     """Find the unique 'Developer ID Application' certificate in the keychain.
 
@@ -48,8 +67,7 @@ def stamp_and_inject(app: Path, version: str, cfg: dict) -> None:
     """Stamp version + inject Sparkle keys into the app's Info.plist (pre-sign)."""
     info = app / "Contents" / "Info.plist"
     sets = {
-        "CFBundleShortVersionString": version,
-        "CFBundleVersion": version,
+        **version_plist_keys(version),
         "SUFeedURL": cfg["feed_url"],
         "SUPublicEDKey": cfg["public_ed_key"],
     }

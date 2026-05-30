@@ -1,0 +1,28 @@
+diff --git a/chrome/browser/lifetime/application_lifetime.cc b/chrome/browser/lifetime/application_lifetime.cc
+index 120cee0391d43..0c72b98275a3c 100644
+--- a/chrome/browser/lifetime/application_lifetime.cc
++++ b/chrome/browser/lifetime/application_lifetime.cc
+@@ -11,6 +11,9 @@
+ #include "base/logging.h"
+ #include "base/trace_event/trace_event.h"
+ #include "build/build_config.h"
++#if BUILDFLAG(IS_MAC)
++#include "teleport/browser/mac/teleport_updater.h"  // teleport overlay
++#endif
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/browser_process_platform_part.h"
+ #include "chrome/browser/lifetime/browser_shutdown.h"
+@@ -65,6 +68,13 @@ void AttemptUserExit() {
+ }
+ 
+ void AttemptRelaunch() {
++#if BUILDFLAG(IS_MAC)
++  // teleport overlay: if a Sparkle update is staged, install + relaunch via
++  // Sparkle instead of a plain restart so the new version is applied.
++  if (teleport::InstallPendingUpdateAndRelaunchIfReady()) {
++    return;
++  }
++#endif
+   AttemptRestart();
+ }
+ 
