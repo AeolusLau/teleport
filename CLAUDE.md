@@ -34,7 +34,12 @@ src/                       overlay 源码 → 构建期链接为 chromium/src/te
   BUILD.gn                 //teleport:teleport(source_set)+ teleport_unittests(test)
   teleport.gni             共享 GN args/路径(teleport_enable_updater、sparkle 目录;供上游 BUILD.gn import)
   browser/teleport_startup.{h,cc,_unittest.cc}   启动 banner 钩子
+  browser/mac/teleport_sparkle_user_driver.{h,mm}  无界面 SPUUserDriver:自动下载/暂存,进度喂 About 页,驱动升级指示
   browser/mac/teleport_updater.{h,mm}+_stub.cc   Sparkle 更新器入口(StartMacUpdater/CheckForUpdatesNow)
+  browser/mac/teleport_update_buildstate.{h,mm}  暂存更新点亮工具栏升级指示(编进 chrome/browser,见 gotcha)
+  browser/mac/teleport_version_updater.mm        VersionUpdater::Create() macOS 实现(编进 chrome/browser/ui,见 gotcha)
+  common/teleport_channel.{h,cc,_unittest.cc}+_mac.mm  TeleportChannel plist 串 → version_info::Channel 映射
+  common/teleport_version.{h,cc,_unittest.cc}+_mac.mm  About/chrome://version 显示版本(永不暴露 Chromium 版本号)
   common/teleport_url_scheme.{h,cc,_unittest.cc} teleport:// 方案别名 + teleport-urls 主机重写
   common/teleport_feed_url.{h,cc,_unittest.cc}   appcast feed 仅允许 https 校验
   gn/args/dev.mac.gn       开发期 GN args 模板(updater 关)
@@ -130,6 +135,8 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`。
 
 - **渠道并排共存(per-channel 身份)**:各渠道身份由上游 `channel_customize` 引擎一键派生——bundle id 后缀(`com.beansec.Teleport` 裸=stable;`.canary`/`.beta`=其余)、app 改名(`Teleport Canary` / 显示名 `闪现 Canary`)、数据目录(Info.plist `CrProductDirName`,如 `Teleport Canary`)、图标。打包期 `_package.py:sign_app` 经环境变量 `TELEPORT_SIGN_CHANNEL` 驱动 `chromium_config.py` 的 `distributions` 覆盖;同一 channel 名同时驱动 bundle id 后缀与运行时 `TeleportChannel` 键(单一事实源)。**我们无 Keystone**:`modification.py.patch` 以 `if _KS_PRODUCT_ID in app_plist:` gate 掉 `KSProductID`/`KSChannelID` 写入(否则前者 KeyError、后者凭空植入脏键)。图标走最低复用:`stage_channel_icons` 把 `app.icns`/`Assets.car` 复制成 `app_<channel>.icns`/`Assets_<channel>.car` 喂给引擎硬依赖的 `_replace_icons`。签名产物落 `<output>/sxs-<channel>-…/Teleport <Fragment>.app`,`build_styled_dmg` 经 `_find_signed_app` 放宽 glob 定位。**bundle id 变更 → Sparkle 不跨 id 自动升级**:旧裸 id 的 canary 需手动重分发到新 `.canary` 包。
+
+- **About 页 / 升级指示集成(跨 target 编译)**:`teleport_update_buildstate.{h,mm}`(启动时 `InstallUpdateReadyBuildStateBridge()`,须在 `StartMacUpdater()` 前调用)与 `teleport_version_updater.mm`(`VersionUpdater::Create()` 的 macOS 实现)虽物理在 `src/` 下,但经 `chrome/browser/BUILD.gn` 与 `chrome/browser/ui/BUILD.gn` 的 patch **编进 chrome target、不在 `//teleport` source_set**——它们要 include chrome 头(BuildState / VersionUpdater),放进 source_set 会造成 GN 依赖环。故这两个文件**不出现在 `src/BUILD.gn`**;改它们要动对应 patch,别往 `src/BUILD.gn` 加。About 页面板本身的改动在 `patches/chrome/browser/resources/settings/about_page/*`(版本展示、Sparkle check-for-updates、页脚链接)。
 
 ## 目标平台
 
