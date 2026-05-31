@@ -4,7 +4,9 @@ sign the .app via the generated signing module, and build the styled dmg
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -92,37 +94,88 @@ def stamp_and_inject(app: Path, version: str, cfg: dict, channel_name: str) -> N
     )
 
 
-def sign_app(app: Path, updates_dir: Path, identity: str) -> None:
+def stage_channel_icons(app: Path, channel_name: str) -> None:
+    """Copy the built app's icon assets to the channel-named files the signing
+    engine's _replace_icons() requires. The engine reads
+    `app_<channel>.icns` / `Assets_<channel>.car` from the "Teleport Packaging"
+    dir (named by config.product, which does not change per channel). We reuse
+    the base icons (no per-channel differentiation yet). No-op for the base
+    channel, which is not channel-customized.
+    """
+    if channel_name in ("", "stable"):
+        return
+    res = app / "Contents" / "Resources"
+    pkg = app.parent / "Teleport Packaging"
+    shutil.copyfile(res / "app.icns", pkg / f"app_{channel_name}.icns")
+    shutil.copyfile(res / "Assets.car", pkg / f"Assets_{channel_name}.car")
+
+
+def sign_app(app: Path, updates_dir: Path, identity: str,
+             channel_name: str = "") -> None:
     """Sign the .app only (--disable-packaging) via the generated signing module.
 
     The signing module must run from the generated "<product> Packaging" dir:
     it holds signing/ PLUS the build-time-generated build_props_config.py
     (branding/version). The source tree's copy lacks it.
+
+    For a channel-customized channel, TELEPORT_SIGN_CHANNEL drives the
+    overridden `distributions` in chromium_config.py so the engine renames the
+    app, suffixes the bundle id, and stamps CrProductDirName. The base channel
+    leaves it unset (engine uses the bare Distribution).
     """
     sign_chrome = app.parent / "Teleport Packaging" / "sign_chrome.py"
     # signing's make_dir uses os.mkdir (single level), so pre-create the output
     # tree; the driver skips its own mkdir when the dir already exists.
     updates_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    if channel_name and channel_name != "stable":
+        env["TELEPORT_SIGN_CHANNEL"] = channel_name
     subprocess.run([
         sys.executable, str(sign_chrome),
         "--identity", identity,
         "--input", str(app.parent),
         "--output", str(updates_dir),
         "--disable-packaging",
-    ], check=True)
+    ], check=True, env=env)
+
+
+def _find_signed_app(updates_dir: Path) -> Path:
+    """Locate the signed .app the signing module produced. It lands under a
+    per-distribution subdir named `<dist.channel or 'stable'>`, and a
+    channel-customized app is renamed (e.g. `Teleport Canary.app`). Match both
+    the legacy `stable/Teleport.app` layout and channel layouts with a space.
+    """
+    matches = (list(updates_dir.glob("Teleport*.app")) +
+               list(updates_dir.glob("*/Teleport*.app")))
+    return next(iter(matches))
+
+
+def dmg_names(channel_name: str) -> tuple[str, str]:
+    """The dmg file-name prefix and the mounted volume name for a channel,
+    mirroring Chrome: the file name is space-free (`TeleportCanary`, like
+    Chrome's `GoogleChromeCanary`) while the volume name keeps the space
+    (`Teleport Canary`, matching the renamed `Teleport Canary.app`). The base
+    channel ('' / 'stable') is the bare `Teleport` for both."""
+    if channel_name in ("", "stable"):
+        return "Teleport", "Teleport"
+    fragment = channel_name.capitalize()  # canary -> Canary, beta -> Beta
+    return f"Teleport{fragment}", f"Teleport {fragment}"
 
 
 def build_styled_dmg(updates_dir: Path, version: str, identity: str,
-                     notary_profile: str) -> Path:
+                     notary_profile: str, channel_name: str = "") -> Path:
     """Build a styled dmg from the signed app (dmgbuild), then sign + notarize +
     staple the dmg itself. The chrome signing module only signs the .app
-    (--disable-packaging); its plain pkg-dmg output isn't styled for Chromium."""
+    (--disable-packaging); its plain pkg-dmg output isn't styled for Chromium.
+
+    The dmg file name and mounted volume name are channel-suffixed (see
+    dmg_names) so a canary image is `TeleportCanary-<ver>.dmg` mounting as
+    `Teleport Canary`, coexisting with a stable `Teleport-<ver>.dmg`."""
     # The signing module writes the signed app under the distribution's channel
     # subdir, e.g. <output>/stable/Teleport.app.
-    signed_app = next(iter(
-        list(updates_dir.glob("Teleport.app")) +
-        list(updates_dir.glob("*/Teleport.app"))))
-    target_dmg = updates_dir / f"Teleport-{version}.dmg"
+    signed_app = _find_signed_app(updates_dir)
+    file_prefix, volume_name = dmg_names(channel_name)
+    target_dmg = updates_dir / f"{file_prefix}-{version}.dmg"
     target_dmg.unlink(missing_ok=True)
 
     dmgbuild = Path(sys.executable).parent / "dmgbuild"
@@ -133,7 +186,7 @@ def build_styled_dmg(updates_dir: Path, version: str, identity: str,
            "-D", f"app={signed_app}", "-D", f"background={background}"]
     if icns.exists():
         cmd += ["-D", f"icon={icns}"]
-    cmd += ["Teleport", str(target_dmg)]
+    cmd += [volume_name, str(target_dmg)]
     subprocess.run(cmd, check=True)
 
     # The signed app is now inside the dmg; drop the loose copy (and its channel

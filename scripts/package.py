@@ -91,12 +91,14 @@ def main(argv: list[str] | None = None) -> int:
         _publish.assert_clean_tree()
         _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
 
-    # Build -> stamp -> sign -> styled dmg (notarized).
+    # Build -> stamp -> stage icons -> sign -> styled dmg (notarized).
     build(out, channel)
     _package.stamp_and_inject(app, version, cfg, channel.name)
-    _package.sign_app(app, updates_dir, cfg["codesign_identity"])
+    _package.stage_channel_icons(app, channel.name)
+    _package.sign_app(app, updates_dir, cfg["codesign_identity"], channel.name)
     target_dmg = _package.build_styled_dmg(
-        updates_dir, version, cfg["codesign_identity"], cfg["notary_profile"])
+        updates_dir, version, cfg["codesign_identity"], cfg["notary_profile"],
+        channel.name)
 
     if not args.distribute:
         print(f"built + signed {channel.name} dmg at {target_dmg} (not published)")

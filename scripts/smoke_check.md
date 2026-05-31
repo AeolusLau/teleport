@@ -133,3 +133,17 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 | 10 | 底部链接 Privacy policy / Terms of Service | 各自打开占位 URL(`teleport.example.com/...`) |
 | 11 | 回归:无待装更新时点重启 | 走普通 `AttemptRestart`,行为正常 |
 | 12 | 回归:后台静默升级闭环 | 仍正常(架构 A 统一 updater 后重点回归项) |
+
+## 渠道并排共存(per-channel 身份,本次新增,待人工冒烟)
+
+> 仅 channel-customized 渠道(canary/beta)适用;stable/dev 为裸基底身份,不改名、不设 `CrProductDirName`。前置:canary 包经 `uv run python scripts/package.py --channel canary` 打出并安装。
+
+| # | 检查 | 期望 |
+|---|---|---|
+| 1 | `PlistBuddy -c 'Print :CFBundleIdentifier' "/Applications/Teleport Canary.app/Contents/Info.plist"` | `com.beansec.Teleport.canary` |
+| 2 | Finder 磁盘名 / 应用内显示名 | `Teleport Canary` / `闪现 Canary` |
+| 3 | `PlistBuddy -c 'Print :CrProductDirName' .../Info.plist`;首次启动后数据目录 | `Teleport Canary`;存在 `~/Library/Application Support/Teleport Canary/`(与裸 `Teleport` 分离) |
+| 4 | canary 包 `chrome://version` 通道行 | `canary`(`TeleportChannel` 键驱动,未受 bundle id 改名影响) |
+| 5 | **并排**:同装裸 `com.beansec.Teleport`(dev/未来 stable)与 `.canary` | 二者可同时运行、各自独立 profile、互不干扰 |
+| 6 | `codesign -dvvv "/Applications/Teleport Canary.app/Contents/Frameworks/.../Teleport Canary Helper (Alerts).app"` 抽查;`codesign --verify --deep --strict "/Applications/Teleport Canary.app"` | 嵌套 Alert Helper bundle id 以 `com.beansec.Teleport.canary` 为前缀;深度校验通过 |
+| 7 | 图标:Dock/Finder 显示的 canary 图标 | 与基底一致(本期最低复用,未做差异化) |

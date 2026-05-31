@@ -115,7 +115,7 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **一文件一 patch**:每个 `.patch` 只改一个上游文件、文件名镜像其在 `chromium/src` 下的路径;顺序无关;同文件多处改动累加进同一 patch。
 - **Python 工具链**:系统 python 是 3.9 且无 pytest;统一用 `uv`(`pyproject.toml` 中 `requires-python>=3.13`、`[tool.uv] package=false`)。
 - **`.gitignore`**:用 `/build`(无尾斜杠)才能忽略 `build` 这个**符号链接**;`/chromium` 同理。
-- **两层品牌**:磁盘/标识符 = `Teleport`(BRANDING `PRODUCT_FULLNAME` → `Teleport.app`、`org.teleport.Teleport`);应用内显示名 = `闪现`(`chrome/app/chromium_strings.grd` 的 `IDS_PRODUCT_NAME`);macOS 菜单/Finder 名 = `闪现`(`CFBundleDisplayName` 已覆盖)。
+- **两层品牌**:磁盘/标识符 = `Teleport`(BRANDING `PRODUCT_FULLNAME` → `Teleport.app`、`com.beansec.Teleport`);应用内显示名 = `闪现`(`chrome/app/chromium_strings.grd` 的 `IDS_PRODUCT_NAME`);macOS 菜单/Finder 名 = `闪现`(`CFBundleDisplayName` 已覆盖)。
 - **TDD 范围**:产品代码(`//teleport` C++)走 TDD(gtest);构建/工具脚本不强求 TDD,仅在有价值处务实地写 pytest。
 - **源码 symlink**:`src/` 经符号链接挂进 `chromium/src/teleport`,M148 上 GN + clang 已验证可正常解析与编译(无需退路)。
 - **M148 注入点**(实现期已确认):`chrome/browser/BUILD.gn` 的 `static_library("browser")` deps 加 `//teleport`;启动 banner 调用在 `chrome/browser/chrome_browser_main.cc` 的 `PreMainMessageLoopRun`。
@@ -128,6 +128,8 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **版本**:`TELEPORT_VERSION`(semver)单一事实来源,签名前 `plutil` 戳进 `CFBundleVersion`(Sparkle 比较版)+`CFBundleShortVersionString`;dmg 改名为 `Teleport-<semver>.dmg`(签名模块按 Chromium 版本命名会跨版本撞车);appcast 只列最新版(`package` 裁到当前 dmg,避免 `--maximum-deltas 0` 仍残留的 delta 悬挂引用)。 发布时给当前 commit 打 `v<semver>` annotated tag 并 push 到 remote(默认 origin);tag 在上传成功后才打,tag 或线上 feed 任一已含该版本即拒绝发布。
 - **EdDSA 私钥**仅在 login keychain + 离线备份(`generate_keys -x`),**绝不入库**;丢失靠 Developer-ID 兜底的密钥轮换(仅 dmg、一次只换一个锚,绝不同时换 Developer ID 和 EdDSA)。Sparkle 用 Ed25519,Secure Enclave 只支持 P-256,故密钥不走 SEP。
 - **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`。
+
+- **渠道并排共存(per-channel 身份)**:各渠道身份由上游 `channel_customize` 引擎一键派生——bundle id 后缀(`com.beansec.Teleport` 裸=stable;`.canary`/`.beta`=其余)、app 改名(`Teleport Canary` / 显示名 `闪现 Canary`)、数据目录(Info.plist `CrProductDirName`,如 `Teleport Canary`)、图标。打包期 `_package.py:sign_app` 经环境变量 `TELEPORT_SIGN_CHANNEL` 驱动 `chromium_config.py` 的 `distributions` 覆盖;同一 channel 名同时驱动 bundle id 后缀与运行时 `TeleportChannel` 键(单一事实源)。**我们无 Keystone**:`modification.py.patch` 以 `if _KS_PRODUCT_ID in app_plist:` gate 掉 `KSProductID`/`KSChannelID` 写入(否则前者 KeyError、后者凭空植入脏键)。图标走最低复用:`stage_channel_icons` 把 `app.icns`/`Assets.car` 复制成 `app_<channel>.icns`/`Assets_<channel>.car` 喂给引擎硬依赖的 `_replace_icons`。签名产物落 `<output>/sxs-<channel>-…/Teleport <Fragment>.app`,`build_styled_dmg` 经 `_find_signed_app` 放宽 glob 定位。**bundle id 变更 → Sparkle 不跨 id 自动升级**:旧裸 id 的 canary 需手动重分发到新 `.canary` 包。
 
 ## 目标平台
 

@@ -1,0 +1,51 @@
+diff --git a/chrome/installer/mac/signing/modification.py b/chrome/installer/mac/signing/modification.py
+index 3378e4bdfdb6a..7d99b92800255 100644
+--- a/chrome/installer/mac/signing/modification.py
++++ b/chrome/installer/mac/signing/modification.py
+@@ -79,7 +79,11 @@ def _modify_plists(paths, dist, config):
+             app_plist[_CF_BUNDLE_ID] = config.base_bundle_id
+             app_plist[_CF_BUNDLE_NAME] = '{} {}'.format(
+                 app_plist[_CF_BUNDLE_NAME], dist.app_name_fragment)
+-            app_plist[_KS_PRODUCT_ID] += '.' + dist.channel
++            # teleport overlay: only Keystone-enabled (Google) builds carry a
++            # KSProductID. Our Sparkle build has none, so guard the append
++            # (an unguarded += KeyErrors). No-op when the key is absent.
++            if _KS_PRODUCT_ID in app_plist:
++                app_plist[_KS_PRODUCT_ID] += '.' + dist.channel
+ 
+         # Apply the channel and brand code changes.
+         if dist.branding_code:
+@@ -87,17 +91,22 @@ def _modify_plists(paths, dist, config):
+         elif _KS_BRAND_ID in app_plist:
+             del app_plist[_KS_BRAND_ID]
+ 
+-        base_tag = app_plist.get(_KS_CHANNEL_ID)
+-        base_channel_tag_components = []
+-        if base_tag:
+-            base_channel_tag_components.append(base_tag)
+-        if dist.channel:
+-            base_channel_tag_components.append(dist.channel)
+-        base_channel_tag = '-'.join(base_channel_tag_components)
+-        if base_channel_tag:
+-            app_plist[_KS_CHANNEL_ID] = base_channel_tag
+-        elif _KS_CHANNEL_ID in app_plist:
+-            del app_plist[_KS_CHANNEL_ID]
++        # teleport overlay: the KSChannelID tag is a Keystone update-channel
++        # label. Our runtime reads the channel from TeleportChannel instead, and
++        # an un-guarded write would plant a stray KSChannelID on a build that
++        # has no Keystone. Only touch it on Keystone-enabled builds.
++        if _KS_PRODUCT_ID in app_plist:
++            base_tag = app_plist.get(_KS_CHANNEL_ID)
++            base_channel_tag_components = []
++            if base_tag:
++                base_channel_tag_components.append(base_tag)
++            if dist.channel:
++                base_channel_tag_components.append(dist.channel)
++            base_channel_tag = '-'.join(base_channel_tag_components)
++            if base_channel_tag:
++                app_plist[_KS_CHANNEL_ID] = base_channel_tag
++            elif _KS_CHANNEL_ID in app_plist:
++                del app_plist[_KS_CHANNEL_ID]
+ 
+         if dist.product_dirname:
+             app_plist['CrProductDirName'] = dist.product_dirname

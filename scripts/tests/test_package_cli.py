@@ -67,13 +67,15 @@ def _stub_distributable(monkeypatch, order, *, distribute):
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: dict(cfg))
     monkeypatch.setattr(package._package, "stamp_and_inject",
                         lambda app, v, c, ch: order.append(("stamp", v, ch)))
+    monkeypatch.setattr(package._package, "stage_channel_icons",
+                        lambda app, ch: order.append(("stage_icons", ch)))
     monkeypatch.setattr(package._package, "sign_app",
-                        lambda app, ud, ident: order.append(("sign", ident)))
+                        lambda app, ud, ident, ch: order.append(("sign", ident, ch)))
 
     class _Dmg:
         name = "Teleport-1.2.3.dmg"
     monkeypatch.setattr(package._package, "build_styled_dmg",
-                        lambda ud, v, ident, notary: (order.append(("dmg", v)) or _Dmg()))
+                        lambda ud, v, ident, notary, ch: (order.append(("dmg", v, ch)) or _Dmg()))
     monkeypatch.setattr(package._publish, "assert_on_main",
                         lambda: order.append(("assert_on_main",)))
     monkeypatch.setattr(package._publish, "assert_clean_tree",
@@ -129,3 +131,15 @@ def test_canary_distribute_dry_run_has_no_side_effects(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "DRY RUN" in out
     assert "git tag -a v1.2.3" in out  # publish steps shown in the plan
+
+
+def test_distribute_passes_channel_to_sign_and_stages_icons(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)
+    rc = package.main(["--channel", "canary", "--distribute"])
+    assert rc == 0
+    # icons staged before signing, both for the canary channel
+    names = [c[0] for c in order]
+    assert names.index("stage_icons") < names.index("sign")
+    assert ("stage_icons", "canary") in order
+    assert ("sign", "Developer ID Application: X (T)", "canary") in order
