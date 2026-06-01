@@ -135,6 +135,22 @@
 - **当前处置**:无(默认零 DRM 能力)。
 - **将来方向**:**硬前置(商务/法务,L)** = 与 Google Widevine 签订集成/分发授权,拿到授权二进制 + host-verification 证书;之后接入 release 打包链(M)。即便接通,桌面 macOS 仅 L3 / 最高 1080p(与官方 Chrome 相同)。**不依赖 fairyland**。企业办公场景多可作为「已知限制」接受,在产品说明中标注「不支持受 DRM 保护的商业流媒体」。
 
+### TD-012 浏览器画像同步(Chrome Sync 服务端)延期实现
+
+- **登记日期**:2026-06-01 · **优先级**:P3(产品路线项;工程量大,依赖 fairyland 后端)
+- **来源**:fairyland 身份平台 / Teleport 账号体系设计(2026-06-01 头脑风暴专门决策延期;fairyland 侧设计文档编写中,落地后回填其路径)。
+- **背景**:
+  - Teleport 账号体系最终态要求受管浏览器把企业画像(书签/历史/密码/设置等)同步到 **fairyland 自有后端**,而非 Google。Chromium 的 sync server 地址可经 `--sync-url` 完全改向(`components/sync/base/sync_util.h` 的 `GetSyncServiceURL`;与 TD-001-B「账号/Sync 需 Google OAuth」同源问题的自有替代方向),**客户端侧零 fork**。
+  - **但 Chrome Sync 协议是 Google 私有的**(`components/sync/protocol/*.proto`),**服务端必须由 fairyland `products/teleport/gateway` 自行实现**(实现 Chrome Sync 协议,或改用基于 Nigori 加密的自定义同步)。这是一块重后端工程,故本期不做。
+- **影响**:
+  - 一期无企业画像同步(换机/多端不漫游)。
+  - **连带影响离职/失权强制**:强制能力中的「**擦除已同步画像数据**」依赖 Sync 先存在,随之延期。一期强制**仍具备**:平台事件驱动的**主动推送强制登出** + 清除企业应用本地 cookie/token(`BrowsingDataRemover` / 远程命令 `BROWSER_CLEAR_BROWSING_DATA`)+ **阻断导航**到企业应用;仅缺「擦同步数据」一项(且无 Sync 时本就无同步数据可擦,自洽,无安全缺口)。
+- **当前处置**:不实现 Sync 服务端;`--sync-url` 暂不下发(或指向占位)。身份认证、策略下发、离职强制三条链路**均不依赖 Sync**,可独立先行落地。
+- **将来方向**:
+  1. 在 `products/teleport/gateway` 实现 Chrome Sync 协议服务端(或 Nigori 加密自定义同步);经托管策略下发 `--sync-url` 指向之;随后补齐强制链路的「擦除已同步数据」。
+  2. **关联备忘(同属推送链路的二期增强,非本条但一并留档)**:Chromium 实时失效走 Google FCM(硬绑、不可改向),故一期「主动推送强制」由 teleport-gateway 让浏览器**短间隔(~30–60s)轮询** command-invalidation topic 实现**准实时**(强制延迟 = 轮询周期);二期可自建 invalidation 服务做**真·实时推送**。
+- **关键引用**:`components/sync/base/sync_util.h`(`GetSyncServiceURL` / `--sync-url`)、`components/sync/protocol/*.proto`(Google 私有协议)、`chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.*`(`BrowsingDataRemover`)、设备管理远程命令 `DEVICE_WIPE_USERS` / `BROWSER_CLEAR_BROWSING_DATA`(`components/policy/proto/device_management_backend.proto`)。
+
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
 
 - **登记日期**:2026-05-31
