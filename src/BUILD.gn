@@ -77,4 +77,18 @@ test("teleport_unittests") {
     "//testing/gtest",
     "//url",
   ]
+
+  # The Sparkle-backed user driver only exists when the updater is enabled, and
+  # its header pulls <Sparkle/Sparkle.h>. Build its test only in that config,
+  # mirroring the source_set's framework wiring: framework_dirs gives -F for the
+  # .mm compile + link, and an rpath lets the standalone test binary find
+  # Sparkle.framework in the checkout at runtime (the source_set's
+  # @loader_path/../../.. rpath only resolves for the chrome framework's nesting).
+  if (is_mac && teleport_enable_updater) {
+    sources += [ "browser/mac/teleport_sparkle_user_driver_unittest.mm" ]
+    deps += [ "//base/test:test_support" ]
+    framework_dirs = [ teleport_sparkle_dir ]
+    ldflags = [ "-Wl,-rpath,@loader_path/" +
+                rebase_path(teleport_sparkle_dir, root_build_dir) ]
+  }
 }

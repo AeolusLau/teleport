@@ -32,9 +32,24 @@
 }
 
 - (void)resurfaceStagedStateToSink {
+  [self reportReadyToRelaunchAndBridge];
+}
+
+// Reports the staged "ready to relaunch" state to the About-page sink AND
+// fires the ready callback that lights the toolbar/menu upgrade badge via the
+// chrome BuildState bridge. Fire the bridge regardless of whether
+// _pendingVersion is known: when Sparkle resumes an update staged in a prior
+// session it reaches "ready" without re-emitting showUpdateFoundWithAppcastItem
+// (so _pendingVersion is empty), and a resurfaced state likewise carries no
+// fresh version. The bridge maps an empty string to an invalid base::Version,
+// which still registers as an available update.
+- (void)reportReadyToRelaunchAndBridge {
   [self reportStage:teleport::UpdateStage::kReadyToRelaunch
            progress:0
             message:u""];
+  if (_readyCallback) {
+    _readyCallback.Run(_pendingVersion);
+  }
 }
 
 - (void)reportStage:(teleport::UpdateStage)stage
@@ -121,12 +136,7 @@
 
 - (void)showReadyToInstallAndRelaunch:(void (^)(SPUUserUpdateChoice))reply {
   _relaunchReply = [reply copy];
-  [self reportStage:teleport::UpdateStage::kReadyToRelaunch
-           progress:0
-            message:u""];
-  if (_readyCallback && !_pendingVersion.empty()) {
-    _readyCallback.Run(_pendingVersion);
-  }
+  [self reportReadyToRelaunchAndBridge];
 }
 
 - (void)showInstallingUpdateWithApplicationTerminated:(BOOL)applicationTerminated
