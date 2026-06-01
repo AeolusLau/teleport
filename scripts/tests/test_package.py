@@ -285,3 +285,41 @@ def test_build_styled_dmg_base_channel_stays_bare(monkeypatch, tmp_path):
     assert dmg == tmp_path / "Teleport-1.2.3.dmg"
     dmgbuild_call = next(c for c in calls if any("dmgbuild" in str(p) for p in c))
     assert "Teleport" in dmgbuild_call and "Teleport Canary" not in dmgbuild_call
+
+
+# ---------------------------------------------------------------------------
+# target_dmg_path + stapler_validate
+# ---------------------------------------------------------------------------
+
+
+def test_target_dmg_path_channel_suffixed(tmp_path):
+    import _package
+    p = _package.target_dmg_path(tmp_path, "1.2.3", "canary")
+    assert p == tmp_path / "TeleportCanary-1.2.3.dmg"
+
+
+def test_target_dmg_path_base_channel(tmp_path):
+    import _package
+    p = _package.target_dmg_path(tmp_path, "1.2.3", "")
+    assert p == tmp_path / "Teleport-1.2.3.dmg"
+
+
+def test_stapler_validate_true_on_zero_exit(monkeypatch, tmp_path):
+    import _package
+    calls = {}
+    def fake_run(cmd, **kw):
+        calls["cmd"] = cmd
+        class R: returncode = 0
+        return R()
+    monkeypatch.setattr(_package.subprocess, "run", fake_run)
+    assert _package.stapler_validate(tmp_path / "x.dmg") is True
+    assert calls["cmd"][:3] == ["xcrun", "stapler", "validate"]
+
+
+def test_stapler_validate_false_on_nonzero_exit(monkeypatch, tmp_path):
+    import _package
+    def fake_run(cmd, **kw):
+        class R: returncode = 65
+        return R()
+    monkeypatch.setattr(_package.subprocess, "run", fake_run)
+    assert _package.stapler_validate(tmp_path / "x.dmg") is False

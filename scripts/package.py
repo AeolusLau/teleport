@@ -14,6 +14,7 @@ from pathlib import Path
 
 import _config
 import _package
+import _package_state
 import _publish
 from _build import build, resolve_channel
 from _lib import chromium_src, repo_root
@@ -30,6 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--channel", default="dev")
     p.add_argument("--distribute", action="store_true",
                    help="publish after building (distributable channels, main only)")
+    p.add_argument("--force", action="store_true",
+                   help="ignore the package-state cache; re-sign + re-notarize even "
+                        "if the app is unchanged")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--config", type=Path, default=_default_config())
     p.add_argument("--out", default=None, help="override the channel's default out dir")
@@ -67,11 +71,28 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         identity = cfg.get("codesign_identity") or "<auto-detected from keychain>"
+        sp = _package_state.state_path(repo_root(), channel.name)
+        target_dmg = _package.target_dmg_path(updates_dir, version, channel.name)
+        # Side-effect-free probe: real dry-run hasn't built the app, so use a
+        # placeholder digest (errs toward "re-notarize"); do NOT call
+        # stapler_validate here (it would run a subprocess).
+        key = _package_state.reuse_key(
+            version, channel.name, identity, cfg["notary_profile"],
+            "<app-digest-after-build>")
+        would_reuse = (not args.force and _package_state.can_reuse(
+            _package_state.load_state(sp), key, target_dmg))
+        if would_reuse:
+            sign_dmg_line = (f"reuse notarized dmg {target_dmg.name} (app unchanged "
+                             f"per cache); skip sign + codesign + staple (no re-submission)")
+        else:
+            sign_dmg_line = (
+                f"sign .app (--disable-packaging) with '{identity}'  ->  "
+                "dmgbuild styled dmg -> codesign -> notarytool submit --wait -> "
+                "stapler staple")
         plan = [
             f"autoninja -C {out} {' '.join(channel.targets)}",
             f"stamp version {version} + inject Sparkle keys into {app}/Contents/Info.plist",
-            f"sign .app (--disable-packaging) with '{identity}'",
-            "dmgbuild styled dmg -> codesign -> notarytool submit --wait -> stapler staple",
+            sign_dmg_line,
         ]
         if args.distribute:
             plan += [
@@ -91,22 +112,38 @@ def main(argv: list[str] | None = None) -> int:
         _publish.assert_clean_tree()
         _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
 
-    # Build -> stamp -> stage icons -> sign -> styled dmg (notarized).
+    # Build -> stamp -> stage icons, then decide whether a previously-notarized
+    # dmg can be reused (app byte-identical) or must be rebuilt + re-notarized.
     build(out, channel)
     _package.stamp_and_inject(app, version, cfg, channel.name)
     _package.stage_channel_icons(app, channel.name)
-    _package.sign_app(app, updates_dir, cfg["codesign_identity"], channel.name)
-    target_dmg = _package.build_styled_dmg(
-        updates_dir, version, cfg["codesign_identity"], cfg["notary_profile"],
-        channel.name)
+
+    sp = _package_state.state_path(repo_root(), channel.name)
+    key = _package_state.reuse_key(
+        version, channel.name, cfg["codesign_identity"], cfg["notary_profile"],
+        _package_state.app_content_digest(app))
+    target_dmg = _package.target_dmg_path(updates_dir, version, channel.name)
+    if (not args.force
+            and _package_state.can_reuse(_package_state.load_state(sp), key, target_dmg)
+            and _package.stapler_validate(target_dmg)):
+        print(f"reusing notarized dmg {target_dmg.name} (app unchanged); "
+              f"skipping sign + notarize")
+    else:
+        _package.sign_app(app, updates_dir, cfg["codesign_identity"], channel.name)
+        target_dmg = _package.build_styled_dmg(
+            updates_dir, version, cfg["codesign_identity"], cfg["notary_profile"],
+            channel.name)
+        _package_state.write_state(sp, key, target_dmg.name)
 
     if not args.distribute:
         print(f"built + signed {channel.name} dmg at {target_dmg} (not published)")
         return 0
 
-    # Re-check (cheap) in case another publish landed during the build, then
-    # generate appcast -> upload -> tag + push (tag only after a successful upload).
+    # Re-check (cheap), then a final notarization gate before ANY upload.
     _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
+    if not _package.stapler_validate(target_dmg):
+        raise SystemExit(
+            f"{target_dmg.name} failed stapler validate; refusing to publish")
     _publish.generate_appcast(updates_dir, cfg["download_base_url"], target_dmg.name)
     _publish.upload_to_oss(updates_dir, cfg["oss_upload_target"])
     _publish.tag_and_push(version, cfg["git_remote"])

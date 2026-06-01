@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 import package
@@ -72,10 +74,8 @@ def _stub_distributable(monkeypatch, order, *, distribute):
     monkeypatch.setattr(package._package, "sign_app",
                         lambda app, ud, ident, ch: order.append(("sign", ident, ch)))
 
-    class _Dmg:
-        name = "Teleport-1.2.3.dmg"
     monkeypatch.setattr(package._package, "build_styled_dmg",
-                        lambda ud, v, ident, notary, ch: (order.append(("dmg", v, ch)) or _Dmg()))
+                        lambda ud, v, ident, notary, ch: (order.append(("dmg", v, ch)) or Path("/tmp/Teleport-1.2.3.dmg")))
     monkeypatch.setattr(package._publish, "assert_on_main",
                         lambda: order.append(("assert_on_main",)))
     monkeypatch.setattr(package._publish, "assert_clean_tree",
@@ -89,6 +89,19 @@ def _stub_distributable(monkeypatch, order, *, distribute):
                         lambda ud, target: order.append(("upload", target)))
     monkeypatch.setattr(package._publish, "tag_and_push",
                         lambda v, remote: order.append(("tag_and_push", v, remote)))
+
+    # package-state cache: default to "no reuse" so existing tests are unaffected.
+    monkeypatch.setattr(package._package_state, "app_content_digest",
+                        lambda app: "DIGEST")
+    monkeypatch.setattr(package._package_state, "load_state", lambda p: None)
+    monkeypatch.setattr(package._package_state, "write_state",
+                        lambda p, key, dmg: order.append(("write_state", dmg)))
+    monkeypatch.setattr(package._package_state, "can_reuse",
+                        lambda state, key, dmg: False)
+    monkeypatch.setattr(package._package, "stapler_validate",
+                        lambda dmg: order.append(("stapler_validate", getattr(dmg, "name", str(dmg)))) or True)
+    monkeypatch.setattr(package._package, "target_dmg_path",
+                        lambda ud, v, ch: Path(f"/tmp/Teleport-{v}.dmg"))
 
 
 def test_distribute_runs_guards_before_build_and_tags_after_upload(monkeypatch, capsys):
@@ -143,3 +156,83 @@ def test_distribute_passes_channel_to_sign_and_stages_icons(monkeypatch, capsys)
     assert names.index("stage_icons") < names.index("sign")
     assert ("stage_icons", "canary") in order
     assert ("sign", "Developer ID Application: X (T)", "canary") in order
+
+
+def test_reuse_skips_sign_and_dmg_when_app_unchanged(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._package_state, "can_reuse", lambda s, k, d: True)
+    rc = package.main(["--channel", "canary", "--distribute"])
+    assert rc == 0
+    names = [c[0] for c in order]
+    assert "sign" not in names and "dmg" not in names      # skipped
+    assert "write_state" not in names                       # nothing new to record
+    assert "upload" in names and "tag_and_push" in names    # still publishes
+    assert "reusing notarized dmg" in capsys.readouterr().out
+
+
+def test_no_reuse_runs_full_chain_and_writes_state(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)  # can_reuse False by default
+    rc = package.main(["--channel", "canary", "--distribute"])
+    assert rc == 0
+    names = [c[0] for c in order]
+    assert names.index("sign") < names.index("dmg")
+    assert ("write_state", "Teleport-1.2.3.dmg") in order   # recorded after dmg
+
+
+def test_force_bypasses_reuse(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=False)
+    monkeypatch.setattr(package._package_state, "can_reuse", lambda s, k, d: True)
+    rc = package.main(["--channel", "canary", "--force"])
+    assert rc == 0
+    names = [c[0] for c in order]
+    assert "sign" in names and "dmg" in names               # forced rebuild
+
+
+def test_distribute_final_gate_refuses_dmg_that_fails_revalidation(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._package_state, "can_reuse", lambda s, k, d: True)
+    # stapler passes at the reuse decision, then FAILS at the final pre-upload gate
+    # (defends against a ticket that became invalid between decision and upload).
+    results = iter([True, False])
+    monkeypatch.setattr(package._package, "stapler_validate", lambda dmg: next(results))
+    with pytest.raises(SystemExit, match="stapler validate"):
+        package.main(["--channel", "canary", "--distribute"])
+    names = [c[0] for c in order]
+    assert "sign" not in names and "dmg" not in names            # reuse path taken
+    assert "upload" not in names and "tag_and_push" not in names  # gate blocked publish
+
+
+def test_dry_run_reports_reuse_when_cached(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._package_state, "can_reuse", lambda s, k, d: True)
+    rc = package.main(["--channel", "canary", "--distribute", "--dry-run"])
+    assert rc == 0
+    assert order == []  # dry-run still has no side effects
+    out = capsys.readouterr().out
+    assert "reuse notarized dmg" in out
+    assert "notarytool" not in out  # not planning to notarize
+
+
+def test_dry_run_reports_renotarize_when_not_cached(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)  # can_reuse False (default)
+    rc = package.main(["--channel", "canary", "--distribute", "--dry-run"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "notarytool submit" in out  # plan shows notarization
+
+
+def test_distribute_final_gate_refuses_after_rebuild(monkeypatch, capsys):
+    order = []
+    _stub_distributable(monkeypatch, order, distribute=True)  # can_reuse False (default)
+    monkeypatch.setattr(package._package, "stapler_validate", lambda dmg: False)
+    with pytest.raises(SystemExit, match="stapler validate"):
+        package.main(["--channel", "canary", "--distribute"])
+    names = [c[0] for c in order]
+    assert "dmg" in names                                         # rebuild ran
+    assert "upload" not in names and "tag_and_push" not in names  # gate blocked publish

@@ -162,6 +162,22 @@ def dmg_names(channel_name: str) -> tuple[str, str]:
     return f"Teleport{fragment}", f"Teleport {fragment}"
 
 
+def target_dmg_path(updates_dir: Path, version: str, channel_name: str = "") -> Path:
+    """The channel-suffixed, versioned dmg path (e.g. TeleportCanary-1.2.3.dmg)."""
+    file_prefix, _ = dmg_names(channel_name)
+    return updates_dir / f"{file_prefix}-{version}.dmg"
+
+
+def stapler_validate(dmg: Path) -> bool:
+    """True iff `xcrun stapler validate <dmg>` exits 0 (dmg has a valid stapled
+    notarization ticket for its current bytes). Side-effecting; kept out of the
+    pure can_reuse gate."""
+    return subprocess.run(
+        ["xcrun", "stapler", "validate", str(dmg)],
+        capture_output=True,
+    ).returncode == 0
+
+
 def build_styled_dmg(updates_dir: Path, version: str, identity: str,
                      notary_profile: str, channel_name: str = "") -> Path:
     """Build a styled dmg from the signed app (dmgbuild), then sign + notarize +
@@ -174,8 +190,8 @@ def build_styled_dmg(updates_dir: Path, version: str, identity: str,
     # The signing module writes the signed app under the distribution's channel
     # subdir, e.g. <output>/stable/Teleport.app.
     signed_app = _find_signed_app(updates_dir)
-    file_prefix, volume_name = dmg_names(channel_name)
-    target_dmg = updates_dir / f"{file_prefix}-{version}.dmg"
+    _, volume_name = dmg_names(channel_name)
+    target_dmg = target_dmg_path(updates_dir, version, channel_name)
     target_dmg.unlink(missing_ok=True)
 
     dmgbuild = Path(sys.executable).parent / "dmgbuild"
