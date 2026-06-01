@@ -45,6 +45,115 @@
   - 若放弃:在产品层面明确禁用并隐藏入口,避免用户点了无反应。
 - 决策落地前,A 类功能对用户呈现为「点了无效果」,需注意是否会造成困惑。
 
+#### 补充(2026-05-31「与 Chrome 体验对齐」专项审计,基于 M148 源码核实)
+
+- **优先级:P0**(与「企业安全浏览器」定位直接冲突)。
+- **Safe Browsing 的失效形态比「不可用」更糟**:无 key 时各处只做 `if (!api_key.empty())` 判断,而未配置时 key 是字面量 `"dummytoken"`(`google_apis/default_api_keys.h:19`)而非空串,于是拼出 `&key=dummytoken` 发往 `safebrowsing.googleapis.com` 被服务端拒绝(400/403)。`kSafeBrowsingEnabled` 仍为 `true`、设置页显示「防护已开启」——属**「自以为在工作的静默失败」**;叠加本条已抑制的缺 key infobar,用户失去最后的视觉警告,构成**安全剧场**。
+- **两条独立链路、同源(均无 Google 后端)**:Safe Browsing 的哈希前缀本地库走 v4/v5 API(`safebrowsing.googleapis.com`,见 `v4_update_protocol_manager.cc`、`hash_realtime_service.cc`),**不走**组件更新器;而 CRLSet/CT 列表等走组件更新器(见 TD-002)。两者都因「无 Google 后端」而失效,需并案评估。
+- **止血与方向**:最低止血 = 注入自有 Google Cloud Safe Browsing API key(GN arg `GOOGLE_API_KEY` 或环境变量;非品牌构建 `allow_override_via_environment=true` 允许,见 `api_key_cache.cc`),成本 S,但受 Google ToS/配额限制;长期应由 fairyland 提供自有威胁情报或代理转发(L)。
+- **关键引用**:`patches/chrome/browser/ui/startup/infobar_utils.cc.patch`、`google_apis/api_key_cache.cc:334`、`components/safe_browsing/core/common/safe_browsing_prefs.cc:278`、`.../hashprefix_realtime/hash_realtime_service.cc:611`。
+
+---
+
+> **以下 TD-002 ~ TD-011 来自同一次 2026-05-31「与 Chrome 体验对齐」专项审计**,均基于 M148(148.0.7778.180)源码核实。背景统一:Teleport 由 Chromium 源码自建,`GOOGLE_CHROME_BRANDING=false`,缺少 Google 全套后端(API key / 组件更新服务 / 账号同步 / 反馈),导致一批「Chrome 官方版才有」的体验缺失、降级或残留。优先级:P0=与安全定位冲突;P1=半成品/死流程(影响「完整浏览器」观感);P2=品牌一致性;P3=企业决策(刻意偏离 Chrome,多依赖 fairyland 或外部授权)。
+
+### TD-002 组件更新器停摆,安全组件冻结(CT 70 天后 fail-open)
+
+- **登记日期**:2026-05-31 · **优先级**:P0
+- **背景**:overlay 完全未触碰 component_updater(`src/`/`patches/` 零命中)。组件更新后端硬编码 `https://update.googleapis.com/service/update2/json`(`components/component_updater/component_updater_url_constants.cc:17`,**无品牌门控**),我们无此后端。结果:有编译期 baseline 的组件**冻结在 build 快照**,无 baseline 的下载式组件**彻底缺失**;浏览器仍每 ~5 小时周期性外联 Google(返回 no-update),既泄露遥测又无收益。注:浏览器本体自更新走 overlay 自研的 Sparkle 链路,与本子系统**无关**。
+- **影响(按严重度,均已核实)**:
+  - **CT 强制在 build 满 70 天后静默 fail-open**(最严重,可定时):CT 日志列表来自 PKI metadata 组件,无更新则冻结在编译期 `kLogListTimestamp`(`ct_known_logs.cc:22`);`chrome_ct_policy_enforcer.cc:184` 的 `IsLogDataTimely` 判定超 70 天后返回 `CT_POLICY_BUILD_NOT_TIMELY`,而 `net/cert/require_ct_delegate.cc:27` 把该状态视作「满足要求」→ **CT 强制被静默关闭**。错误签发且未上 CT 的证书不再被拦截。
+  - **CRLSet 始终为空**(`crl_set_component_installer.cc`,无 baseline):被盗/被吊销中间 CA 的快速吊销能力等同关闭。
+  - **Chrome Root Store 冻结**:新增/移除受信根、紧急 distrust 不生效。
+  - 次要:File Type Policies(危险文件分级)、Subresource Filter、Safety Tips(反钓鱼提示)停更。
+- **当前处置**:无。
+- **将来方向**:
+  - **止损(S,零后端依赖)**:用 `ComponentUpdatesEnabled` 策略关掉组件更新外联(消除周期连 Google),并以**发版纪律 ≤8 周/版**守住 CT 70 天窗口、跟随上游 root store。
+  - **中期(M,依赖 fairyland)**:在 fairyland 起 update2/json 兼容端点,经 `--component-updater=url-source=<url>`(`configurator_impl.cc:80`)或 patch 常量重定向;需自建 CRX 签名 + 改对应 `GetHash()` 公钥 + 镜像/再签 CRLSet 与 PKI metadata。**优先只接 CRLSet + PKI metadata(CT/Root Store)两项必做组件**,这是性价比拐点。与未来企业版 Omaha 4 自更新栈可共用签名/分发基建。
+
+### TD-003 首次运行弹出指向 Google 登录的死路卡
+
+- **登记日期**:2026-05-31 · **优先级**:P1
+- **背景**:M148「For You FRE」在 macOS 非品牌构建照常运行(`enable_dice_support` 在 mac 为 true,`components/signin/features.gni:13`;门控 `first_run_service.cc:51,92,345`)。Intro 步骤是一张 sign-in 促销卡(`first_run_flow_controller.cc:541`、`intro_app.html.ts:15`),指向 `accounts.google.com`。
+- **影响**:全新安装首启即弹「登录到闪现」引导卡,但无 Google OAuth client/同步后端,点登录无法完成,观感像半成品/借来的流程。后续「设为默认浏览器」卡本身可用。
+- **当前处置**:无。
+- **将来方向**:S = 加 `--no-first-run` 或标记 FRE 已完成,整体禁用 FRE 直接落 NTP;M = 改造 Intro 移除登录卡、保留默认浏览器卡,登录卡最终形态待企业身份(fairyland)。注:TD-005 的 `BrowserSignin=0` 策略很可能顺带短路本卡(FRE 门控含「允许 sign-in」)。
+
+### TD-004 新标签页展示完整 Google 首页(doodle / OneGoogleBar)
+
+- **登记日期**:2026-05-31 · **优先级**:P1(品牌错位 + 数据外泄)
+- **背景**:默认搜索仍是 Google(预置 fallback `google.id`,`template_url_prepopulate_data.cc:274-281`),`DefaultSearchProviderIsGoogle()` 为 true → `search.cc:178` 选用全功能 `chrome://new-tab-page`,注入 Google doodle(`LogoService`,`new_tab_page_ui.cc:1200`)、OneGoogleBar(`:269`,真实向 Google 发请求)、模块。
+- **影响**:企业浏览器的新标签页呈现 Google 首页观感,OneGoogleBar 向 Google 外发请求。
+- **当前处置**:无。
+- **将来方向**:**高杠杆 S** = 把默认搜索锚点从 `google.id` 换成占位企业引擎 → `DefaultSearchProviderIsGoogle()` 变 false → NTP **自动**切到极简 `chrome://new-tab-page-third-party`(无搜索框/无 doodle/无 OneGoogleBar),一举消除 Google 首页。富企业门户 NTP 自研为 L、依赖 fairyland。与 TD-005 同属「锁定企业默认搜索」的产品决策。
+
+### TD-005 release 构建下 Google 登录按钮可见且通向失败流程
+
+- **登记日期**:2026-05-31 · **优先级**:P1
+- **背景**:Dice 因 `HasOAuthClientConfigured()==false` 被构建级禁用,但 profile 菜单登录按钮只看 `prefs::kSigninAllowed`(默认 true,`signin_utils_desktop.cc:35`),**不查 OAuth client 是否配置**;且 `ShowDiceSigninTab` 对「Dice 未启用」的检查只在 `DCHECK_IS_ON()` 内(`signin_view_controller.cc:599`)。official/release 构建 DCHECK 关闭 → 跳过检查 → 打开真实 `accounts.google.com`,OAuth 用 `dummytoken` 交换令牌**失败**(dev 构建则命中 DCHECK abort)。
+- **影响**:用户能从 profile 菜单/`chrome://settings/syncSetup` 走到 Google 登录页并失败。关联 TD-001 B 类。
+- **当前处置**:无(overlay 未触碰 signin/sync;grep 命中的 "signin" 实为代码 **signing** 误报)。
+- **将来方向**:**首选 S(policy,零改码零后端)** = 默认下发 `BrowserSignin=0`(+ 可选 `SyncDisabled=true`)策略,经 macOS managed preferences plist(`com.beansec.Teleport` 域)注入,`CanOfferSignin` 立即返回 disallowed → 登录按钮消失、syncSetup 入口关闭,profile 管理/头像不受影响。彻底做法 = 编译期 `enable_dice_support=false` 整段移除 Dice(成本更高、与「加法为主」理念冲突,暂不)。自有受管身份是独立未来大工程,强依赖 fairyland。
+
+### TD-006 「报告问题」反馈提交到 Google(数据外泄)
+
+- **登记日期**:2026-05-31 · **优先级**:P1
+- **背景**:overlay 自己解开了 `_google_chrome` gate 让「报告问题」常显(`about_page.html.patch` 还删掉了 `hidden="[[!prefs.feedback_allowed.value]]"` 守卫,`about_page.ts.patch`/`about_page_browser_proxy.ts.patch` 接通 `openFeedbackDialog`),但提交端点仍硬编码 `https://www.google.com/tools/feedback/chrome/__submit`(`components/feedback/feedback_uploader.cc:45`,**非品牌门控**)。
+- **影响**:反馈对话框能填能交,数据(可能含截图、系统日志、URL)POST 到 Google——既无法被 Google 正确归集,又构成数据外泄,与「企业安全」定位直接冲突。另:C++ `CanShowFeedback()` 仍读策略 pref `kUserFeedbackAllowed`,策略禁用时点击被静默拦截而前端 link 仍可见(轻微不一致)。
+- **当前处置**:无(入口被 overlay 主动启用)。
+- **将来方向**:S 止血 = patch `kFeedbackPostUrl` 指向自有/空,或把入口改回隐藏直到后端就绪;M 完整 = 端点指向 fairyland 反馈服务(兼容现有 multipart 格式)+ 恢复有意义的前端可见性守卫。
+
+### TD-007 关于页「隐私政策 / 服务条款」为占位死链
+
+- **登记日期**:2026-05-31 · **优先级**:P1(上线前必须处理)
+- **背景**:overlay 去掉 `_google_chrome` gate 无条件显示这两行,并填了占位 URL:服务条款 `https://teleport.example.com/terms`(`patches/.../settings_localized_strings_provider.cc.patch:25`)、隐私政策 `https://teleport.example.com/privacy`(`patches/.../about_page.ts.patch:24`)。
+- **影响**:`chrome://settings/help` 页脚两个链接点击即死链。
+- **当前处置**:占位 URL。
+- **将来方向**:S,待 fairyland/法务提供真实 ToS、隐私政策页 URL 后替换。同类需替换的外部 URL 还有帮助中心(见 TD-009)。
+
+### TD-008 chrome://management 残留 "Chromium" 字样 + Google 帮助链
+
+- **登记日期**:2026-05-31 · **优先级**:P1(企业核心受管页)
+- **背景**:`components/management_strings.grdp:78,81` 的非 Google 分支字面写 "managed outside of **Chromium**";该文件属 `components_strings.grd`,**不在** `branding_strings.py` 覆盖的 `components_chromium_strings.grd` 内 → 重写脚本扫不到 → 原样显示。同页「Learn more」链接 `kManagedUiLearnMoreUrl` 指向 `support.google.com/chrome?p=is_chrome_managed`(`url_constants.h:343`)。
+- **影响**:企业「由组织管理」页露出 Chromium 字样并跳 Google。
+- **当前处置**:无。
+- **将来方向**:S = patch 这 2 处字串(或扩展 `branding_strings.py` 覆盖 `management_strings.grdp`)+ 重定向/移除 Learn more 链。
+
+### TD-009 设置页大面积字面 "Chrome" 残留 + 多处指向 Google 的链接
+
+- **登记日期**:2026-05-31 · **优先级**:P2
+- **背景**:`branding_strings.py` 只替换独立单词 "Chromium",**不替换 "Chrome"**,且**不覆盖** `chrome/app/settings_strings.grdp` 与 `chrome/app/generated_resources.grd`(两者共约 500 处含 "Chrome",需甄别可见正文 vs `desc=`/`_google_chrome` 分支/已用 `$1`/`IDS_SHORT_PRODUCT_NAME` 占位的安全条目)。代表样本:`settings_strings.grdp:254`(Chrome Colors)、`:822-831`(地址自动填充 "Remove from Chrome")、`:1480-1582`(广告隐私 "estimated by Chrome")、`:2284-2296`(设置重置)、`:2442-2460`(搜索引擎 "part of Chrome")等。指向 Google 的链接:帮助中心 `kChromeHelpVia{Menu,WebUI,Keyboard}URL`(菜单栏「帮助」也走它)、Chrome Web Store 入口(`extension_urls.cc:41`)、Safe Browsing 说明链(`url_constants.h:500+`)。
+- **影响**:设置页多处字面 "Chrome";多个入口跳转 Google。
+- **当前处置**:无。
+- **将来方向**:**系统性杠杆(L,量大但一次收口)** = 扩展 `scripts/branding_strings.py` 覆盖 `settings_strings.grdp` / `generated_resources.grd` / `management_strings.grdp`,并把替换规则从「Chromium」扩到「Chrome」**外加专有名排除表**(Chrome Web Store / Chrome OS / Chrome Remote Desktop 等)。指向 Google 的链接逐个重定向到 fairyland 或隐藏。已用 `$1`/`IDS_SHORT_PRODUCT_NAME` 占位的条目无需动。
+
+### TD-010 隐私设置存在 UKM「死 toggle」
+
+- **登记日期**:2026-05-31 · **优先级**:P2
+- **背景**:「让搜索和浏览更好」开关(`url_keyed_anonymized_data_collection`)位于 `_google_chrome` 块**之外**(`chrome/browser/resources/settings/privacy_page/personalization_options.html:93`),非品牌构建仍渲染;但 UKM 上送 URL 在公开 Chromium 为空(`components/metrics/server_urls.grd` 占位 `-`)→ `NetMetricsLogUploader` 短路丢弃日志。
+- **影响**:开关有效、UKM 真采集,但永不上送——「点了有反应却无任何后果」,且文案暗示数据外发,与定位语义冲突。
+- **当前处置**:无。
+- **将来方向**:S,patch `personalization_options.html` 隐藏该 toggle。
+
+### TD-011 无 DRM / 受保护媒体播放能力
+
+- **登记日期**:2026-05-31 · **优先级**:P3(企业决策 + 外部授权)
+- **背景**:`enable_widevine=false`(`is_chrome_branded=false`,默认值见 `third_party/widevine/cdm/widevine.gni:15`);Widevine CDM 二进制走 Google 私有通道 `checkout_src_internal`(`DEPS:3959`,本检出该目录为空);macOS 无 FairPlay 兜底。已开的 codec 开关(`proprietary_codecs`/HEVC/Dolby 等)只覆盖**明文**媒体,加密(EME/DRM)内容仍需 CDM。
+- **影响**:Netflix / Disney+ / HBO Max / Amazon Prime Video / Spotify Web Player / Apple TV+ Web 等受 DRM 保护内容**全部无法播放**(报「浏览器不受支持」)。
+- **当前处置**:无(默认零 DRM 能力)。
+- **将来方向**:**硬前置(商务/法务,L)** = 与 Google Widevine 签订集成/分发授权,拿到授权二进制 + host-verification 证书;之后接入 release 打包链(M)。即便接通,桌面 macOS 仅 L3 / 最高 1080p(与官方 Chrome 相同)。**不依赖 fairyland**。企业办公场景多可作为「已知限制」接受,在产品说明中标注「不支持受 DRM 保护的商业流媒体」。
+
+### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
+
+- **登记日期**:2026-05-31
+- 因 `GOOGLE_CHROME_BRANDING=false`,以下遥测/上报在非品牌构建里被上游默认关死,**均不联 Google**,现状即理想 MVP 态,无需做减法:
+  - **崩溃上报(Crashpad)**:上报 URL 仅在 `GOOGLE_CHROME_BRANDING && OFFICIAL_BUILD` 定义,非品牌返回空串且 consent 恒 false(`crash_reporter_client.cc:26,148`;`chrome_crash_reporter_client.cc:198`)→ 只写本地 minidump、不上传、无死 UI。
+  - **UMA 指标**:上送 URL 经 Google 内部 GRD 注入,公开树为空(`server_urls.cc:24`);consent toggle 整块 `_google_chrome` 门控 → 不渲染。日志采集后丢弃。
+  - **Variations / Finch 种子**:`IsFetchingEnabled()` 在非品牌构建除非命令行给 URL 否则返 false(`variations_service.cc:222`),叠加已开的 `disable_fieldtrial_testing_config` → 启动不拉任何 seed,每个 feature 钉死编译期默认。
+  - **RLZ**:`enable_rlz=is_chrome_branded` → 编译期即关闭,代码不编入。
+- 未来若要自建 telemetry/crash/variations 后端,各为 L 级且依赖 fairyland 对应服务,归入后续 phase,MVP 不动。
+- 唯一从「沉默良好态」被 overlay 自己**破坏**的是反馈端点 → 已单列 TD-006。
+
 ---
 
 ## 已结清
