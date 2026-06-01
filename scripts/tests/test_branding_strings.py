@@ -88,6 +88,17 @@ def test_rekey_xtb_substitutes_value_and_id():
     assert 'id="222"' in out and "关于闪现" in out and "111" not in out
 
 
+def test_rekey_xtb_dedupes_colliding_new_ids():
+    # When two old ids remap to the SAME new id (two messages whose rebranded
+    # text collapsed to identical content), only ONE <translation> may survive,
+    # else grit's xtb_reader asserts on a duplicate translation id at build time.
+    xtb = ('<translation id="111">重启Chromium</translation>'
+           '<translation id="222">重启Chrome</translation>')
+    out = bs.rekey_xtb(xtb, {"111": "999", "222": "999"}, "zh-CN", sweep_chrome=True)
+    assert out.count('id="999"') == 1     # duplicate dropped
+    assert "重启闪现" in out                # surviving translation localized
+
+
 def test_message_name_to_id_reads_real_grd_stably():
     """grit enumerates message ids deterministically for the real grd."""
     src = _chromium_src()
@@ -157,3 +168,233 @@ def test_inject_translations_appends_missing_only():
     assert '<translation id="222">闪现</translation>' in out  # added
     assert out.count('id="111"') == 1  # not duplicated
     assert bs.inject_translations(out, {"222"}, "闪现") == out  # idempotent
+
+
+# --- shared-superset "Chrome" sweep -----------------------------------------
+
+def test_sweep_chrome_replaces_standalone_en():
+    assert bs.rebrand_en_text("Open Chrome now", sweep_chrome=True) == "Open Teleport now"
+    assert bs.rebrand_en_text("Google Chrome is fast", sweep_chrome=True) == "Teleport is fast"
+
+
+def test_sweep_chrome_default_off_is_backward_compatible():
+    # Without the flag, "Chrome" is untouched (existing targets unaffected).
+    assert bs.rebrand_en_text("Open Chrome now") == "Open Chrome now"
+
+
+def test_sweep_chrome_zh():
+    assert bs.rebrand_zh_text("在 Chrome 中打开", "zh-CN", sweep_chrome=True) == "在 闪现 中打开"
+    assert bs.rebrand_zh_text("Google Chrome 浏览器", "zh-TW", sweep_chrome=True) == "閃現 浏览器"
+
+
+def test_sweep_chrome_word_boundary():
+    assert bs.rebrand_en_text("Chromecast and Chromium", sweep_chrome=True) == "Chromecast and Teleport"
+
+
+def test_sweep_chrome_keeps_external_products():
+    src = "Open the Chrome Web Store on Chrome OS via Chrome Remote Desktop and Chrome Canvas"
+    # External products preserved; no standalone Chrome here to replace.
+    assert bs.rebrand_en_text(src, sweep_chrome=True) == src
+
+
+def test_sweep_chrome_keeps_external_but_replaces_standalone():
+    src = "Chrome can install apps from the Chrome Web Store"
+    assert bs.rebrand_en_text(src, sweep_chrome=True) == "Teleport can install apps from the Chrome Web Store"
+
+
+def test_sweep_chrome_skips_desc_attribute():
+    # desc="" is a translator note, never displayed: must NOT be rebranded.
+    grd = '<message name="IDS_X" desc="Shown in Chrome settings">Open Chrome</message>'
+    out = bs._sub_chrome(grd, "Teleport")
+    assert 'desc="Shown in Chrome settings"' in out   # desc preserved
+    assert ">Open Teleport<" in out                    # body replaced
+
+
+def test_sweep_chrome_skips_ex_example():
+    # <ex>Chrome</ex> is placeholder example text, never displayed.
+    src = '<ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Chrome</ex></ph> is updating'
+    out = bs._sub_chrome(src, "Teleport")
+    assert "<ex>Chrome</ex>" in out          # example preserved
+    assert "</ph> is updating" in out
+
+
+def test_sweep_chrome_skips_google_chrome_in_desc():
+    grd = '<message name="IDS_X" desc="Google Chrome sign-in">Sign in to Google Chrome</message>'
+    out = bs._sub_chrome(grd, "Teleport")
+    assert 'desc="Google Chrome sign-in"' in out
+    assert ">Sign in to Teleport<" in out
+
+
+def test_sweep_chrome_skips_both_desc_and_ex():
+    src = '<message name="X" desc="Chrome help"><ph name="P">$1<ex>Chrome</ex></ph> settings</message>'
+    out = bs._sub_chrome(src, "Teleport")
+    assert 'desc="Chrome help"' in out
+    assert "<ex>Chrome</ex>" in out
+    assert "</ph> settings" in out
+
+
+def test_mask_google_chrome_blocks_simple():
+    src = ('<if expr="not _google_chrome">Open Chrome</if>'
+           '<if expr="_google_chrome">Open Chrome branded</if>')
+    out = bs._sub_chrome(src, "Teleport")
+    # active (not _google_chrome) branch rebranded; google_chrome branch kept
+    assert '>Open Teleport<' in out
+    assert 'Open Chrome branded' in out
+
+
+def test_mask_google_chrome_blocks_nested():
+    src = ('<if expr="_google_chrome">'
+           '<if expr="not is_chromeos">Use Chrome here</if>'
+           '</if>'
+           ' and standalone Chrome')
+    out = bs._sub_chrome(src, "Teleport")
+    assert 'Use Chrome here' in out            # whole google_chrome block kept
+    assert 'and standalone Teleport' in out    # outside replaced
+
+
+def test_mask_google_chrome_blocks_ignores_if_prefixed_tokens():
+    # '<if' is a prefix of '<ifoo'; the scanner must not treat it as a nested <if>.
+    src = ('<if expr="_google_chrome"><ifoo>Open Chrome</ifoo></if>'
+           ' then standalone Chrome')
+    out = bs._sub_chrome(src, "Teleport")
+    assert '<ifoo>Open Chrome</ifoo>' in out      # google_chrome block kept intact
+    assert 'then standalone Teleport' in out      # text after the block rebranded
+
+
+def test_restore_spans_desc_containing_chrome_keep():
+    # A keep-list phrase inside a desc="" produces a nested sentinel; restore
+    # must unwrap outer-before-inner (reverse index order) or the inner sentinel
+    # is stranded as malformed XML.
+    grd = '<message desc="See the Chrome Web Store">Open Chrome</message>'
+    out = bs._sub_chrome(grd, "Teleport")
+    assert 'desc="See the Chrome Web Store"' in out  # desc intact incl. keep term
+    assert ">Open Teleport<" in out                   # body rebranded
+    assert "\x00" not in out                           # no sentinel stranded
+
+
+def test_components_strings_renamed_set_is_frozen():
+    src = _chromium_src()
+    grd = "components/components_strings.grd"
+    got = bs.renamed_message_names(src, grd, bs._target_grdp(grd), sweep_chrome=True)
+    fixture = Path(__file__).parent / "fixtures" / "branding_renamed_components_strings.txt"
+    assert fixture.exists(), "fixture not generated yet — see Step 3"
+    expected = fixture.read_text(encoding="utf-8").split()
+    assert got == sorted(expected), (
+        "rebranded components message set drifted from frozen fixture — review the "
+        "diff and update the fixture only after confirming new entries are correct")
+
+
+def test_generated_resources_renamed_set_is_frozen():
+    src = _chromium_src()
+    grd = "chrome/app/generated_resources.grd"
+    got = bs.renamed_message_names(src, grd, bs._target_grdp(grd), sweep_chrome=True)
+    fixture = Path(__file__).parent / "fixtures" / "branding_renamed_generated_resources.txt"
+    assert fixture.exists(), "fixture not generated yet — see Step 4"
+    expected = fixture.read_text(encoding="utf-8").split()
+    assert got == sorted(expected), (
+        "rebranded message set drifted from frozen fixture — review the diff and "
+        "update the fixture only after confirming new entries are correct")
+
+
+def test_rebrand_target_handles_unlisted_parts_via_inplace_snapshot(tmp_path):
+    """The snapshot must compute old ids from the pristine on-disk grd (so all
+    <part> includes resolve) without enumerating them. We assert _rebrand_target
+    no longer requires copying grdp includes: it accepts a grd with parts it was
+    not told about."""
+    src = _chromium_src()
+    grd_rel = "chrome/app/generated_resources.grd"
+    xtb_map = {
+        "zh-CN": "chrome/app/resources/generated_resources_zh-CN.xtb",
+        "zh-TW": "chrome/app/resources/generated_resources_zh-TW.xtb",
+    }
+    grd_path = src / grd_rel
+    backups = {grd_path: grd_path.read_text(encoding="utf-8")}
+    for rel in xtb_map.values():
+        p = src / rel
+        backups[p] = p.read_text(encoding="utf-8")
+    try:
+        remapped, injected = bs._rebrand_target(
+            src, grd_rel, xtb_map, grdp_includes=(), inject_names=(),
+            sweep_chrome=True)
+        assert remapped > 0  # generated_resources has product-name strings
+    finally:
+        for p, original in backups.items():
+            p.write_text(original, encoding="utf-8")
+
+
+def test_sweep_chrome_keeps_external_products_zh():
+    """Chinese external-product phrases must survive the zh sweep unchanged."""
+    # zh-CN: Chrome 应用商店 (Web Store), Chrome 操作系统 (OS), and
+    # standalone Chrome (our browser) must still be rebranded.
+    src_cn = "在 Chrome 应用商店 中安装，或直接打开 Chrome 浏览器"
+    out_cn = bs.rebrand_zh_text(src_cn, "zh-CN", sweep_chrome=True)
+    assert "Chrome 应用商店" in out_cn          # external product kept
+    assert "打开 闪现 浏览器" in out_cn          # standalone Chrome rebranded
+
+    # zh-CN: additional external forms
+    assert "Chrome 操作系统" in bs.rebrand_zh_text(
+        "更新 Chrome 操作系统", "zh-CN", sweep_chrome=True)
+    assert "Chrome 企业核心版" in bs.rebrand_zh_text(
+        "试用 Chrome 企业核心版", "zh-CN", sweep_chrome=True)
+    assert "Chrome 远程桌面" in bs.rebrand_zh_text(
+        "通过 Chrome 远程桌面连接", "zh-CN", sweep_chrome=True)
+    assert "Chrome 浏览器云管理" in bs.rebrand_zh_text(
+        "注册 Chrome 浏览器云管理", "zh-CN", sweep_chrome=True)
+
+    # zh-TW: Chrome 線上應用程式商店 (Web Store TW) and Chrome Enterprise
+    src_tw = "前往 Chrome 線上應用程式商店 查找，或使用 Chrome 瀏覽器"
+    out_tw = bs.rebrand_zh_text(src_tw, "zh-TW", sweep_chrome=True)
+    assert "Chrome 線上應用程式商店" in out_tw   # TW external product kept
+    assert "使用 閃現 瀏覽器" in out_tw           # standalone Chrome rebranded
+
+    # zh-TW: Chrome Enterprise must survive (TW uses English "Enterprise")
+    assert "Chrome Enterprise" in bs.rebrand_zh_text(
+        "試用 Chrome Enterprise 基本版", "zh-TW", sweep_chrome=True)
+
+
+def test_surviving_chrome_phrases_are_frozen():
+    src = _chromium_src()
+    got = set()
+    for grd in ("chrome/app/generated_resources.grd",
+                "components/components_strings.grd"):
+        got.update(bs.surviving_chrome_phrases(src, grd, bs._target_grdp(grd)))
+    fixture = Path(__file__).parent / "fixtures" / "branding_chrome_kept.txt"
+    assert fixture.exists(), "fixture not generated yet — see Step 3"
+    expected = fixture.read_text(encoding="utf-8").split("\n")
+    expected = [e for e in expected if e]  # drop trailing empty
+    assert sorted(got) == sorted(expected), (
+        "kept 'Chrome X' phrase set drifted — a new proper noun may need adding "
+        "to _CHROME_KEEP, or a string that should rebrand was missed")
+
+
+# --- frozen-snapshot tests for the 3 new standalone grds --------------------
+
+@pytest.mark.parametrize("grd_rel,fixture_name", [
+    (
+        "components/privacy_sandbox_strings.grd",
+        "branding_renamed_privacy_sandbox_strings.txt",
+    ),
+    (
+        "extensions/strings/extensions_strings.grd",
+        "branding_renamed_extensions_strings.txt",
+    ),
+    (
+        "components/plus_addresses/core/browser/resources/strings/plus_addresses_strings.grd",
+        "branding_renamed_plus_addresses_strings.txt",
+    ),
+])
+def test_standalone_grd_renamed_set_is_frozen(grd_rel, fixture_name):
+    """Frozen snapshot of message names that change under sweep_chrome rebranding.
+
+    Mirrors test_generated_resources_renamed_set_is_frozen for the three
+    standalone grds that were previously missing from _GRD_TARGETS.
+    """
+    src = _chromium_src()
+    got = bs.renamed_message_names(src, grd_rel, bs._target_grdp(grd_rel), sweep_chrome=True)
+    fixture = Path(__file__).parent / "fixtures" / fixture_name
+    assert fixture.exists(), f"fixture not generated yet: {fixture_name}"
+    expected = fixture.read_text(encoding="utf-8").split()
+    assert got == sorted(expected), (
+        f"rebranded message set for {grd_rel} drifted from frozen fixture — "
+        "review the diff and update the fixture only after confirming new entries are correct"
+    )

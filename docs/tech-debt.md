@@ -116,24 +116,16 @@
 - **登记日期**:2026-05-31 · **优先级**:P1(企业核心受管页)
 - **背景**:`components/management_strings.grdp:78,81` 的非 Google 分支字面写 "managed outside of **Chromium**";该文件属 `components_strings.grd`,**不在** `branding_strings.py` 覆盖的 `components_chromium_strings.grd` 内 → 重写脚本扫不到 → 原样显示。同页「Learn more」链接 `kManagedUiLearnMoreUrl` 指向 `support.google.com/chrome?p=is_chrome_managed`(`url_constants.h:343`)。
 - **影响**:企业「由组织管理」页露出 Chromium 字样并跳 Google。
-- **当前处置**:无。
-- **将来方向**:S = patch 这 2 处字串(或扩展 `branding_strings.py` 覆盖 `management_strings.grdp`)+ 重定向/移除 Learn more 链。
+- **当前处置**:**字符串部分已收口**——`branding_strings.py` 扩展为覆盖 `components_strings.grd`(含 `management_strings.grdp`),`IDS_MANAGEMENT_BROWSER_NOTICE` / `..._NOT_MANAGED_NOTICE` 的 "managed outside of **Chromium**" 现 rebrand 为「闪现」(见 spec/plan `docs/superpowers/{specs,plans}/2026-05-31-settings-residual-branding-cleanup*`)。**「Learn more」Google 链接(`kManagedUiLearnMoreUrl`)仍未处理**,随其余指向 Google 的链接一并推迟。
+- **将来方向**:剩余的 Learn more 链接重定向/移除,待 fairyland 帮助页 URL 就绪后另起 spec(与 TD-009 链接部分合并处理)。
 
 ### TD-009 设置页大面积字面 "Chrome" 残留 + 多处指向 Google 的链接
 
 - **登记日期**:2026-05-31 · **优先级**:P2
 - **背景**:`branding_strings.py` 只替换独立单词 "Chromium",**不替换 "Chrome"**,且**不覆盖** `chrome/app/settings_strings.grdp` 与 `chrome/app/generated_resources.grd`(两者共约 500 处含 "Chrome",需甄别可见正文 vs `desc=`/`_google_chrome` 分支/已用 `$1`/`IDS_SHORT_PRODUCT_NAME` 占位的安全条目)。代表样本:`settings_strings.grdp:254`(Chrome Colors)、`:822-831`(地址自动填充 "Remove from Chrome")、`:1480-1582`(广告隐私 "estimated by Chrome")、`:2284-2296`(设置重置)、`:2442-2460`(搜索引擎 "part of Chrome")等。指向 Google 的链接:帮助中心 `kChromeHelpVia{Menu,WebUI,Keyboard}URL`(菜单栏「帮助」也走它)、Chrome Web Store 入口(`extension_urls.cc:41`)、Safe Browsing 说明链(`url_constants.h:500+`)。
 - **影响**:设置页多处字面 "Chrome";多个入口跳转 Google。
-- **当前处置**:无。
-- **将来方向**:**系统性杠杆(L,量大但一次收口)** = 扩展 `scripts/branding_strings.py` 覆盖 `settings_strings.grdp` / `generated_resources.grd` / `management_strings.grdp`,并把替换规则从「Chromium」扩到「Chrome」**外加专有名排除表**(Chrome Web Store / Chrome OS / Chrome Remote Desktop 等)。指向 Google 的链接逐个重定向到 fairyland 或隐藏。已用 `$1`/`IDS_SHORT_PRODUCT_NAME` 占位的条目无需动。
-
-### TD-010 隐私设置存在 UKM「死 toggle」
-
-- **登记日期**:2026-05-31 · **优先级**:P2
-- **背景**:「让搜索和浏览更好」开关(`url_keyed_anonymized_data_collection`)位于 `_google_chrome` 块**之外**(`chrome/browser/resources/settings/privacy_page/personalization_options.html:93`),非品牌构建仍渲染;但 UKM 上送 URL 在公开 Chromium 为空(`components/metrics/server_urls.grd` 占位 `-`)→ `NetMetricsLogUploader` 短路丢弃日志。
-- **影响**:开关有效、UKM 真采集,但永不上送——「点了有反应却无任何后果」,且文案暗示数据外发,与定位语义冲突。
-- **当前处置**:无。
-- **将来方向**:S,patch `personalization_options.html` 隐藏该 toggle。
+- **当前处置**:**品牌串部分已收口**——`branding_strings.py` 扩展为新增两个 target:`generated_resources.grd`(含 `settings_strings.grdp` 等 14 个 part)与 `components_strings.grd`(25 个 part),按 en `_CHROME_KEEP` + zh `_CHROME_KEEP_ZH` 外部产品保留表,把可见消息体里的 "Chrome"/"Chromium"/"Google Chrome" → Teleport/闪现(遮罩 `desc=`/`<ex>`/`_google_chrome` 分支),并对四个 `.xtb` 做 id 重键 + 去重;配 3 个 frozen-snapshot drift 测试。dev 增量构建通过(见 spec/plan `docs/superpowers/{specs,plans}/2026-05-31-settings-residual-branding-cleanup*`)。**指向 Google 的链接(帮助中心 `kChromeHelpVia*URL`、Chrome Web Store 入口、Safe Browsing 说明链)仍未处理。**
+- **将来方向**:剩余的指向 Google 链接逐个重定向到 fairyland 或隐藏,待 fairyland 帮助/隐私/ToS 落地页 URL 就绪后另起一份 spec(与 TD-007/TD-008 链接部分合并)。
 
 ### TD-011 无 DRM / 受保护媒体播放能力
 
@@ -158,4 +150,8 @@
 
 ## 已结清
 
-(暂无)
+### TD-010 隐私设置存在 UKM「死 toggle」(已解决)
+
+- **登记日期**:2026-05-31 · **结清日期**:2026-06-01 · **优先级**:P2
+- **背景**:「让搜索和浏览更好」开关(`url_keyed_anonymized_data_collection`)位于 `_google_chrome` 块**之外**(`chrome/browser/resources/settings/privacy_page/personalization_options.html:93`),非品牌构建仍渲染;但 UKM 上送 URL 在公开 Chromium 为空(`components/metrics/server_urls.grd` 占位 `-`)→ `NetMetricsLogUploader` 短路丢弃日志,成为「点了有反应却无任何后果」的死控件。
+- **处置**:新增 patch `patches/chrome/browser/resources/settings/privacy_page/personalization_options.html.patch`,把 `urlCollectionToggle` 裹进 `<if expr="_google_chrome">...</if>`,使本构建(`_google_chrome=false`)不渲染该 toggle(与相邻 toggle 的上游写法一致)。见 spec/plan `docs/superpowers/{specs,plans}/2026-05-31-settings-residual-branding-cleanup*`。

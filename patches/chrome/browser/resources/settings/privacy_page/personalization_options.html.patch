@@ -1,0 +1,19 @@
+diff --git a/chrome/browser/resources/settings/privacy_page/personalization_options.html b/chrome/browser/resources/settings/privacy_page/personalization_options.html
+index 7adae56a25060..6ec2bd611387e 100644
+--- a/chrome/browser/resources/settings/privacy_page/personalization_options.html
++++ b/chrome/browser/resources/settings/privacy_page/personalization_options.html
+@@ -90,12 +90,14 @@
+     </settings-toggle-button>
+ </if><!-- not chromeos -->
+ </if><!-- _google_chrome -->
++<if expr="_google_chrome">
+     <settings-toggle-button id="urlCollectionToggle"
+         class="hr"
+         pref="{{prefs.url_keyed_anonymized_data_collection.enabled}}"
+         label="$i18n{urlKeyedAnonymizedDataCollection}"
+         sub-label="$i18n{urlKeyedAnonymizedDataCollectionDesc}">
+     </settings-toggle-button>
++</if><!-- _google_chrome: UKM toggle has no backend in teleport (TD-010) -->
+ <if expr="_google_chrome">
+ <if expr="not is_chromeos">
+     <settings-toggle-button id="spellCheckControl"
