@@ -138,6 +138,8 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 
 - **About 页 / 升级指示集成(跨 target 编译)**:`teleport_update_buildstate.{h,mm}`(启动时 `InstallUpdateReadyBuildStateBridge()`,须在 `StartMacUpdater()` 前调用)与 `teleport_version_updater.mm`(`VersionUpdater::Create()` 的 macOS 实现)虽物理在 `src/` 下,但经 `chrome/browser/BUILD.gn` 与 `chrome/browser/ui/BUILD.gn` 的 patch **编进 chrome target、不在 `//teleport` source_set**——它们要 include chrome 头(BuildState / VersionUpdater),放进 source_set 会造成 GN 依赖环。故这两个文件**不出现在 `src/BUILD.gn`**;改它们要动对应 patch,别往 `src/BUILD.gn` 加。About 页面板本身的改动在 `patches/chrome/browser/resources/settings/about_page/*`(版本展示、Sparkle check-for-updates、页脚链接)。
 
+- **工具栏主菜单升级角标依赖 `enable_update_notifications`**:点亮「⋮ 菜单的重启更新角标」的唯一通道是 `BuildState::SetUpdate` → `UpgradeDetectorImpl` → `AppMenuIconController`。但 `UpgradeDetectorImpl::Init()` 里 `build_state->AddObserver(this)` 与 `InstalledVersionPoller` 整段包在 `#if BUILDFLAG(ENABLE_UPDATE_NOTIFICATIONS)`,而该 flag 上游默认 `= is_chrome_branded`(`//chrome/browser/buildflags.gni`)——非品牌构建恒为 0,detector **根本不订阅 BuildState**,我们 bridge 的 `SetUpdate()` 全程无效,角标永不亮(About 页却仍显示 Relaunch,因为它走另一条 VersionUpdater 通道)。我们有 Sparkle,故在 `gn/args/{release,dev}.mac.gn` 显式 `enable_update_notifications = true`。验证可纯本地、不发版:dev 构建用 `--simulate-critical-update`(经 InstalledVersionPoller 合成 BuildState 更新)即可秒亮角标(critical 红;普通更新走 1h 的 VERY_LOW 阈值后转绿)。副作用:同时编入 outdated-build 检测器(满 8 周对非受管/organic 构建提示;受管安装 `IsManaged()` 下不触发)。
+
 ## 目标平台
 
 Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙等),MVP 暂不。**目前仅 macOS(Apple Silicon)跑通构建**。

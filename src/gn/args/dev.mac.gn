@@ -12,6 +12,14 @@ v8_symbol_level = 0
 is_official_build = false
 use_remoteexec = false
 
+# Match release.mac.gn: enable the toolbar/app-menu update indicator so dev can
+# exercise it (e.g. --simulate-upgrade / --simulate-critical-update, which drive
+# the InstalledVersionPoller gated behind this flag). Upstream defaults it to
+# is_chrome_branded=false; we override because our product ships an updater.
+# Dev has teleport_enable_updater=false (no Sparkle), so the live Sparkle bridge
+# is inert here, but the BuildState->UpgradeDetector->menu path is testable.
+enable_update_notifications = true
+
 # Upstream Blink ships a shape-cache consistency self-check behind
 # EXPENSIVE_DCHECKS (ng_shape_cache.h, upstream crbug.com/486945341) that
 # false-fires on CJK text with font fallback and aborts the renderer

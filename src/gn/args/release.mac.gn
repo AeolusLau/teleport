@@ -24,6 +24,16 @@ chrome_pgo_phase = 2
 # links Sparkle.framework; requires `python scripts/fetch_sparkle.py` first).
 teleport_enable_updater = true
 
+# Light the toolbar/app-menu "update ready -- relaunch" indicator. Upstream gates
+# this behind is_chrome_branded (//chrome/browser/buildflags.gni:
+# enable_update_notifications = is_chrome_branded) because stock Chromium ships
+# no updater. Our build DOES (Sparkle): without this flag, UpgradeDetectorImpl
+# never registers as a BuildState observer, so the teleport_update_buildstate
+# bridge's BuildState::SetUpdate() has no effect and the app-menu upgrade badge
+# can never light. Verified via A/B probe: flag off -> SetUpdate leaves the
+# detector at stage NONE; flag on -> the stage tracks the update.
+enable_update_notifications = true
+
 # Proprietary / platform audio-video codecs (same rationale as dev.mac.gn).
 proprietary_codecs = true
 ffmpeg_branding = "Chrome"
