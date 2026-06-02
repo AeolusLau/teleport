@@ -1,0 +1,26 @@
+diff --git a/chrome/browser/upgrade_detector/upgrade_detector_impl.cc b/chrome/browser/upgrade_detector/upgrade_detector_impl.cc
+index 07b7e0fcf5119..ebbca99dbcda4 100644
+--- a/chrome/browser/upgrade_detector/upgrade_detector_impl.cc
++++ b/chrome/browser/upgrade_detector/upgrade_detector_impl.cc
+@@ -491,7 +491,20 @@ void UpgradeDetectorImpl::Init() {
+ 
+   auto* const build_state = g_browser_process->GetBuildState();
+   build_state->AddObserver(this);
+-  installed_version_poller_.emplace(build_state);
++  // teleport: only run the InstalledVersionPoller under the --simulate-* test
++  // switches. In production our Sparkle updater stages updates into its own
++  // cache and only swaps the app bundle on relaunch, so the poller would read
++  // the on-disk version as installed == running and keep calling
++  // BuildState::SetUpdate(kNone). That fights our update bridge (which feeds
++  // SetUpdate(kNormalUpdate)): the poller's kNone resets the annoyance stage
++  // via UpgradeDetected(NONE) without notifying observers, leaving the toolbar
++  // chip stale-on while the live state reports no upgrade -- so the chip and
++  // the "Relaunch to update" menu item desync. The Sparkle bridge is the sole
++  // production driver; the poller is only kept to back --simulate-upgrade /
++  // --simulate-critical-update (which feed it a synthetic higher version).
++  if (is_testing_) {
++    installed_version_poller_.emplace(build_state);
++  }
+ #endif  // BUILDFLAG(ENABLE_UPDATE_NOTIFICATIONS)
+ }
+ 
