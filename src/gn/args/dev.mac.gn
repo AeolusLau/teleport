@@ -50,3 +50,8 @@ enable_platform_mpeg_h_audio = true       # MPEG-H 3D Audio
 # permanently fixes the UsePersistentCacheForCodeCache renderer abort: dev runs
 # no longer need --disable-field-trial-config (passing it becomes a no-op).
 disable_fieldtrial_testing_config = true
+
+# Bake the dev enterprise endpoints (fairyland.io DM/enroll/register-handler
+# URLs + kDevPolicyKey verification root) into the binary. Set to true in
+# release.mac.gn to bake the production beansec.com endpoints + KMS root instead.
+teleport_use_release_endpoints = false

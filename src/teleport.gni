@@ -6,6 +6,18 @@ declare_args() {
   # Enable the Sparkle-based auto-updater. On for official channel builds
   # (release.mac.gn); off for dev so the dev workflow needs no framework/signing.
   teleport_enable_updater = false
+
+  # Select the release vs. dev set of baked enterprise endpoints. This one
+  # switch governs every dev/release-split constant: the policy verification
+  # root public key (cloud_policy_constants.cc), the default device-management
+  # server URL (browser_policy_connector.cc), and the enroll / register-handler
+  # URLs (common/teleport_enterprise_urls.cc).
+  # false (default / dev.mac.gn): dev values — fairyland.io endpoints +
+  #   kDevPolicyKey (dev root-signer); safe for local testing and CI.
+  # true (release.mac.gn): release values — beansec.com endpoints +
+  #   kReleasePolicyKey (production KMS root); all release channels
+  #   (canary/beta/stable) share one release binary.
+  teleport_use_release_endpoints = false
 }
 
 # Inside-checkout dir where fetch_sparkle.py symlinks the pinned framework.

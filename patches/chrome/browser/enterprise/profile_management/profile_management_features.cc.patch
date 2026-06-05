@@ -1,0 +1,17 @@
+diff --git a/chrome/browser/enterprise/profile_management/profile_management_features.cc b/chrome/browser/enterprise/profile_management/profile_management_features.cc
+index 20f10bb81c771..86ffe662bb40a 100644
+--- a/chrome/browser/enterprise/profile_management/profile_management_features.cc
++++ b/chrome/browser/enterprise/profile_management/profile_management_features.cc
+@@ -20,8 +20,11 @@ BASE_FEATURE(kOidcEnrollmentTimeout,
+              "kOidcEnrollmentTimeout",
+              base::FEATURE_ENABLED_BY_DEFAULT);
+ 
++// teleport: default-enabled so our official builds use the generic-OIDC path
++// (skips the upstream Entra trusted-redirect-chain check and reads the `state`
++// param) without requiring --enable-features on every launch.
+ BASE_FEATURE(kEnableGenericOidcAuthProfileManagement,
+-             base::FEATURE_DISABLED_BY_DEFAULT);
++             base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+ BASE_FEATURE(kOidcEnrollmentAuthSource, base::FEATURE_DISABLED_BY_DEFAULT);
+ 

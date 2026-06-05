@@ -1,0 +1,16 @@
+diff --git a/components/policy/core/common/BUILD.gn b/components/policy/core/common/BUILD.gn
+index 7558ce6bb4bd6..5a8b24552fdc9 100644
+--- a/components/policy/core/common/BUILD.gn
++++ b/components/policy/core/common/BUILD.gn
+@@ -484,7 +484,10 @@ static_library("test_support") {
+ 
+ source_set("common_constants") {
+   configs += [ "//components/policy:component_implementation" ]
+-  deps = [ "//base" ]
++  deps = [
++    "//base",
++    "//teleport:teleport_policy_buildflags",
++  ]
+   sources = [
+     "../../policy_export.h",
+     "cloud/cloud_policy_constants.cc",

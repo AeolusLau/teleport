@@ -1,6 +1,7 @@
 # The //teleport additive module, compiled into chrome via a minimal upstream
 # BUILD.gn dep patch (see patches/). A standalone test() target keeps unit
 # tests buildable without patching upstream test targets.
+import("//build/buildflag_header.gni")
 import("//teleport/teleport.gni")
 import("//testing/test.gni")
 
@@ -14,12 +15,24 @@ config("sparkle_rpath") {
   ldflags = [ "-Wl,-rpath,@loader_path/../../.." ]
 }
 
+# Leaf buildflag header that bakes the dev/release endpoint selection into the
+# binary at compile time (policy verification root key, default DM server URL,
+# enroll / register-handler URLs). Kept as a separate target (not part of
+# :teleport) so that //components/policy can dep on it without pulling in
+# //content and creating a dependency cycle.
+buildflag_header("teleport_policy_buildflags") {
+  header = "teleport_policy_buildflags.h"
+  flags = [ "TELEPORT_USE_RELEASE_ENDPOINTS=$teleport_use_release_endpoints" ]
+}
+
 source_set("teleport") {
   sources = [
     "browser/teleport_startup.cc",
     "browser/teleport_startup.h",
     "common/teleport_channel.cc",
     "common/teleport_channel.h",
+    "common/teleport_enterprise_urls.cc",
+    "common/teleport_enterprise_urls.h",
     "common/teleport_feed_url.cc",
     "common/teleport_feed_url.h",
     "common/teleport_url_scheme.cc",
@@ -29,6 +42,8 @@ source_set("teleport") {
   ]
   public_deps = [ "//components/version_info" ]
   deps = [
+    # teleport_enterprise_urls.cc bakes dev/release endpoints via this header.
+    ":teleport_policy_buildflags",
     "//base",
     "//content/public/common",
     "//url",
@@ -67,12 +82,16 @@ test("teleport_unittests") {
   sources = [
     "browser/teleport_startup_unittest.cc",
     "common/teleport_channel_unittest.cc",
+    "common/teleport_enterprise_urls_unittest.cc",
     "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",
     "common/teleport_version_unittest.cc",
   ]
   deps = [
     ":teleport",
+    # teleport_enterprise_urls_unittest.cc includes the buildflag header to
+    # assert the dev/release endpoint selection (deps, not public, on :teleport).
+    ":teleport_policy_buildflags",
     "//base/test:run_all_unittests",
     "//testing/gtest",
     "//url",
