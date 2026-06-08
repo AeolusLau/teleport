@@ -1,0 +1,110 @@
+diff --git a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
+index e1d9a884d558b..548690f5ff2eb 100644
+--- a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
++++ b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
+@@ -41,7 +41,9 @@
+ #include "components/policy/core/common/cloud/machine_level_user_cloud_policy_manager.h"
+ #include "components/policy/core/common/features.h"
+ #include "components/policy/core/common/remote_commands/remote_commands_constants.h"
++#include "components/policy/core/common/remote_commands/remote_commands_fetch_reason.h"
+ #include "components/policy/core/common/remote_commands/remote_commands_invalidator.h"
++#include "components/policy/core/common/remote_commands/remote_commands_service.h"
+ #include "content/public/browser/browser_task_traits.h"
+ #include "content/public/browser/browser_thread.h"
+ #include "content/public/browser/network_service_instance.h"
+@@ -103,6 +105,63 @@ std::set<int64_t> GetAllInvalidationProjectNumbers() {
+ 
+ }  // namespace
+ 
++// PolicyFetchObserver ---------------------------------------------------------
++
++ChromeBrowserCloudManagementControllerDesktop::PolicyFetchObserver::
++    PolicyFetchObserver(MachineLevelUserCloudPolicyManager* manager)
++    : manager_(manager) {
++  manager_->AddClientObserver(this);
++  CloudPolicyCore* core = manager_->core();
++  CloudPolicyClient* client = core ? core->client() : nullptr;
++  // If the client already registered + fetched policy before we attached
++  // (StartInvalidations can run after the initial fetch), fetch now; otherwise
++  // OnPolicyFetched catches the upcoming fetch.
++  if (client && client->is_registered()) {
++    FetchRemoteCommands();
++  }
++}
++
++ChromeBrowserCloudManagementControllerDesktop::PolicyFetchObserver::
++    ~PolicyFetchObserver() {
++  manager_->RemoveClientObserver(this);
++}
++
++void ChromeBrowserCloudManagementControllerDesktop::PolicyFetchObserver::
++    OnPolicyFetched(CloudPolicyClient* /*client*/) {
++  FetchRemoteCommands();
++}
++
++void ChromeBrowserCloudManagementControllerDesktop::PolicyFetchObserver::
++    FetchRemoteCommands() {
++  // Teleport: post a delayed task so the fetch lands after the target Profile
++  // is loaded (executing synchronously here would cause CLEAR_BROWSING_DATA and
++  // similar commands to hit `if (!profile)` and return RESULT_FAILURE).
++  // RemoteCommandsService coalesces concurrent fetch requests, so overlapping
++  // delayed tasks from rapid policy fetches are safe.
++  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
++      FROM_HERE,
++      base::BindOnce(&PolicyFetchObserver::DoFetchRemoteCommands,
++                     weak_factory_.GetWeakPtr()),
++      base::Seconds(5));
++}
++
++void ChromeBrowserCloudManagementControllerDesktop::PolicyFetchObserver::
++    DoFetchRemoteCommands() {
++  // Teleport: no Google FCM channel, so RemoteCommandsInvalidator's
++  // InvalidationsExpected::kYes gate never fires. Fetch remote commands on
++  // every policy fetch (initial post-registration + every periodic refresh) to
++  // achieve poll parity: commands queued before launch are delivered on
++  // startup, and commands issued later on the next policy cycle.
++  // Delayed so the target profile is loaded before execution.
++  CloudPolicyCore* core = manager_->core();
++  if (RemoteCommandsService* rc_service =
++          core ? core->remote_commands_service() : nullptr) {
++    rc_service->FetchRemoteCommands(RemoteCommandsFetchReason::kStartup);
++  }
++}
++
++// ChromeBrowserCloudManagementControllerDesktop ------------------------------
++
+ ChromeBrowserCloudManagementControllerDesktop::
+     ChromeBrowserCloudManagementControllerDesktop()
+     : invalidations_initializer_(this) {}
+@@ -209,6 +268,10 @@ void ChromeBrowserCloudManagementControllerDesktop::OnServiceAccountSet(
+ }
+ 
+ void ChromeBrowserCloudManagementControllerDesktop::ShutDown() {
++  // Teleport: destroy the PolicyFetchObserver before tearing down policy
++  // infrastructure; its destructor calls RemoveClientObserver on the manager.
++  policy_fetch_observer_.reset();
++
+   if (policy_invalidator_) {
+     policy_invalidator_->Shutdown();
+     policy_invalidator_.reset();
+@@ -374,6 +437,20 @@ void ChromeBrowserCloudManagementControllerDesktop::StartInvalidations() {
+       std::make_unique<enterprise_commands::CBCMRemoteCommandsFactory>(),
+       PolicyInvalidationScope::kCBCM);
+ 
++  // Teleport: register the PolicyFetchObserver to trigger a remote commands
++  // fetch on every policy fetch (replaces the FCM-gated initial fetch; see
++  // PolicyFetchObserver::FetchRemoteCommands for the full rationale). Guard
++  // against a null manager: our unbranded build forces IsEnabled() to true, so
++  // StartInvalidations can run on a device that never registered (no enrollment
++  // token), where machine_level_user_cloud_policy_manager() is null and the
++  // observer ctor would dereference it.
++  auto* machine_manager = g_browser_process->browser_policy_connector()
++                              ->machine_level_user_cloud_policy_manager();
++  if (machine_manager) {
++    policy_fetch_observer_ =
++        std::make_unique<PolicyFetchObserver>(machine_manager);
++  }
++
+   invalidation::InvalidationListener* remote_commands_invalidation_listener =
+       invalidation_listener_per_project_
+           [policy::kRemoteCommandsInvalidationsProjectNumber]

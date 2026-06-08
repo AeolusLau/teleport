@@ -1,0 +1,22 @@
+diff --git a/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc b/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
+index a27e93ef8f02d..48fc608d79440 100644
+--- a/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
++++ b/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
+@@ -100,8 +100,15 @@ bool ChromeBrowserCloudManagementController::IsEnabled() {
+ #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+   return true;
+ #else
+-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
+-      switches::kEnableChromeBrowserCloudManagement);
++  // Teleport is an enterprise browser: machine-level cloud management is always
++  // available in our unbranded build, without requiring the
++  // --enable-chrome-browser-cloud-management switch (which is unreliable across
++  // channels). This does not cause spurious enrollment: with no enrollment
++  // token and no DM token, CreatePolicyManager() returns nullptr and Init()
++  // skips registration, while InitializeReporting()'s ReportScheduler self-stops
++  // on the missing DM token. The browser contacts the management server only
++  // when an enrollment token is provisioned.
++  return true;
+ #endif
+ }
+ 

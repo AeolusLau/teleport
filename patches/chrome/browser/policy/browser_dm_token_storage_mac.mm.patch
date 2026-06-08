@@ -1,0 +1,96 @@
+diff --git a/chrome/browser/policy/browser_dm_token_storage_mac.mm b/chrome/browser/policy/browser_dm_token_storage_mac.mm
+index 0c39d3482ad53..758ae4cf1f43a 100644
+--- a/chrome/browser/policy/browser_dm_token_storage_mac.mm
++++ b/chrome/browser/policy/browser_dm_token_storage_mac.mm
+@@ -18,6 +18,7 @@
+ #include "base/mac/mac_util.h"
+ #include "base/mac/scoped_ioobject.h"
+ #include "base/metrics/histogram_functions.h"
++#include "base/no_destructor.h"
+ #include "base/notreached.h"
+ #include "base/path_service.h"
+ #include "base/strings/string_util.h"
+@@ -29,6 +30,7 @@
+ #include "chrome/common/chrome_paths.h"
+ #include "components/policy/core/common/policy_logger.h"
+ #include "crypto/obsolete/sha1.h"
++#include "teleport/common/teleport_enterprise_enrollment.h"
+ 
+ namespace policy {
+ 
+@@ -42,24 +44,29 @@
+ 
+ namespace {
+ 
+-const char kDmTokenBaseDir[] =
+-    FILE_PATH_LITERAL("Google/Chrome Cloud Enrollment/");
++const char* const kDmTokenBaseDir = teleport::kDmTokenStorageDir;
+ const CFStringRef kEnrollmentTokenPolicyName =
+     CFSTR("CloudManagementEnrollmentToken");
+-const char kEnrollmentTokenFilePath[] =
+-    FILE_PATH_LITERAL("/Library/Google/Chrome/CloudManagementEnrollmentToken");
++const char* const kEnrollmentTokenFilePath =
++    teleport::kEnrollmentTokenFilePath;
+ 
+ // Enrollment Mandatory Option
+ const CFStringRef kEnrollmentMandatoryOptionPolicyName =
+     CFSTR("CloudManagementEnrollmentMandatory");
+-const char kEnrollmentOptionsFilePath[] = FILE_PATH_LITERAL(
+-    "/Library/Google/Chrome/CloudManagementEnrollmentOptions");
++const char* const kEnrollmentOptionsFilePath =
++    teleport::kEnrollmentOptionsFilePath;
+ const char kEnrollmentMandatoryOption[] = "Mandatory";
+ 
+-// Explicitly access the "com.google.Chrome" bundle ID, no matter what this
+-// app's bundle ID actually is. All channels of Chrome should obey the same
+-// policies.
+-const CFStringRef kBundleId = CFSTR("com.google.Chrome");
++// Explicitly access a SINGLE FIXED base bundle id (teleport::
++// kManagedPrefsBundleId), no matter what this app's bundle id actually is. All
++// channels of Teleport (stable/canary/beta) obey the same machine-level
++// policies, so one MDM payload enrolls every channel — mirroring upstream
++// Chrome's fixed-"com.google.Chrome" behavior.
++CFStringRef ManagedPrefsBundleId() {
++  static const base::NoDestructor<base::apple::ScopedCFTypeRef<CFStringRef>>
++      bundle_id(base::SysUTF8ToCFStringRef(teleport::kManagedPrefsBundleId));
++  return bundle_id->get();
++}
+ 
+ constexpr char kEnrollmentTokenMetricsName[] =
+     "Enterprise.CloudManagementEnrollmentTokenLocation.Mac";
+@@ -115,19 +122,19 @@ bool DeleteDMTokenFromAppDataDir(const std::string& client_id) {
+   return base::DeleteFile(token_file_path);
+ }
+ 
+-// Get the enrollment token from policy file: /Library/com.google.Chrome.plist.
++// Get the enrollment token from policy file: /Library/com.beansec.Teleport.plist.
+ // Return true if policy is set, otherwise false.
+ bool GetEnrollmentTokenFromPolicy(std::string* enrollment_token) {
+   // Since the configuration management infrastructure is not initialized when
+   // this code runs, read the policy preference directly.
+   base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+-      CFPreferencesCopyAppValue(kEnrollmentTokenPolicyName, kBundleId));
++      CFPreferencesCopyAppValue(kEnrollmentTokenPolicyName, ManagedPrefsBundleId()));
+ 
+   // Read the enrollment token from the new location. If that fails, try the old
+   // location (which will be deprecated soon). If that also fails, bail as there
+   // is no token set.
+   if (!value ||
+-      !CFPreferencesAppValueIsForced(kEnrollmentTokenPolicyName, kBundleId)) {
++      !CFPreferencesAppValueIsForced(kEnrollmentTokenPolicyName, ManagedPrefsBundleId())) {
+     return false;
+   }
+   CFStringRef value_string = base::apple::CFCast<CFStringRef>(value.get());
+@@ -155,10 +162,10 @@ bool GetEnrollmentTokenFromFile(std::string* enrollment_token) {
+ std::optional<bool> IsEnrollmentMandatoryByPolicy() {
+   base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
+       CFPreferencesCopyAppValue(kEnrollmentMandatoryOptionPolicyName,
+-                                kBundleId));
++                                ManagedPrefsBundleId()));
+ 
+   if (!value || !CFPreferencesAppValueIsForced(
+-                    kEnrollmentMandatoryOptionPolicyName, kBundleId)) {
++                    kEnrollmentMandatoryOptionPolicyName, ManagedPrefsBundleId())) {
+     return std::optional<bool>();
+   }
+ 

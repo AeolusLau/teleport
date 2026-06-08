@@ -31,6 +31,8 @@ source_set("teleport") {
     "browser/teleport_startup.h",
     "common/teleport_channel.cc",
     "common/teleport_channel.h",
+    "common/teleport_enterprise_enrollment.cc",
+    "common/teleport_enterprise_enrollment.h",
     "common/teleport_enterprise_urls.cc",
     "common/teleport_enterprise_urls.h",
     "common/teleport_feed_url.cc",
@@ -82,6 +84,7 @@ test("teleport_unittests") {
   sources = [
     "browser/teleport_startup_unittest.cc",
     "common/teleport_channel_unittest.cc",
+    "common/teleport_enterprise_enrollment_unittest.cc",
     "common/teleport_enterprise_urls_unittest.cc",
     "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",

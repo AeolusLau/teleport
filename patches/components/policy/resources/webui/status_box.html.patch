@@ -1,0 +1,35 @@
+diff --git a/components/policy/resources/webui/status_box.html b/components/policy/resources/webui/status_box.html
+index fbd9f22db3c09..f2c874026abea 100644
+--- a/components/policy/resources/webui/status_box.html
++++ b/components/policy/resources/webui/status_box.html
+@@ -31,6 +31,30 @@ div.status-entry:not([hidden]) {
+   text-align: right;
+ }
+ 
++/* The CBCM enrollment token is a long, unbreakable base64 string that would
++   otherwise overflow the colored status box. Keep it on a single line and
++   truncate with a trailing ellipsis. Left-aligned so the overflow (and thus
++   the ellipsis) is at the line's end edge; min-width:0 lets the flex item
++   shrink below its content width; max-width:50% caps the value to the right
++   half of the row so it never butts up against the key (the flex
++   space-between then leaves a clear gap). Scoped to the token so other
++   right-aligned values are unaffected. */
++.status-entry-value.machine-enrollment-token {
++  min-width: 0;
++  max-width: 50%;
++  overflow: hidden;
++  white-space: nowrap;
++  text-overflow: ellipsis;
++  text-align: left;
++}
++
++/* Keep the "Enrollment Token" key on one line. Without this the flex row
++   shrinks the label to its longest word ("Enrollment") and wraps "Token:";
++   the long token value already ellipsizes, so let it absorb all the shrink. */
++.status-entry:has(> .machine-enrollment-token) .label {
++  white-space: nowrap;
++}
++
+ div.status-entry:last-child {
+   margin-bottom: 0;
+ }

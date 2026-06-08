@@ -1,0 +1,72 @@
+diff --git a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
+index 15b4c0e61a168..5148ac2133fc0 100644
+--- a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
++++ b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
+@@ -8,12 +8,16 @@
+ #include <stdint.h>
+ 
+ #include <map>
++#include <memory>
+ #include <vector>
+ 
++#include "base/memory/weak_ptr.h"
+ #include "base/task/single_thread_task_runner.h"
++#include "base/time/time.h"
+ #include "chrome/browser/policy/cbcm_invalidations_initializer.h"
+ #include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
+ #include "components/enterprise/client_certificates/core/prefs_certificate_store.h"
++#include "components/policy/core/common/cloud/cloud_policy_client.h"
+ #include "extensions/buildflags/buildflags.h"
+ 
+ namespace instance_id {
+@@ -30,6 +34,7 @@ class ChromeBrowserCloudManagementRegisterWatcher;
+ class CloudPolicyInvalidator;
+ class ExtensionInstallPolicyInvalidator;
+ class FmRegistrationTokenUploader;
++class MachineLevelUserCloudPolicyManager;
+ class RemoteCommandsInvalidator;
+ 
+ // Desktop implementation of the platform-specific operations of CBCMController.
+@@ -96,6 +101,32 @@ class ChromeBrowserCloudManagementControllerDesktop
+   bool CanStartExtensionInstallPolicyInvalidator() const override;
+ 
+  private:
++  // Teleport: observes the machine-level CloudPolicyClient to trigger a remote
++  // commands fetch on each policy fetch (startup + periodic). This compensates
++  // for the absence of Google FCM: normally RemoteCommandsInvalidator fires
++  // DoInitialRemoteCommandsFetch only when InvalidationsExpected::kYes, which
++  // never happens without FCM. OnPolicyFetched fires only after registration,
++  // so CanFetchRemoteCommands() is guaranteed true at that point.
++  class PolicyFetchObserver : public CloudPolicyClient::Observer {
++   public:
++    explicit PolicyFetchObserver(MachineLevelUserCloudPolicyManager* manager);
++    ~PolicyFetchObserver() override;
++
++    // CloudPolicyClient::Observer:
++    void OnPolicyFetched(CloudPolicyClient* client) override;
++
++   private:
++    // Posts a delayed task to call DoFetchRemoteCommands() (scheduler).
++    void FetchRemoteCommands();
++    // Actually fetches remote commands (runs after the delay, via WeakPtr).
++    void DoFetchRemoteCommands();
++
++    raw_ptr<MachineLevelUserCloudPolicyManager> manager_;
++
++    // Must be last: invalidates WeakPtrs before any other member is destroyed.
++    base::WeakPtrFactory<PolicyFetchObserver> weak_factory_{this};
++  };
++
+   std::unique_ptr<ChromeBrowserCloudManagementRegisterWatcher>
+       cloud_management_register_watcher_;
+ 
+@@ -116,6 +147,9 @@ class ChromeBrowserCloudManagementControllerDesktop
+   // This invalidator is responsible for receiving remote commands invalidations
+   std::unique_ptr<RemoteCommandsInvalidator> commands_invalidator_;
+ 
++  // Teleport: polls remote commands on every policy fetch (no FCM push channel).
++  std::unique_ptr<PolicyFetchObserver> policy_fetch_observer_;
++
+   // Responsible for storing and retrieving browser-level managed identities.
+   std::unique_ptr<client_certificates::CertificateStore> certificate_store_;
+ 

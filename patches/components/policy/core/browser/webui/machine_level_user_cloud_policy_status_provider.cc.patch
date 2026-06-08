@@ -1,0 +1,21 @@
+diff --git a/components/policy/core/browser/webui/machine_level_user_cloud_policy_status_provider.cc b/components/policy/core/browser/webui/machine_level_user_cloud_policy_status_provider.cc
+index 6e8d20101a045..625da60c2d4f3 100644
+--- a/components/policy/core/browser/webui/machine_level_user_cloud_policy_status_provider.cc
++++ b/components/policy/core/browser/webui/machine_level_user_cloud_policy_status_provider.cc
+@@ -84,7 +84,15 @@ base::DictValue MachineLevelUserCloudPolicyStatusProvider::GetStatus() {
+                GetTimeSinceLastActionString(
+                    refresh_scheduler ? refresh_scheduler->last_refresh()
+                                      : base::Time()));
+-      dict.Set(kDomainKey, gaia::ExtractDomainName(policy->username()));
++      // Machine-level (CBCM) PolicyData legitimately has no username when the
++      // browser is enrolled without an owning domain (PolicyData.username is
++      // optional). gaia::ExtractDomainName() hits DUMP_WILL_BE_NOTREACHED() on
++      // an empty string (fatal under DCHECK / non-official builds), so guard on
++      // has_username() exactly as CloudPolicyValidatorBase::ExtractDomainFromPolicy
++      // does before deriving the domain.
++      if (policy->has_username()) {
++        dict.Set(kDomainKey, gaia::ExtractDomainName(policy->username()));
++      }
+     } else {
+       if (store->is_managed()) {
+         dict.Set("error", true);
