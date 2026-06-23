@@ -1,0 +1,74 @@
+diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.cc b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
+index 71b1f7b48544c..8601dc0da1856 100644
+--- a/chrome/browser/ui/webui/signin/profile_picker_handler.cc
++++ b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
+@@ -62,6 +62,7 @@
+ #include "components/signin/public/base/signin_switches.h"
+ #include "components/signin/public/identity_manager/account_info.h"
+ #include "components/signin/public/identity_manager/tribool.h"
++#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
+ #include "components/startup_metric_utils/browser/startup_metric_utils.h"
+ #include "components/sync/base/features.h"
+ #include "content/public/browser/url_data_source.h"
+@@ -420,6 +421,20 @@ void ProfilePickerHandler::TryLaunchLockedProfile(
+     return;
+   }
+ 
++  // teleport: a force-signin-locked, not-yet-enrolled profile must complete
++  // enterprise OIDC enrollment (in place, on this profile) before it can be
++  // used. Route it to the GAIA-free Teleport enrollment step rather than GAIA
++  // sign-in. Checked before the fresh-signin branch so even a never-active
++  // profile enrolls instead of going through Google sign-in.
++  if (teleport::ShouldLockProfile(&entry)) {
++    g_browser_process->profile_manager()->LoadProfileByPath(
++        entry.GetPath(), /*incognito=*/false,
++        base::BindOnce(
++            &ProfilePickerHandler::OnProfileLoadedForSwitchToEnrollment,
++            weak_factory_.GetWeakPtr()));
++    return;
++  }
++
+   // Default profile, not yet active, fresh sign in is allowed as the profile
+   // was not used yet. Default profile is the automatically created profile,
+   // initial profile or after deleting the last profile for example.
+@@ -462,6 +477,16 @@ void ProfilePickerHandler::OnProfileLoadedForSwitchToReauth(Profile* profile) {
+                      weak_factory_.GetWeakPtr(), profile->GetPath()));
+ }
+ 
++void ProfilePickerHandler::OnProfileLoadedForSwitchToEnrollment(
++    Profile* profile) {
++  if (!profile) {
++    return;
++  }
++  ProfilePicker::SwitchToEnrollment(
++      profile, base::BindOnce(&ProfilePickerHandler::OnResetPickerButtons,
++                              weak_factory_.GetWeakPtr()));
++}
++
+ void ProfilePickerHandler::DisplaySigninErrorDialog(
+     const base::FilePath& profile_path,
+     const std::variant<ForceSigninUIError, SigninUIError>& error) {
+@@ -829,12 +854,19 @@ void ProfilePickerHandler::OnProfileStatisticsReceived(
+ void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
+   AllowJavascript();
+   CHECK_EQ(1U, args.size());
+-  std::optional<SkColor> profile_color = args[0].GetIfInt();
++  // teleport: under the enterprise enrollment model, creating a new profile from
++  // the picker is not supported — GAIA new-profile creation CHECK-fails for our
++  // dasherless profiles, and creating a profile to enroll in place is deferred
++  // (see the Layer-1 design). The "add profile" tile is hidden by default via the
++  // BrowserAddPersonEnabled policy (kBrowserAddPersonEnabled defaults false ->
++  // profiles::IsProfileCreationAllowed() false -> the WebUI hides the tile). If
++  // this handler is still reached (policy re-enabled), do nothing rather than
++  // start the crashing GAIA flow.
+   if (signin_util::IsForceSigninEnabled()) {
+-    // Force sign-in policy uses a separate flow that doesn't initialize the
+-    // profile color. Generate a new profile color here.
+-    profile_color = GenerateNewProfileColor().color;
++    OnResetPickerButtons(false);
++    return;
+   }
++  std::optional<SkColor> profile_color = args[0].GetIfInt();
+   std::vector<StepSwitchFinishedCallback> callbacks;
+   callbacks.emplace_back(base::BindOnce(
+       &ProfilePickerHandler::OnLoadSigninFinished, weak_factory_.GetWeakPtr()));

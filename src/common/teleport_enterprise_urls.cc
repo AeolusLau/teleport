@@ -11,18 +11,20 @@ namespace {
 // channel/test-gated upstream and unreliable on STABLE/BETA).
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 // Release: production beansec.com endpoints.
-constexpr char kEnrollUrl[] = "https://enroll.teleport.beansec.com/enroll";
+constexpr char kEnrollUrl[] = "https://enroll.teleport.beansec.com/start";
 constexpr char kRegisterHandlerUrl[] =
     "https://enroll.teleport.beansec.com/profile-enrollment/register-handler";
 constexpr char kKeystoneOpHost[] = "https://id.beansec.com";
+constexpr char kEnrollmentDomainSuffix[] = ".beansec.com";
 #else
 // Dev: fairyland.io endpoints. The OP host is a sample value — under
 // generic-OIDC the trusted-redirect-host check is skipped by the throttle, so
 // it only serves as a placeholder.
-constexpr char kEnrollUrl[] = "https://enroll.teleport.fairyland.io/enroll";
+constexpr char kEnrollUrl[] = "https://enroll.teleport.fairyland.io/start";
 constexpr char kRegisterHandlerUrl[] =
     "https://enroll.teleport.fairyland.io/profile-enrollment/register-handler";
 constexpr char kKeystoneOpHost[] = "https://dadou.fairyland.io";
+constexpr char kEnrollmentDomainSuffix[] = ".fairyland.io";
 #endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 }  // namespace
 
@@ -36,6 +38,10 @@ std::string EnterpriseRegisterHandlerUrl() {
 
 std::vector<std::string> EnterpriseTrustedRedirectHosts() {
   return {kKeystoneOpHost};
+}
+
+std::vector<std::string> EnterpriseEnrollmentDomainSuffixes() {
+  return {kEnrollmentDomainSuffix};
 }
 
 }  // namespace teleport

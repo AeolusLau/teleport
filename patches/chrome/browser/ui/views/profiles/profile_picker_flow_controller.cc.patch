@@ -1,0 +1,151 @@
+diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
+index 9cd8efe899789..5333e4e524b6f 100644
+--- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
++++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
+@@ -45,6 +45,15 @@
+ #include "chrome/browser/ui/views/profiles/profile_picker_sign_in_provider.h"
+ #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
+ #include "chrome/browser/ui/webui/signin/profile_picker_handler.h"
++// teleport: GAIA-free enrollment step dependencies.
++#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
++#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
++#include "chrome/browser/profiles/profile_attributes_entry.h"
++#include "chrome/browser/profiles/profile_attributes_storage.h"
++#include "content/public/browser/web_contents.h"
++#include "teleport/browser/enterprise/teleport_enrollment_done_user_data.h"
++#include "teleport/common/teleport_enterprise_urls.h"
++#include "url/gurl.h"
+ #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
+ #include "chrome/common/webui_url_constants.h"
+ #include "chrome/grit/branded_strings.h"
+@@ -322,6 +331,86 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
+       profile);
+ }
+ 
++// teleport: GAIA-free enrollment provider. Hosts the enterprise OIDC enroll page
++// on the target (locked) profile's own WebContents and attaches an "enrollment
++// done" closure to it. There is NO ForceSigninVerifier, NO DiceTabHelper, NO
++// gaia_id/email handling: enrollment completion is detected and driven entirely
++// by the OIDC capture throttle -> in-place registrar, which runs the attached
++// closure (-> OnEnrollmentSucceeded) once policy has actually been fetched.
++class TeleportEnrollmentProvider {
++ public:
++  TeleportEnrollmentProvider(ProfilePickerWebContentsHost* host,
++                             Profile* profile,
++                             base::OnceClosure on_enrolled)
++      : host_(host), profile_(profile), on_enrolled_(std::move(on_enrolled)) {}
++
++  TeleportEnrollmentProvider(const TeleportEnrollmentProvider&) = delete;
++  TeleportEnrollmentProvider& operator=(const TeleportEnrollmentProvider&) =
++      delete;
++  ~TeleportEnrollmentProvider() = default;
++
++  void Show(StepSwitchFinishedCallback step_shown_callback) {
++    CHECK(!contents_);
++    // Keep the locked profile alive for the duration of the picker-hosted flow.
++    profile_keep_alive_ = std::make_unique<ScopedProfileKeepAlive>(
++        profile_, ProfileKeepAliveOrigin::kProfileCreationFlow);
++
++    contents_ = content::WebContents::Create(
++        content::WebContents::CreateParams(profile_));
++    teleport::EnrollmentDoneUserData::Set(contents_.get(),
++                                          std::move(on_enrolled_));
++    host_->ShowScreen(
++        contents_.get(), GURL(teleport::EnterpriseEnrollUrl()),
++        base::BindOnce(&ProfilePickerWebContentsHost::SetNativeToolbarVisible,
++                       base::Unretained(host_), /*visible=*/true)
++            .Then(base::BindOnce(std::move(step_shown_callback.value()),
++                                 /*success=*/true)));
++  }
++
++  content::WebContents* contents() { return contents_.get(); }
++
++ private:
++  raw_ptr<ProfilePickerWebContentsHost> host_;
++  raw_ptr<Profile> profile_;
++  base::OnceClosure on_enrolled_;
++  std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
++  std::unique_ptr<content::WebContents> contents_;
++};
++
++class TeleportEnrollmentStepController : public ProfileManagementStepController {
++ public:
++  TeleportEnrollmentStepController(
++      ProfilePickerWebContentsHost* host,
++      std::unique_ptr<TeleportEnrollmentProvider> provider)
++      : ProfileManagementStepController(host),
++        enrollment_provider_(std::move(provider)) {}
++
++  ~TeleportEnrollmentStepController() override = default;
++
++  void Show(StepSwitchFinishedCallback step_shown_callback,
++            bool reset_state) override {
++    enrollment_provider_->Show(std::move(step_shown_callback));
++  }
++
++  void OnHidden() override { host()->SetNativeToolbarVisible(false); }
++
++  void OnNavigateBackRequested() override {
++    NavigateBackInternal(enrollment_provider_->contents());
++  }
++
++ private:
++  std::unique_ptr<TeleportEnrollmentProvider> enrollment_provider_;
++};
++
++std::unique_ptr<ProfileManagementStepController> CreateTeleportEnrollmentStep(
++    ProfilePickerWebContentsHost* host,
++    Profile* profile,
++    base::OnceClosure on_enrolled) {
++  return std::make_unique<TeleportEnrollmentStepController>(
++      host, std::make_unique<TeleportEnrollmentProvider>(
++                host, profile, std::move(on_enrolled)));
++}
++
+ void RecordProfilingFinishReason(
+     metrics::StartupProfilingFinishReason finish_reason) {
+   base::UmaHistogramEnumeration(
+@@ -578,6 +667,43 @@ void ProfilePickerFlowController::OnReauthCompleted(
+   FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
+ }
+ 
++void ProfilePickerFlowController::SwitchToEnrollment(
++    Profile* profile,
++    StepSwitchFinishedCallback switch_finished_callback) {
++  DCHECK_EQ(Step::kProfilePicker, current_step());
++
++  if (IsStepInitialized(Step::kTeleportEnrollment)) {
++    UnregisterStep(Step::kTeleportEnrollment);
++  }
++
++  // The on-enrolled closure is moved into the step's WebContents UserData, taken
++  // by the OIDC throttle, and run async by the in-place registrar. Binding to a
++  // WeakPtr makes a destroyed flow controller a safe no-op. The provider holds a
++  // ScopedProfileKeepAlive on `profile` (and the registrar holds its own), so a
++  // live flow controller implies a live profile when the callback runs.
++  RegisterStep(
++      Step::kTeleportEnrollment,
++      CreateTeleportEnrollmentStep(
++          host(), profile,
++          base::BindOnce(&ProfilePickerFlowController::OnEnrollmentSucceeded,
++                         weak_ptr_factory_.GetWeakPtr(), profile)));
++
++  SwitchToStep(
++      Step::kTeleportEnrollment, true, std::move(switch_finished_callback),
++      /*pop_step_callback=*/CreateSwitchToStepPopCallback(current_step()));
++}
++
++void ProfilePickerFlowController::OnEnrollmentSucceeded(Profile* profile) {
++  // The enrolled profile is an existing (non-omitted) profile; just unlock it.
++  // "Add profile" / new-profile creation is intentionally not supported here.
++  g_browser_process->profile_manager()
++      ->GetProfileAttributesStorage()
++      .GetProfileAttributesWithPath(profile->GetPath())
++      ->LockForceSigninProfile(false);
++
++  FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
++}
++
+ void ProfilePickerFlowController::OnProfilePickerStepShownReauthError(
+     base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback,
+     const ForceSigninUIError& error,

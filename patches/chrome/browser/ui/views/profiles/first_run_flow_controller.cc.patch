@@ -1,0 +1,12 @@
+diff --git a/chrome/browser/ui/views/profiles/first_run_flow_controller.cc b/chrome/browser/ui/views/profiles/first_run_flow_controller.cc
+index 41048ae6fbd36..494dafe7193d4 100644
+--- a/chrome/browser/ui/views/profiles/first_run_flow_controller.cc
++++ b/chrome/browser/ui/views/profiles/first_run_flow_controller.cc
+@@ -114,6 +114,7 @@ bool IsPostIdentityStep(ProfileManagementFlowController::Step step) {
+     case ProfileManagementFlowController::Step::kAccountSelection:
+     case ProfileManagementFlowController::Step::kIntro:
+     case ProfileManagementFlowController::Step::kReauth:
++    case ProfileManagementFlowController::Step::kTeleportEnrollment:
+       return false;
+     case ProfileManagementFlowController::Step::kDefaultBrowser:
+     case ProfileManagementFlowController::Step::kSearchEngineChoice:

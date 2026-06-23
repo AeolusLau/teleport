@@ -18,7 +18,22 @@ declare_args() {
   #   kReleasePolicyKey (production KMS root); all release channels
   #   (canary/beta/stable) share one release binary.
   teleport_use_release_endpoints = false
+
+  # Safety interlock for the release policy verification root key. kReleasePolicyKey
+  # in cloud_policy_constants.cc is currently a THROWAWAY PLACEHOLDER; a release
+  # build must not ship it (a leaked placeholder private key would validate forged
+  # policy, and real KMS-signed policy would fail validation). Flip this to true
+  # ONLY after kReleasePolicyKey + kPolicyVerificationKeyHash are replaced with the
+  # real production KMS root. The assert below blocks any release-endpoints build
+  # until then.
+  teleport_release_policy_key_is_real = false
 }
+
+# A build that bakes the release endpoints must also bake the real release policy
+# root key — never the placeholder. Keep this fail-closed.
+assert(
+    !teleport_use_release_endpoints || teleport_release_policy_key_is_real,
+    "teleport_use_release_endpoints=true requires teleport_release_policy_key_is_real=true: kReleasePolicyKey is still a placeholder; set the real production KMS root key first.")
 
 # Inside-checkout dir where fetch_sparkle.py symlinks the pinned framework.
 teleport_sparkle_dir = "//third_party/teleport_sparkle"

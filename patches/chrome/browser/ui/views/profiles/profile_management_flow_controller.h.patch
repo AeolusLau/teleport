@@ -1,0 +1,17 @@
+diff --git a/chrome/browser/ui/views/profiles/profile_management_flow_controller.h b/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
+index 3c30c884edd6d..3c77b21f7662f 100644
+--- a/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
++++ b/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
+@@ -65,7 +65,11 @@ class ProfileManagementFlowController
+ 
+     kFinishFlow = 9,
+ 
+-    kMaxValue = kFinishFlow,
++    // teleport: hosts the GAIA-free enterprise OIDC enrollment page for a
++    // force-signin-locked, not-yet-enrolled profile.
++    kTeleportEnrollment = 10,
++
++    kMaxValue = kTeleportEnrollment,
+   };
+   // LINT.ThenChange(//tools/metrics/histograms/metadata/profile/enums.xml:ProfileManagementFlowStep)
+ 

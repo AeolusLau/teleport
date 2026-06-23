@@ -1,0 +1,29 @@
+diff --git a/chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.cc b/chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.cc
+index 15ca28ab281bd..b8db8a721ff9b 100644
+--- a/chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.cc
++++ b/chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.cc
+@@ -12,8 +12,6 @@
+ #include "chrome/browser/policy/chrome_browser_policy_connector.h"
+ #include "chrome/browser/policy/cloud/user_policy_signin_service_factory.h"
+ #include "chrome/browser/profiles/profile.h"
+-#include "chrome/browser/profiles/profile_attributes_entry.h"
+-#include "chrome/browser/profiles/profile_attributes_storage.h"
+ #include "chrome/browser/signin/identity_manager_factory.h"
+ #include "components/policy/core/browser/browser_policy_connector.h"
+ #include "components/policy/core/common/cloud/profile_cloud_policy_manager.h"
+@@ -24,13 +22,8 @@ namespace policy {
+ 
+ std::variant<UserCloudPolicyManager*, ProfileCloudPolicyManager*>
+ GetCloudPolicyManager(Profile* profile) {
+-  auto* entry = g_browser_process->profile_manager()
+-                    ->GetProfileAttributesStorage()
+-                    .GetProfileAttributesWithPath(profile->GetPath());
+-  if (entry && entry->IsDasherlessManagement()) {
+-    return profile->GetProfileCloudPolicyManager();
+-  }
+-  return profile->GetUserCloudPolicyManager();
++  // teleport: dasherless-only — always the profile cloud policy manager.
++  return profile->GetProfileCloudPolicyManager();
+ }
+ 
+ UserPolicyOidcSigninServiceFactory::UserPolicyOidcSigninServiceFactory()

@@ -1,0 +1,22 @@
+diff --git a/chrome/browser/ui/profiles/profile_picker.h b/chrome/browser/ui/profiles/profile_picker.h
+index 4507686f20b87..bf32de4997992 100644
+--- a/chrome/browser/ui/profiles/profile_picker.h
++++ b/chrome/browser/ui/profiles/profile_picker.h
+@@ -250,6 +250,17 @@ class ProfilePicker {
+       base::OnceCallback<void(bool)> switch_finished_callback,
+       base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback);
+ 
++  // teleport: starts the GAIA-free enterprise OIDC enrollment flow for a
++  // force-signin-locked, not-yet-enrolled `profile`, hosted within the profile
++  // picker. The enroll page runs on `profile`'s WebContents; on successful
++  // in-place enrollment (driven by the OIDC capture throttle -> in-place
++  // registrar) the profile is unlocked and a browser is opened. Failure leaves
++  // the profile locked on the enroll page (retryable).
++  // `switch_finished_callback` is called once the step was switched to.
++  static void SwitchToEnrollment(
++      Profile* profile,
++      base::OnceCallback<void(bool)> switch_finished_callback);
++
+   // Switch to the flow that comes when the user decides to create a profile
+   // without signing in.
+   // `profile_color` is the profile's color. It is undefined for the default

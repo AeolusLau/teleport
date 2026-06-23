@@ -1,0 +1,14 @@
+diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.h b/chrome/browser/ui/webui/signin/profile_picker_handler.h
+index 996963b50df66..3e97fdd97dc4d 100644
+--- a/chrome/browser/ui/webui/signin/profile_picker_handler.h
++++ b/chrome/browser/ui/webui/signin/profile_picker_handler.h
+@@ -183,6 +183,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
+   void TryLaunchLockedProfile(ProfileAttributesEntry& entry);
+   // Callback with the loaded profile to start the reauth flow.
+   void OnProfileLoadedForSwitchToReauth(Profile* profile);
++  // teleport: callback with the loaded profile to start the GAIA-free
++  // enterprise OIDC enrollment flow.
++  void OnProfileLoadedForSwitchToEnrollment(Profile* profile);
+ 
+   // Updates if guest mode is available following a profile addition, removal,
+   // or changed supervision status.

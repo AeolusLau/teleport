@@ -42,5 +42,21 @@ TEST(TeleportEnterpriseUrlsTest, EnrollUrlMatchesEndpointBuildflag) {
       << reg;
 }
 
+TEST(TeleportEnterpriseUrlsTest, EnrollmentDomainSuffixesNonEmpty) {
+  const auto suffixes = EnterpriseEnrollmentDomainSuffixes();
+  ASSERT_FALSE(suffixes.empty());
+  // Each suffix starts with a dot, for use as a host suffix matcher.
+  for (const auto& s : suffixes) {
+    EXPECT_EQ('.', s.front());
+  }
+  // The suffix is baked per build via teleport_use_release_endpoints, mirroring
+  // EnrollUrlMatchesEndpointBuildflag: release=beansec.com, dev=fairyland.io.
+#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
+  EXPECT_EQ(suffixes[0], ".beansec.com");
+#else
+  EXPECT_EQ(suffixes[0], ".fairyland.io");
+#endif
+}
+
 }  // namespace
 }  // namespace teleport

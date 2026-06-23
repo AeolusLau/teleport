@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
+index 4c7ad0aaa2347..a8a51fca2aaf0 100644
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -29,6 +29,7 @@
+ #include "chrome/browser/engagement/important_sites_util.h"
+ #include "chrome/browser/enterprise/reporting/prefs.h"
+ #include "chrome/browser/enterprise/util/managed_browser_utils.h"
++#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
+ #include "chrome/browser/external_protocol/external_protocol_handler.h"
+ #include "chrome/browser/finds/core/finds_service.h"
+ #include "chrome/browser/first_run/first_run.h"
+@@ -1374,6 +1375,7 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+   domain_reliability::RegisterPrefs(registry);
+   embedder_support::OriginTrialPrefs::RegisterPrefs(registry);
+   enterprise_reporting::RegisterLocalStatePrefs(registry);
++  teleport::RegisterEnrollmentGateLocalStatePrefs(registry);
+   ExternalProtocolHandler::RegisterPrefs(registry);
+   flags_ui::PrefServiceFlagsStorage::RegisterPrefs(registry);
+   GpuModeManager::RegisterPrefs(registry);

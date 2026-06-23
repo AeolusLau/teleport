@@ -1,0 +1,28 @@
+diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
+index 77ea5ac8846bc..71962b9598b86 100644
+--- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
++++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
+@@ -38,6 +38,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
+       StepSwitchFinishedCallback switch_finished_callback,
+       base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback);
+ 
++  // teleport: registers + switches to the GAIA-free enterprise OIDC enrollment
++  // step for the force-signin-locked, not-yet-enrolled `profile`.
++  void SwitchToEnrollment(Profile* profile,
++                          StepSwitchFinishedCallback switch_finished_callback);
++
+   void CancelSigninFlow() override;
+ 
+   std::u16string GetFallbackAccessibleWindowTitle() const override;
+@@ -65,6 +70,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
+       bool success,
+       const ForceSigninUIError& error);
+ 
++  // teleport: invoked (via the enrollment step's WebContents UserData closure,
++  // run by the in-place registrar once policy is fetched) when enrollment of
++  // `profile` succeeds: unlocks the profile and finishes the flow in a browser.
++  void OnEnrollmentSucceeded(Profile* profile);
++
+   void OnProfilePickerStepShownReauthError(
+       base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback,
+       const ForceSigninUIError& error,

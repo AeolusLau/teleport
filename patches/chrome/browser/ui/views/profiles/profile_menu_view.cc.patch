@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/ui/views/profiles/profile_menu_view.cc b/chrome/browser/ui/views/profiles/profile_menu_view.cc
+index 684e24c211901..1163fa4964bfe 100644
+--- a/chrome/browser/ui/views/profiles/profile_menu_view.cc
++++ b/chrome/browser/ui/views/profiles/profile_menu_view.cc
+@@ -684,10 +684,12 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
+     }
+   }
+ 
+-  // Clarify Dasherless profile with subtitle while not adding the button.
++  // teleport: our enrolled profiles are all dasherless (enterprise OIDC, not a
++  // GAIA account), so the upstream "This isn't a Google Account / items won't be
++  // available on other devices" subtitle would always show. Suppress it — leave
++  // no subtitle — while still skipping the GAIA sync-state logic below that does
++  // not apply to a dasherless profile.
+   if (is_dasherless_profile) {
+-    params.subtitle =
+-        l10n_util::GetStringUTF16(IDS_PROFILES_DASHER_FEATURE_DISABLED_TITLE);
+     return params;
+   }
+ 

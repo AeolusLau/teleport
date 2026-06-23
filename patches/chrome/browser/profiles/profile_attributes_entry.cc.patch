@@ -1,0 +1,27 @@
+diff --git a/chrome/browser/profiles/profile_attributes_entry.cc b/chrome/browser/profiles/profile_attributes_entry.cc
+index 87f4db2aa47f3..ba1a99923a31d 100644
+--- a/chrome/browser/profiles/profile_attributes_entry.cc
++++ b/chrome/browser/profiles/profile_attributes_entry.cc
+@@ -192,9 +192,19 @@ void ProfileAttributesEntry::Initialize(ProfileAttributesStorage* storage,
+   }
+ 
+   if (signin_util::IsForceSigninEnabled()) {
+-    if ((!syncer::IsReplaceSyncPromosWithSignInPromosEnabled() ||
+-         GetSigninState() == SigninState::kNotSignedIn) &&
+-        !CanBeManaged()) {
++    if (!GetProfileManagementId().empty()) {
++      // teleport: a dasherless OIDC-enrolled profile (ProfileManagementId set) is
++      // authenticated via enterprise enrollment, not a GAIA account, so it has no
++      // signed-in account to satisfy force-signin. It must NEVER be force-signin
++      // locked: otherwise on the next launch it can never be reopened (it is
++      // locked, not reauthable, and not freshly-enrollable, so it falls to the
++      // "old profiles disabled" error dialog). Actively unlock it here so a
++      // profile that was previously (erroneously) locked also recovers.
++      SetBool(kForceSigninProfileLockedKey, false);
++    } else if ((!syncer::IsReplaceSyncPromosWithSignInPromosEnabled() ||
++                GetSigninState() == SigninState::kNotSignedIn) &&
++               !CanBeManaged()) {
++      // Fresh, not-yet-enrolled profiles stay locked and get routed to enrollment.
+       SetBool(kForceSigninProfileLockedKey, true);
+     }
+   } else {

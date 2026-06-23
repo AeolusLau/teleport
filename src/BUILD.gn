@@ -27,16 +27,22 @@ buildflag_header("teleport_policy_buildflags") {
 
 source_set("teleport") {
   sources = [
+    "browser/enterprise/teleport_inplace_enrollment_sequence.cc",
+    "browser/enterprise/teleport_inplace_enrollment_sequence.h",
     "browser/teleport_startup.cc",
     "browser/teleport_startup.h",
     "common/teleport_channel.cc",
     "common/teleport_channel.h",
+    "common/teleport_enrollment_gate_logic.cc",
+    "common/teleport_enrollment_gate_logic.h",
     "common/teleport_enterprise_enrollment.cc",
     "common/teleport_enterprise_enrollment.h",
     "common/teleport_enterprise_urls.cc",
     "common/teleport_enterprise_urls.h",
     "common/teleport_feed_url.cc",
     "common/teleport_feed_url.h",
+    "common/teleport_pref_names.cc",
+    "common/teleport_pref_names.h",
     "common/teleport_url_scheme.cc",
     "common/teleport_url_scheme.h",
     "common/teleport_version.cc",
@@ -82,8 +88,10 @@ source_set("teleport") {
 
 test("teleport_unittests") {
   sources = [
+    "browser/enterprise/teleport_inplace_enrollment_sequence_unittest.cc",
     "browser/teleport_startup_unittest.cc",
     "common/teleport_channel_unittest.cc",
+    "common/teleport_enrollment_gate_logic_unittest.cc",
     "common/teleport_enterprise_enrollment_unittest.cc",
     "common/teleport_enterprise_urls_unittest.cc",
     "common/teleport_feed_url_unittest.cc",

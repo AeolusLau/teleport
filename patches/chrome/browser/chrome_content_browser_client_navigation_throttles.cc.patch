@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+index d1615d67d2b9a..d81510202efec 100644
+--- a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
++++ b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
+@@ -145,6 +145,7 @@
+ #include "chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.h"
+ #include "chrome/browser/enterprise/profile_management/profile_management_navigation_throttle.h"
+ #include "chrome/browser/enterprise/signin/managed_profile_required_navigation_throttle.h"
++#include "teleport/browser/enterprise/teleport_enrollment_gate_throttle.h"
+ #include "chrome/browser/enterprise/webstore/chrome_web_store_navigation_throttle.h"
+ #include "chrome/browser/enterprise/webstore/features.h"
+ #include "chrome/browser/ui/webui/app_settings/web_app_settings_navigation_throttle.h"
+@@ -445,6 +446,7 @@ void CreateAndAddChromeThrottlesForNavigation(
+       MaybeCreateAndAdd(registry);
+ 
+   ManagedProfileRequiredNavigationThrottle::MaybeCreateAndAdd(registry);
++  teleport::TeleportEnrollmentGateThrottle::MaybeCreateAndAdd(registry);
+ 
+   if (base::FeatureList::IsEnabled(
+           enterprise::webstore::kChromeWebStoreNavigationThrottle)) {
