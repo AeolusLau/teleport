@@ -14,7 +14,7 @@ namespace teleport {
 // agnostic concept, so one MDM payload enrolls all channels. This is the value
 // the patched browser_dm_token_storage_mac.mm reads managed prefs from and the
 // plist (/Library/<id>.plist) CFPreferences resolves.
-inline constexpr char kManagedPrefsBundleId[] = "com.beansec.Teleport";
+inline constexpr char kManagedPrefsBundleId[] = "cn.douan.Teleport";
 
 // File fallbacks for the enrollment token / options (read when the managed
 // preference is not forced). Mirror Chrome's /Library/Google/Chrome/... paths.

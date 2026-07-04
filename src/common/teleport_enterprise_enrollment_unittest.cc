@@ -12,7 +12,7 @@ namespace {
 // all channels (mirrors Chrome's deliberate "com.google.Chrome no matter what"
 // behavior), so one MDM payload enrolls every channel.
 TEST(TeleportEnterpriseEnrollmentTest, ManagedPrefsBundleIdIsFixedBaseId) {
-  EXPECT_EQ(std::string_view(kManagedPrefsBundleId), "com.beansec.Teleport");
+  EXPECT_EQ(std::string_view(kManagedPrefsBundleId), "cn.douan.Teleport");
 }
 
 TEST(TeleportEnterpriseEnrollmentTest,

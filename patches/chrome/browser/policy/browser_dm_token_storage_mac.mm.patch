@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/policy/browser_dm_token_storage_mac.mm b/chrome/browser/policy/browser_dm_token_storage_mac.mm
-index 0c39d3482ad53..758ae4cf1f43a 100644
+index 0c39d3482ad53..c0130d6a9c4be 100644
 --- a/chrome/browser/policy/browser_dm_token_storage_mac.mm
 +++ b/chrome/browser/policy/browser_dm_token_storage_mac.mm
 @@ -18,6 +18,7 @@
@@ -63,7 +63,7 @@ index 0c39d3482ad53..758ae4cf1f43a 100644
  }
  
 -// Get the enrollment token from policy file: /Library/com.google.Chrome.plist.
-+// Get the enrollment token from policy file: /Library/com.beansec.Teleport.plist.
++// Get the enrollment token from policy file: /Library/cn.douan.Teleport.plist.
  // Return true if policy is set, otherwise false.
  bool GetEnrollmentTokenFromPolicy(std::string* enrollment_token) {
    // Since the configuration management infrastructure is not initialized when

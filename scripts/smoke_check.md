@@ -57,7 +57,7 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | 检查 | 命令 / 期望 | 实测 |
 |---|---|---|
 | grit 预检 | `autoninja -C out/... chrome/app:branded_strings` 成功 | ✅ |
-| bundle id | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` = `com.beansec.Teleport` | ✅ |
+| bundle id | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` = `cn.douan.Teleport` | ✅ |
 | 菜单显示名 | `PlistBuddy -c 'Print :CFBundleDisplayName' Teleport.app/Contents/Info.plist` = `闪现` | ✅ |
 | 版权 | `grep COPYRIGHT chrome/app/theme/chromium/BRANDING` 含 `BeanSec` | ✅ |
 | app 图标 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` 一致 | ✅ |
@@ -107,8 +107,8 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 ### 升级闭环(v1→v2,已实测 0.1.0→0.1.1)
 
 1. 发布 v1(如 0.1.0)+ v2(bump `TELEPORT_VERSION`,如 0.1.1)到 OSS;appcast 最新=v2,两个 dmg 均在。
-2. 清理后装 v1:`rm -rf /Applications/Teleport.app && defaults delete com.beansec.Teleport`;下载 `Teleport-0.1.0.dmg` 拖入 /Applications,右键打开;`defaults read .../Info CFBundleShortVersionString` = `0.1.0`。
-3. 运行 v1 → `SUEnableAutomaticChecks` 自动检查 → 弹「有新版本 0.1.1 可用」。(未接「检查更新」菜单;不弹则 `defaults delete com.beansec.Teleport SULastCheckTime` 后重启强制检查。)
+2. 清理后装 v1:`rm -rf /Applications/Teleport.app && defaults delete cn.douan.Teleport`;下载 `Teleport-0.1.0.dmg` 拖入 /Applications,右键打开;`defaults read .../Info CFBundleShortVersionString` = `0.1.0`。
+3. 运行 v1 → `SUEnableAutomaticChecks` 自动检查 → 弹「有新版本 0.1.1 可用」。(未接「检查更新」菜单;不弹则 `defaults delete cn.douan.Teleport SULastCheckTime` 后重启强制检查。)
 4. 点「更新」→ 下载 v2 → EdDSA + 代码签名校验 → 重启安装(/Applications 可能弹一次管理员密码)。
 5. 确认:`defaults read /Applications/Teleport.app/Contents/Info CFBundleShortVersionString` = `0.1.1`。✅ 实测通过。
 
@@ -140,10 +140,10 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 | # | 检查 | 期望 |
 |---|---|---|
-| 1 | `PlistBuddy -c 'Print :CFBundleIdentifier' "/Applications/Teleport Canary.app/Contents/Info.plist"` | `com.beansec.Teleport.canary` |
+| 1 | `PlistBuddy -c 'Print :CFBundleIdentifier' "/Applications/Teleport Canary.app/Contents/Info.plist"` | `cn.douan.Teleport.canary` |
 | 2 | Finder 磁盘名 / 应用内显示名 | `Teleport Canary` / `闪现 Canary` |
 | 3 | `PlistBuddy -c 'Print :CrProductDirName' .../Info.plist`;首次启动后数据目录 | `Teleport Canary`;存在 `~/Library/Application Support/Teleport Canary/`(与裸 `Teleport` 分离) |
 | 4 | canary 包 `chrome://version` 通道行 | `canary`(`TeleportChannel` 键驱动,未受 bundle id 改名影响) |
-| 5 | **并排**:同装裸 `com.beansec.Teleport`(dev/未来 stable)与 `.canary` | 二者可同时运行、各自独立 profile、互不干扰 |
-| 6 | `codesign -dvvv "/Applications/Teleport Canary.app/Contents/Frameworks/.../Teleport Canary Helper (Alerts).app"` 抽查;`codesign --verify --deep --strict "/Applications/Teleport Canary.app"` | 嵌套 Alert Helper bundle id 以 `com.beansec.Teleport.canary` 为前缀;深度校验通过 |
+| 5 | **并排**:同装裸 `cn.douan.Teleport`(dev/未来 stable)与 `.canary` | 二者可同时运行、各自独立 profile、互不干扰 |
+| 6 | `codesign -dvvv "/Applications/Teleport Canary.app/Contents/Frameworks/.../Teleport Canary Helper (Alerts).app"` 抽查;`codesign --verify --deep --strict "/Applications/Teleport Canary.app"` | 嵌套 Alert Helper bundle id 以 `cn.douan.Teleport.canary` 为前缀;深度校验通过 |
 | 7 | 图标:Dock/Finder 显示的 canary 图标 | 与基底一致(本期最低复用,未做差异化) |

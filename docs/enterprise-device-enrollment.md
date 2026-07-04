@@ -5,7 +5,7 @@
 ## 1. 原理
 
 - Teleport 复用 Chromium 的 **CBCM(Chrome Browser Cloud Management)**:启动时读取受管偏好里的 enrollment token,向 device-manager `register_browser`,换取**机器 DMToken**,再拉取 `google/chrome/machine-level-user` 作用域的签名策略。
-- **单一固定基础域**:Teleport 所有渠道(stable/canary/beta)的机器纳管都读取固定 bundle id **`com.beansec.Teleport`** 与固定路径 **`/Library/Teleport/`**——机器级纳管是整机维度、与渠道无关,**一份 MDM 配置即可纳管所有渠道**(对齐 Chrome 固定 `com.google.Chrome` 的设计)。
+- **单一固定基础域**:Teleport 所有渠道(stable/canary/beta)的机器纳管都读取固定 bundle id **`cn.douan.Teleport`** 与固定路径 **`/Library/Teleport/`**——机器级纳管是整机维度、与渠道无关,**一份 MDM 配置即可纳管所有渠道**(对齐 Chrome 固定 `com.google.Chrome` 的设计)。
 - DM 服务端点由构建期 buildflag 决定(dev=`dm.teleport.fairyland.io`,release=生产域),命令行覆盖在 stable/beta 渠道会被忽略,故走内置默认。
 - 机器纳管**默认启用**(非品牌构建已 patch `IsEnabled()` 返回 true);**是否真正注册取决于有没有 enrollment token**——无 token 时控制器静默 no-op,不外联。
 
@@ -13,7 +13,7 @@
 
 ### 2.1 生产:MDM Configuration Profile(推荐)
 
-向受管偏好域 **`com.beansec.Teleport`** 推送(payload type `com.apple.ManagedClient.preferences`):
+向受管偏好域 **`cn.douan.Teleport`** 推送(payload type `com.apple.ManagedClient.preferences`):
 
 | 键 | 类型 | 说明 |
 |---|---|---|
@@ -26,7 +26,7 @@
 <key>PayloadType</key>            <string>com.apple.ManagedClient.preferences</string>
 <key>PayloadContent</key>
 <dict>
-  <key>com.beansec.Teleport</key>
+  <key>cn.douan.Teleport</key>
   <dict>
     <key>Forced</key>
     <array>

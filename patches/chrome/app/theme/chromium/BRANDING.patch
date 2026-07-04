@@ -1,5 +1,5 @@
 diff --git a/chrome/app/theme/chromium/BRANDING b/chrome/app/theme/chromium/BRANDING
-index f8363d5b294fe..70cf63b4f8dcc 100644
+index f8363d5b294fe..44f8f000626cc 100644
 --- a/chrome/app/theme/chromium/BRANDING
 +++ b/chrome/app/theme/chromium/BRANDING
 @@ -1,10 +1,10 @@
@@ -9,15 +9,15 @@ index f8363d5b294fe..70cf63b4f8dcc 100644
 -PRODUCT_SHORTNAME=Chromium
 -PRODUCT_INSTALLER_FULLNAME=Chromium Installer
 -PRODUCT_INSTALLER_SHORTNAME=Chromium Installer
+-COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
+-MAC_BUNDLE_ID=org.chromium.Chromium
 +COMPANY_FULLNAME=BeanSec
 +COMPANY_SHORTNAME=BeanSec
 +PRODUCT_FULLNAME=Teleport
 +PRODUCT_SHORTNAME=Teleport
 +PRODUCT_INSTALLER_FULLNAME=Teleport Installer
 +PRODUCT_INSTALLER_SHORTNAME=Teleport Installer
--COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
 +COPYRIGHT=Copyright @LASTCHANGE_YEAR@ BeanSec. All rights reserved.
--MAC_BUNDLE_ID=org.chromium.Chromium
-+MAC_BUNDLE_ID=com.beansec.Teleport
++MAC_BUNDLE_ID=cn.douan.Teleport
  MAC_CREATOR_CODE=Cr24
  MAC_TEAM_ID=

@@ -93,7 +93,7 @@
 - **背景**:Dice 因 `HasOAuthClientConfigured()==false` 被构建级禁用,但 profile 菜单登录按钮只看 `prefs::kSigninAllowed`(默认 true,`signin_utils_desktop.cc:35`),**不查 OAuth client 是否配置**;且 `ShowDiceSigninTab` 对「Dice 未启用」的检查只在 `DCHECK_IS_ON()` 内(`signin_view_controller.cc:599`)。official/release 构建 DCHECK 关闭 → 跳过检查 → 打开真实 `accounts.google.com`,OAuth 用 `dummytoken` 交换令牌**失败**(dev 构建则命中 DCHECK abort)。
 - **影响**:用户能从 profile 菜单/`chrome://settings/syncSetup` 走到 Google 登录页并失败。关联 TD-001 B 类。
 - **当前处置**:无(overlay 未触碰 signin/sync;grep 命中的 "signin" 实为代码 **signing** 误报)。
-- **将来方向**:**首选 S(policy,零改码零后端)** = 默认下发 `BrowserSignin=0`(+ 可选 `SyncDisabled=true`)策略,经 macOS managed preferences plist(`com.beansec.Teleport` 域)注入,`CanOfferSignin` 立即返回 disallowed → 登录按钮消失、syncSetup 入口关闭,profile 管理/头像不受影响。彻底做法 = 编译期 `enable_dice_support=false` 整段移除 Dice(成本更高、与「加法为主」理念冲突,暂不)。自有受管身份是独立未来大工程,强依赖 fairyland。
+- **将来方向**:**首选 S(policy,零改码零后端)** = 默认下发 `BrowserSignin=0`(+ 可选 `SyncDisabled=true`)策略,经 macOS managed preferences plist(`cn.douan.Teleport` 域)注入,`CanOfferSignin` 立即返回 disallowed → 登录按钮消失、syncSetup 入口关闭,profile 管理/头像不受影响。彻底做法 = 编译期 `enable_dice_support=false` 整段移除 Dice(成本更高、与「加法为主」理念冲突,暂不)。自有受管身份是独立未来大工程,强依赖 fairyland。
 
 ### TD-006 「报告问题」反馈提交到 Google(数据外泄)
 

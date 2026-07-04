@@ -3,7 +3,7 @@
 > 基于 **Chromium** 源码自研的**企业安全浏览器**:作为受管端,接收并执行服务端集中下发的安全策略。
 
 - **代号**:`teleport`(闪现,取「瞬移 / 传送」之意)
-- **磁盘 / 标识名**:`Teleport`(`Teleport.app`、bundle id 前缀 `com.beansec.Teleport`)
+- **磁盘 / 标识名**:`Teleport`(`Teleport.app`、bundle id 前缀 `cn.douan.Teleport`)
 - **应用内显示名**:`闪现`
 - **当前版本**:`0.1.12`(见 `TELEPORT_VERSION`)
 - **上游基线**:Chromium `148.0.7778.180`(见 `CHROMIUM_VERSION`)
