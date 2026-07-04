@@ -1,33 +1,38 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-index 9cd8efe899789..5333e4e524b6f 100644
+index 9cd8efe899789..3a62e954a6265 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
 +++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-@@ -45,6 +45,15 @@
+@@ -45,6 +45,19 @@
  #include "chrome/browser/ui/views/profiles/profile_picker_sign_in_provider.h"
  #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
  #include "chrome/browser/ui/webui/signin/profile_picker_handler.h"
 +// teleport: GAIA-free enrollment step dependencies.
++#include "base/memory/weak_ptr.h"
 +#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 +#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 +#include "chrome/browser/profiles/profile_attributes_entry.h"
 +#include "chrome/browser/profiles/profile_attributes_storage.h"
++#include "content/public/browser/navigation_controller.h"
 +#include "content/public/browser/web_contents.h"
 +#include "teleport/browser/enterprise/teleport_enrollment_done_user_data.h"
++#include "teleport/common/teleport_enterprise_enrollment.h"
 +#include "teleport/common/teleport_enterprise_urls.h"
++#include "ui/base/page_transition_types.h"
 +#include "url/gurl.h"
  #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
  #include "chrome/common/webui_url_constants.h"
  #include "chrome/grit/branded_strings.h"
-@@ -322,6 +331,86 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
+@@ -322,6 +335,118 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
        profile);
  }
  
 +// teleport: GAIA-free enrollment provider. Hosts the enterprise OIDC enroll page
 +// on the target (locked) profile's own WebContents and attaches an "enrollment
-+// done" closure to it. There is NO ForceSigninVerifier, NO DiceTabHelper, NO
++// done" callback to it. There is NO ForceSigninVerifier, NO DiceTabHelper, NO
 +// gaia_id/email handling: enrollment completion is detected and driven entirely
 +// by the OIDC capture throttle -> in-place registrar, which runs the attached
-+// closure (-> OnEnrollmentSucceeded) once policy has actually been fetched.
++// callback (-> OnEnrollmentFinished) once the flow has a terminal result;
++// failures re-navigate to the enroll start page with an error banner.
 +class TeleportEnrollmentProvider {
 + public:
 +  TeleportEnrollmentProvider(ProfilePickerWebContentsHost* host,
@@ -48,8 +53,10 @@ index 9cd8efe899789..5333e4e524b6f 100644
 +
 +    contents_ = content::WebContents::Create(
 +        content::WebContents::CreateParams(profile_));
-+    teleport::EnrollmentDoneUserData::Set(contents_.get(),
-+                                          std::move(on_enrolled_));
++    teleport::EnrollmentDoneUserData::Set(
++        contents_.get(),
++        base::BindOnce(&TeleportEnrollmentProvider::OnEnrollmentFinished,
++                       weak_factory_.GetWeakPtr()));
 +    host_->ShowScreen(
 +        contents_.get(), GURL(teleport::EnterpriseEnrollUrl()),
 +        base::BindOnce(&ProfilePickerWebContentsHost::SetNativeToolbarVisible,
@@ -60,12 +67,41 @@ index 9cd8efe899789..5333e4e524b6f 100644
 +
 +  content::WebContents* contents() { return contents_.get(); }
 +
++  // Runs on the registrar's terminal outcome. Success hands off to the flow
++  // controller's unlock closure; failure keeps the gate locked and navigates
++  // the hosted enroll page to the server-rendered error banner (which is also
++  // the retry entry — the slug form restarts the whole flow).
++  void OnEnrollmentFinished(teleport::EnrollmentResult result) {
++    if (result == teleport::EnrollmentResult::kSuccess) {
++      // Run() can tear down this provider (FinishFlowAndRunInBrowser); return immediately.
++      std::move(on_enrolled_).Run();
++      return;
++    }
++    LOG(ERROR) << "[teleport-enroll] enrollment failed (result="
++               << static_cast<int>(result) << "); showing error page";
++    if (!contents_) {
++      return;
++    }
++    // Re-arm the outcome callback for the inline retry: the throttle consumed
++    // the previous one via Take() during the failed attempt, and the error
++    // page's slug form restarts the flow in this same WebContents.
++    teleport::EnrollmentDoneUserData::Set(
++        contents_.get(),
++        base::BindOnce(&TeleportEnrollmentProvider::OnEnrollmentFinished,
++                       weak_factory_.GetWeakPtr()));
++    content::NavigationController::LoadURLParams params(
++        teleport::EnrollmentErrorUrl(result));
++    params.transition_type = ui::PAGE_TRANSITION_AUTO_TOPLEVEL;
++    contents_->GetController().LoadURLWithParams(params);
++  }
++
 + private:
 +  raw_ptr<ProfilePickerWebContentsHost> host_;
 +  raw_ptr<Profile> profile_;
 +  base::OnceClosure on_enrolled_;
 +  std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
 +  std::unique_ptr<content::WebContents> contents_;
++  base::WeakPtrFactory<TeleportEnrollmentProvider> weak_factory_{this};
 +};
 +
 +class TeleportEnrollmentStepController : public ProfileManagementStepController {
@@ -105,7 +141,7 @@ index 9cd8efe899789..5333e4e524b6f 100644
  void RecordProfilingFinishReason(
      metrics::StartupProfilingFinishReason finish_reason) {
    base::UmaHistogramEnumeration(
-@@ -578,6 +667,43 @@ void ProfilePickerFlowController::OnReauthCompleted(
+@@ -578,6 +703,43 @@ void ProfilePickerFlowController::OnReauthCompleted(
    FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
  }
  

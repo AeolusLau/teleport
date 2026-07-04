@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/common/cloud/cloud_policy_constants.cc b/components/policy/core/common/cloud/cloud_policy_constants.cc
-index 7c2ec2e253633..e4fa101aa5ad4 100644
+index 7c2ec2e253633..162fc571d75f3 100644
 --- a/components/policy/core/common/cloud/cloud_policy_constants.cc
 +++ b/components/policy/core/common/cloud/cloud_policy_constants.cc
 @@ -8,6 +8,7 @@
@@ -10,7 +10,7 @@ index 7c2ec2e253633..e4fa101aa5ad4 100644
  
  #if BUILDFLAG(IS_ANDROID)
  #include "base/android/device_info.h"
-@@ -156,40 +157,83 @@ const char* GetChromeUserPolicyType() {
+@@ -156,40 +157,88 @@ const char* GetChromeUserPolicyType() {
  
  }  // namespace dm_protocol
  
@@ -50,7 +50,12 @@ index 7c2ec2e253633..e4fa101aa5ad4 100644
 +//   Replace with the actual production KMS root public key DER before the first
 +//   real device-manager deployment. The matching private key is never committed.
 +// kDevPolicyKey: dev root-signer root — used in dev and CI builds.
-+//   The matching private key is held by the dev root-signer, never committed.
++//   The matching private key is INTENTIONALLY COMMITTED in the fairyland repo
++//   (products/teleport/device-manager/keys/dev-policy-root.pem): a dev-only
++//   trust anchor whose durability outweighs secrecy (accepted risk: repo
++//   readers can sign policy dev builds trust; dev builds target fairyland.io
++//   only). Keep in sync via keys/dev-policy-root.pub.pem +
++//   scripts/gen_policy_verification_key.py. Release keys are NEVER committed.
 +#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 +const uint8_t kReleasePolicyKey[] = {
 +    0x30, 0x82, 0x01, 0x22, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,

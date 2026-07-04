@@ -35,6 +35,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/storage_partition.h"
 #include "teleport/browser/enterprise/teleport_inplace_enrollment_sequence.h"
+#include "teleport/common/teleport_enterprise_enrollment.h"
 
 namespace teleport {
 
@@ -81,7 +82,7 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
                                const std::string& issuer_id,
                                const std::string& subject_id,
                                const std::string& email,
-                               base::OnceClosure on_done)
+                               EnrollmentDoneCallback on_done)
       : profile_(profile),
         oidc_tokens_(oidc_tokens),
         issuer_id_(issuer_id),
@@ -205,6 +206,17 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
   }
 
  private:
+  // Runs the enrollment-outcome callback exactly once, then self-destructs.
+  // Every terminal path funnels through here so the UI step always learns the
+  // outcome (success unlock or visible failure state).
+  void RunDoneAndDelete(EnrollmentResult result) {
+    if (on_done_) {
+      std::move(on_done_).Run(result);
+    }
+    // Run() may indirectly delete other objects; nothing below may touch members.
+    delete this;
+  }
+
   // Stable management id derived from issuer + subject. We do NOT use the
   // interceptor's ProfileIdService-preset id because that path is geared toward
   // a freshly created profile (it pairs a generated GUID with the device id to
@@ -221,11 +233,11 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
   // captures the registration outputs, then runs the apply-then-fetch sequence.
   void OnClientRegistered(CloudPolicyClient::Result result) {
     if (!result.IsSuccess()) {
-      VLOG(1) << "[teleport-enroll] registration FAILED net_error="
-              << result.GetNetError()
-              << " dm_status=" << client_->last_dm_status();
-      // The gate stays locked; do not run `on_done_`.
-      delete this;
+      LOG(ERROR) << "[teleport-enroll] registration FAILED net_error="
+                 << result.GetNetError()
+                 << " dm_status=" << client_->last_dm_status();
+      // The gate stays locked; the step renders the failure.
+      RunDoneAndDelete(EnrollmentResult::kRegistrationFailed);
       return;
     }
 
@@ -248,23 +260,23 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
             << (dm_token_.empty() ? "<empty>" : "<present>");
 
     if (dm_token_.empty()) {
-      VLOG(1) << "[teleport-enroll] empty dm_token; aborting";
-      delete this;
+      LOG(ERROR) << "[teleport-enroll] empty dm_token; aborting";
+      RunDoneAndDelete(EnrollmentResult::kRegistrationFailed);
       return;
     }
 
     entry_ = GetEntry(profile_);
     if (!entry_) {
-      VLOG(1) << "[teleport-enroll] no profile attributes entry; aborting";
-      delete this;
+      LOG(ERROR) << "[teleport-enroll] no profile attributes entry; aborting";
+      RunDoneAndDelete(EnrollmentResult::kRegistrationFailed);
       return;
     }
 
     oidc_signin_service_ =
         UserPolicyOidcSigninServiceFactory::GetForProfile(profile_);
     if (!oidc_signin_service_) {
-      VLOG(1) << "[teleport-enroll] no OIDC signin service; aborting";
-      delete this;
+      LOG(ERROR) << "[teleport-enroll] no OIDC signin service; aborting";
+      RunDoneAndDelete(EnrollmentResult::kRegistrationFailed);
       return;
     }
 
@@ -272,11 +284,12 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     // the unit-tested sequencer. On attribute failure, abort without fetching
     // (a fetch before the dasherless attrs are set bad-casts our policy manager).
     if (!RunInPlaceEnrollmentSequence(*this)) {
-      delete this;
+      LOG(ERROR) << "[teleport-enroll] managed-attribute application failed; aborting";
+      RunDoneAndDelete(EnrollmentResult::kRegistrationFailed);
       return;
     }
     // FetchPolicy() is now in flight; OnPolicyFetchComplete or OnEnrollmentTimeout
-    // will delete `this`.
+    // finishes the flow.
   }
 
   void OnPolicyFetchComplete(bool success) {
@@ -287,29 +300,25 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     policy::CloudPolicyStore* store = core ? core->store() : nullptr;
     policy::CloudPolicyClient* client = core ? core->client() : nullptr;
     const bool has_policy = store && store->has_policy();
-    VLOG(1) << "[teleport-enroll] policy-fetch-result: success=" << success
-            << " has_policy=" << has_policy << " store_status="
-            << (store ? static_cast<int>(store->status()) : -1)
-            << " validation_status="
-            << (store ? static_cast<int>(store->validation_status()) : -1)
-            << " client=" << (client ? "present" : "null")
-            << " client_dm_status="
-            << (client ? static_cast<int>(client->last_dm_status()) : -1)
-            << " client_registered="
-            << (client ? client->is_registered() : false);
-    if (has_policy && on_done_) {
-      std::move(on_done_).Run();
+    if (has_policy) {
+      VLOG(1) << "[teleport-enroll] policy fetch succeeded";
+      RunDoneAndDelete(EnrollmentResult::kSuccess);
+      return;
     }
-    delete this;
+    LOG(ERROR) << "[teleport-enroll] policy REJECTED: success=" << success
+               << " store_status="
+               << (store ? static_cast<int>(store->status()) : -1)
+               << " validation_status="
+               << (store ? static_cast<int>(store->validation_status()) : -1)
+               << " client_dm_status="
+               << (client ? static_cast<int>(client->last_dm_status()) : -1);
+    RunDoneAndDelete(EnrollmentResult::kPolicyRejected);
   }
 
   void OnEnrollmentTimeout() {
     LOG(WARNING) << "[teleport-enroll] enrollment timed out; profile stays "
-                    "locked, not running unlock";
-    // on_done_ is intentionally NOT run: enrollment did not complete. delete this
-    // destroys the CloudPolicyClient + registration helper, cancelling any
-    // pending registration/fetch callbacks (no Unretained UAF).
-    delete this;
+                    "locked, surfacing failure to the enroll step";
+    RunDoneAndDelete(EnrollmentResult::kTimeout);
   }
 
   raw_ptr<Profile> profile_;
@@ -317,7 +326,7 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
   const std::string issuer_id_;
   const std::string subject_id_;
   const std::string email_;
-  base::OnceClosure on_done_;
+  EnrollmentDoneCallback on_done_;
 
   // Captured in OnClientRegistered before the apply-then-fetch sequence runs.
   std::string dm_token_;
@@ -345,7 +354,7 @@ void EnrollCurrentProfileInPlace(
     const std::string& issuer_id,
     const std::string& subject_id,
     const std::string& email,
-    base::OnceClosure on_done) {
+    EnrollmentDoneCallback on_done) {
   // Self-owned: deletes itself on completion.
   (new TeleportOidcInPlaceRegistrar(profile, oidc_tokens, issuer_id, subject_id,
                                     email, std::move(on_done)))

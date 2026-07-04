@@ -63,6 +63,7 @@ scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   _lib.py, tests/          路径/链接 helper + pytest
   smoke_check.md           构建与冒烟检查清单
 patches/                   一文件一 patch,镜像 chromium/src 路径(注入/启动钩子/BRANDING/strings)
+keys/dev-policy-root.pub.pem   dev 策略验签根公钥锚(私钥在 fairyland 仓库;gen_policy_verification_key.py 由它生成/校验补丁内容)
 branding/                  资源覆盖(整文件),镜像 chromium/src 路径(app.icns)
 brand/teleport.svg         品牌源资产(手改这个;派生物由 generate_icons.py 产出)
 CHROMIUM_VERSION           钉死的上游版本
@@ -91,6 +92,7 @@ autoninja -C out/mac/arm64/dev chrome    # 产物 Teleport.app(亦在 <repo>/bui
 uv run pytest                                # 工具脚本单测(仓库根运行)
 autoninja -C out/mac/arm64/dev teleport_unittests && \
   "$TELEPORT_CHROMIUM_DIR"/src/out/mac/arm64/dev/teleport_unittests   # //teleport gtest
+uv run python scripts/gen_policy_verification_key.py --check   # 补丁烘焙 key ↔ 公钥锚一致性(apply_patches 亦自动前置执行)
 
 python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重生成图标
 # 冒烟验证清单见 scripts/smoke_check.md
@@ -140,6 +142,8 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 
 - **工具栏主菜单升级角标依赖 `enable_update_notifications`**:点亮「⋮ 菜单的重启更新角标」的唯一通道是 `BuildState::SetUpdate` → `UpgradeDetectorImpl` → `AppMenuIconController`。但 `UpgradeDetectorImpl::Init()` 里 `build_state->AddObserver(this)` 与 `InstalledVersionPoller` 整段包在 `#if BUILDFLAG(ENABLE_UPDATE_NOTIFICATIONS)`,而该 flag 上游默认 `= is_chrome_branded`(`//chrome/browser/buildflags.gni`)——非品牌构建恒为 0,detector **根本不订阅 BuildState**,我们 bridge 的 `SetUpdate()` 全程无效,角标永不亮(About 页却仍显示 Relaunch,因为它走另一条 VersionUpdater 通道)。我们有 Sparkle,故在 `gn/args/{release,dev}.mac.gn` 显式 `enable_update_notifications = true`。验证可纯本地、不发版:dev 构建用 `--simulate-critical-update`(经 InstalledVersionPoller 合成 BuildState 更新)即可秒亮角标(critical 红;普通更新走 1h 的 VERY_LOW 阈值后转绿)。副作用:同时编入 outdated-build 检测器(满 8 周对非受管/organic 构建提示;受管安装 `IsManaged()` 下不触发)。
 
+- **修改已有 patch 的工作流**:先 `apply_patches.py` 确保全部已应用 → 直接编辑 `chromium/src/<file>` → `git -C chromium/src diff -- <path> > patches/<path>.patch` 重生成 → 再跑 `apply_patches.py` 验证幂等。禁止手改 hunk。
+- **dev 策略验签根**:私钥有意提交在 fairyland 仓库(`products/teleport/device-manager/keys/dev-policy-root.pem`,dev-only 信任锚);本仓库只 vendor 公钥 `keys/dev-policy-root.pub.pem`。轮换走 fairyland `scripts/mint-dev-policy-root.sh` 的清单;release 根永不入库(KMS + 离线仪式,`teleport_release_policy_key_is_real` assert fail-closed)。
 - **`InstalledVersionPoller` 与 Sparkle「暂存-重启才替换」冲突(patch `upgrade_detector_impl.cc`)**:`enable_update_notifications=true` 在 `UpgradeDetectorImpl::Init()` 里除了订阅 BuildState,还顺带 `installed_version_poller_.emplace()`。该 poller 每 2h(+ 启动首轮 + bundle 监听)读**磁盘 .app 版本**比对运行版:`installed==running` → `SetUpdate(kNone)`。但 Sparkle 把更新暂存到自己缓存、**重启才换主 bundle**,故重启前磁盘版恒等于运行版 → poller 不停 `SetUpdate(kNone)`,与我们 bridge 的 `SetUpdate(kNormalUpdate)` **抢同一 BuildState**。致命点:`UpgradeDetected(NONE)` 把 `upgrade_notification_stage_` 重置为 NONE 但**不调 `NotifyUpgrade()`**(`set_upgrade_notification_stage` 是纯 setter)→ 观察者不被通知 → **chip 缓存的 `kUpgradeNotification` 成 stale(蓝底 Update 一直在),而菜单 `Build()` live 查 `GetTypeAndSeverity()` 因 `stage==NONE`→`severity==kNone` 落空,upgrade 块整段跳过 → 「Relaunch to update」菜单项消失、默认浏览器项浮顶**。chip 与菜单项 desync,即此因。**为何 `--simulate-*` 复现不出**:simulate 走 `SimulateGetInstalledVersion` 伪造 `components[3]+=2` 的高版本,poller 自己就报 update、单写入者、不打架。修复:patch 把 poller 创建**门控在 `if (is_testing_)`**——生产路径(无 simulate)不建 poller,bridge 成 BuildState 唯一写入者;保留 `--simulate-upgrade/--simulate-critical-update` 的本地调试能力(它俩本就依赖 poller 跑 `SimulateGetInstalledVersion`)。
 
 ## 目标平台

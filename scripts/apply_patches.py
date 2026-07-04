@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from _lib import chromium_src, repo_root
+from gen_policy_verification_key import run_check
 
 
 def find_patches(patches_dir: Path) -> list[Path]:
@@ -61,6 +62,9 @@ def apply_branding(branding_dir: Path, src: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Guard: the baked policy verification key patch must match the vendored
+    # public anchor before any patch application.
+    run_check()
     parser = argparse.ArgumentParser(description="Apply teleport overlay onto chromium/src")
     parser.add_argument("--root", type=Path, default=repo_root())
     args = parser.parse_args(argv)
