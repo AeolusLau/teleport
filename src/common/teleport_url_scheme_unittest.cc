@@ -1,4 +1,4 @@
-// Copyright 2026 BeanSec.
+// Copyright 2026 The Teleport Authors
 #include "teleport/common/teleport_url_scheme.h"
 
 #include "testing/gtest/include/gtest/gtest.h"

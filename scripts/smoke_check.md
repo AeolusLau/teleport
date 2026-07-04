@@ -59,13 +59,13 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | grit 预检 | `autoninja -C out/... chrome/app:branded_strings` 成功 | ✅ |
 | bundle id | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` = `cn.douan.Teleport` | ✅ |
 | 菜单显示名 | `PlistBuddy -c 'Print :CFBundleDisplayName' Teleport.app/Contents/Info.plist` = `闪现` | ✅ |
-| 版权 | `grep COPYRIGHT chrome/app/theme/chromium/BRANDING` 含 `BeanSec` | ✅ |
+| 版权 | `grep COPYRIGHT chrome/app/theme/chromium/BRANDING` 含 `Xiaodou Shuan` | ✅ |
 | app 图标 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` 一致 | ✅ |
-| en 文案 | `strings .../en.lproj/locale.pak \| grep -i "BeanSec\|Teleport"` 出现 Teleport / BeanSec / "Make Teleport the default browser" | ✅ |
+| en 文案 | `strings .../en.lproj/locale.pak \| grep -i "Xiaodou\|Teleport"` 出现 Teleport / Xiaodou Shuan / "Make Teleport the default browser" | ✅ |
 | 运行 | `Teleport …` 启动有 banner、0 FATAL | ✅ |
 | 幂等 | `branding_strings.py` 二次运行 = 0 ids remapped | ✅ |
 
-GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"BeanSec";各处 product logo = 我方标记。
+GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"Beijing Xiaodou Shuan Technology Co., Ltd.";各处 product logo = 我方标记。
 
 ## 仍待人工确认 / 后续
 

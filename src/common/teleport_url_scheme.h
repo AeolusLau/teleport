@@ -1,4 +1,4 @@
-// Copyright 2026 BeanSec.
+// Copyright 2026 The Teleport Authors
 #ifndef TELEPORT_COMMON_TELEPORT_URL_SCHEME_H_
 #define TELEPORT_COMMON_TELEPORT_URL_SCHEME_H_
 

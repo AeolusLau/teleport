@@ -1,9 +1,10 @@
 """Rebrand Chromium product/company names in chromium_strings.grd + zh .xtb.
 
 English source: standalone "Chromium" -> "Teleport", "(The )Chromium Authors"
--> "BeanSec". zh-CN/zh-TW .xtb values are rebranded to 闪现/閃現 + Chinese company
-name and re-keyed to the new source message ids (via in-tree grit). Other locales
-fall back to English. Excludes non-product names (ChromiumOS, chromium.org, etc.).
+-> "Beijing Xiaodou Shuan Technology Co., Ltd.". zh-CN/zh-TW .xtb values are
+rebranded to 闪现/閃現 + Chinese company name and re-keyed to the new source
+message ids (via in-tree grit). Other locales fall back to English. Excludes
+non-product names (ChromiumOS, chromium.org, etc.).
 """
 from __future__ import annotations
 
@@ -12,6 +13,11 @@ import sys
 from pathlib import Path
 
 _AUTHORS = re.compile(r"(?:The )?Chromium Authors")
+# The English company name ends with an abbreviation period ("Ltd."). Where the
+# source has its own sentence period right after the authors name, absorb it —
+# substituting the bare pattern alone would render "Ltd.." in the copyright.
+_AUTHORS_SENTENCE = re.compile(r"(?:The )?Chromium Authors\.")
+_COMPANY_EN = "Beijing Xiaodou Shuan Technology Co., Ltd."
 # Standalone product name, but NOT: ChromiumOS / "Chromium Projects" /
 # chromium.org, nor the label of an upstream-project link
 # (...BEGIN_LINK_CHROMIUM...Chromium...END_LINK_CHROMIUM..., e.g. the "made
@@ -189,7 +195,8 @@ def _sub_chrome(text: str, repl: str,
 
 
 def rebrand_en_text(text: str, sweep_chrome: bool = False) -> str:
-    text = _AUTHORS.sub("BeanSec", text)
+    text = _AUTHORS_SENTENCE.sub(_COMPANY_EN, text)
+    text = _AUTHORS.sub(_COMPANY_EN, text)
     text = _PRODUCT.sub("Teleport", text)
     if sweep_chrome:
         text = _sub_chrome(text, "Teleport")

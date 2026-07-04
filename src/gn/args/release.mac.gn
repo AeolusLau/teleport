@@ -51,7 +51,7 @@ enable_platform_mpeg_h_audio = true
 # studies, of which we have none).
 disable_fieldtrial_testing_config = true
 
-# Bake the production beansec.com enterprise endpoints (DM/enroll/register-handler
+# Bake the production douan.cn enterprise endpoints (DM/enroll/register-handler
 # URLs + kReleasePolicyKey KMS verification root) into the binary. All release
 # channels (canary/beta/stable) share these values.
 # NOTE: The current kReleasePolicyKey is a throwaway placeholder — replace it

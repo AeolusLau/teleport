@@ -10,12 +10,12 @@ namespace {
 // teleport_use_release_endpoints buildflag (switch-based overrides are
 // channel/test-gated upstream and unreliable on STABLE/BETA).
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-// Release: production beansec.com endpoints.
-constexpr char kEnrollUrl[] = "https://enroll.teleport.beansec.com/start";
+// Release: production douan.cn endpoints.
+constexpr char kEnrollUrl[] = "https://enroll.teleport.douan.cn/start";
 constexpr char kRegisterHandlerUrl[] =
-    "https://enroll.teleport.beansec.com/profile-enrollment/register-handler";
-constexpr char kKeystoneOpHost[] = "https://id.beansec.com";
-constexpr char kEnrollmentDomainSuffix[] = ".beansec.com";
+    "https://enroll.teleport.douan.cn/profile-enrollment/register-handler";
+constexpr char kKeystoneOpHost[] = "https://id.douan.cn";
+constexpr char kEnrollmentDomainSuffix[] = ".douan.cn";
 #else
 // Dev: fairyland.io endpoints. The OP host is a sample value — under
 // generic-OIDC the trusted-redirect-host check is skipped by the throttle, so

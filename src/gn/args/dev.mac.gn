@@ -53,5 +53,5 @@ disable_fieldtrial_testing_config = true
 
 # Bake the dev enterprise endpoints (fairyland.io DM/enroll/register-handler
 # URLs + kDevPolicyKey verification root) into the binary. Set to true in
-# release.mac.gn to bake the production beansec.com endpoints + KMS root instead.
+# release.mac.gn to bake the production douan.cn endpoints + KMS root instead.
 teleport_use_release_endpoints = false

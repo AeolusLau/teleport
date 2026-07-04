@@ -23,15 +23,15 @@ TEST(TeleportEnterpriseUrlsTest, TrustedRedirectHostsAreHttpsAndNonEmpty) {
 }
 
 // The enroll / register-handler hosts are baked per build via
-// teleport_use_release_endpoints: release points at beansec.com, dev at
+// teleport_use_release_endpoints: release points at douan.cn, dev at
 // fairyland.io. The register-handler URL must always carry the
 // /profile-enrollment/register-handler path the device-manager dispatches on.
 TEST(TeleportEnterpriseUrlsTest, EnrollUrlMatchesEndpointBuildflag) {
   const std::string enroll = EnterpriseEnrollUrl();
   const std::string reg = EnterpriseRegisterHandlerUrl();
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-  EXPECT_NE(enroll.find("teleport.beansec.com"), std::string::npos) << enroll;
-  EXPECT_NE(reg.find("teleport.beansec.com"), std::string::npos) << reg;
+  EXPECT_NE(enroll.find("teleport.douan.cn"), std::string::npos) << enroll;
+  EXPECT_NE(reg.find("teleport.douan.cn"), std::string::npos) << reg;
 #else
   EXPECT_NE(enroll.find("enroll.teleport.fairyland.io"), std::string::npos)
       << enroll;
@@ -50,9 +50,9 @@ TEST(TeleportEnterpriseUrlsTest, EnrollmentDomainSuffixesNonEmpty) {
     EXPECT_EQ('.', s.front());
   }
   // The suffix is baked per build via teleport_use_release_endpoints, mirroring
-  // EnrollUrlMatchesEndpointBuildflag: release=beansec.com, dev=fairyland.io.
+  // EnrollUrlMatchesEndpointBuildflag: release=douan.cn, dev=fairyland.io.
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-  EXPECT_EQ(suffixes[0], ".beansec.com");
+  EXPECT_EQ(suffixes[0], ".douan.cn");
 #else
   EXPECT_EQ(suffixes[0], ".fairyland.io");
 #endif

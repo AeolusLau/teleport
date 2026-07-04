@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/browser/browser_policy_connector.cc b/components/policy/core/browser/browser_policy_connector.cc
-index 6f234c0d5d242..9cc09d11514f1 100644
+index 6f234c0d5d242..2f99d231d7593 100644
 --- a/components/policy/core/browser/browser_policy_connector.cc
 +++ b/components/policy/core/browser/browser_policy_connector.cc
 @@ -28,21 +28,43 @@
@@ -20,18 +20,18 @@ index 6f234c0d5d242..9cc09d11514f1 100644
 +#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
  const char kDefaultDeviceManagementServerUrl[] =
 -    "https://m.google.com/devicemanagement/data/api";
-+    "https://dm.teleport.beansec.com/devicemanagement/data/api";
++    "https://dm.teleport.douan.cn/devicemanagement/data/api";
 +#else
 +const char kDefaultDeviceManagementServerUrl[] =
 +    "https://dm.teleport.fairyland.io/devicemanagement/data/api";
 +#endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
  
 +// Teleport repoints the reporting endpoints to the fairyland device-manager
-+// (dev) / beansec (release), same buildflag-driven default-value override as the
++// (dev) / douan.cn (release), same buildflag-driven default-value override as the
 +// DM server URL above (the upstream switches are ignored on stable/beta).
 +#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 +const char kDefaultEncryptedReportingServerUrl[] =
-+    "https://dm.teleport.beansec.com/v1/record";
++    "https://dm.teleport.douan.cn/v1/record";
 +#else
  const char kDefaultEncryptedReportingServerUrl[] =
 -    "https://chromereporting-pa.googleapis.com/v1/record";
@@ -41,7 +41,7 @@ index 6f234c0d5d242..9cc09d11514f1 100644
  // The URL for the realtime reporting server.
 +#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 +const char kDefaultRealtimeReportingServerUrl[] =
-+    "https://dm.teleport.beansec.com/v1/events";
++    "https://dm.teleport.douan.cn/v1/events";
 +#else
  const char kDefaultRealtimeReportingServerUrl[] =
 -    "https://chromereporting-pa.googleapis.com/v1/events";

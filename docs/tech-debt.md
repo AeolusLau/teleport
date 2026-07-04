@@ -161,7 +161,7 @@
   - 清理文档/脚本被迫 carve-out(`find ... ! -name 'Cloud Enrollment'`)才能做「只清浏览数据、保留注册」。
   - 该常量是未来 Windows/Linux 移植会照抄的模板,不修则错误模式被复制。
 - **当前处置**:无。注意给用户/测试机的清理指引须排除 `Cloud Enrollment` 子目录。
-- **将来方向(S)**:常量改为**平级兄弟目录** `"Teleport Cloud Enrollment/"`(无公司伞目录时对 Chrome 布局最忠实的直译;不采用 `"BeanSec/Teleport Cloud Enrollment/"`——只为此一处引入伞目录而产品目录仍在顶层,不彻底)。改动面已 grep 收口:头文件常量+注释、`src/common/teleport_enterprise_enrollment_unittest.cc:26` 断言(TDD 先行)、`docs/enterprise-device-enrollment.md:97`;fairyland 侧零引用(服务端不关心客户端文件布局)。迁移:pre-release 仅内部测试机,可不写迁移代码——旧目录成无害遗留(顺手删),测试机下次启动经强制注册自动重取 token;需确认 device-manager 按 client id(硬件 UUID 派生,不随清理变)幂等 upsert、不产生重复设备记录。若想省测试机一次重注册,可加「新路径不存在且旧路径存在则搬运」的三行一次性迁移。**须在首个外部发布前完成**,否则升级为带兼容回退的正式迁移工程。
+- **将来方向(S)**:常量改为**平级兄弟目录** `"Teleport Cloud Enrollment/"`(无公司伞目录时对 Chrome 布局最忠实的直译;不采用 `"Xiaodou Shuan/Teleport Cloud Enrollment/"`——只为此一处引入伞目录而产品目录仍在顶层,不彻底)。改动面已 grep 收口:头文件常量+注释、`src/common/teleport_enterprise_enrollment_unittest.cc:26` 断言(TDD 先行)、`docs/enterprise-device-enrollment.md:97`;fairyland 侧零引用(服务端不关心客户端文件布局)。迁移:pre-release 仅内部测试机,可不写迁移代码——旧目录成无害遗留(顺手删),测试机下次启动经强制注册自动重取 token;需确认 device-manager 按 client id(硬件 UUID 派生,不随清理变)幂等 upsert、不产生重复设备记录。若想省测试机一次重注册,可加「新路径不存在且旧路径存在则搬运」的三行一次性迁移。**须在首个外部发布前完成**,否则升级为带兼容回退的正式迁移工程。
 - **关键引用**:`src/common/teleport_enterprise_enrollment.h:25`、`src/common/teleport_enterprise_enrollment_unittest.cc:26`、`patches/chrome/browser/policy/browser_dm_token_storage_mac.mm.patch`、`patches/chrome/common/chrome_paths_mac.mm.patch`、`docs/enterprise-device-enrollment.md:97`、plan `2026-06-04-enterprise-alignment-phase1-device-enrollment.md:528`。
 
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)

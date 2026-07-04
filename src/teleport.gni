@@ -14,7 +14,7 @@ declare_args() {
   # URLs (common/teleport_enterprise_urls.cc).
   # false (default / dev.mac.gn): dev values — fairyland.io endpoints +
   #   kDevPolicyKey (dev root-signer); safe for local testing and CI.
-  # true (release.mac.gn): release values — beansec.com endpoints +
+  # true (release.mac.gn): release values — douan.cn endpoints +
   #   kReleasePolicyKey (production KMS root); all release channels
   #   (canary/beta/stable) share one release binary.
   teleport_use_release_endpoints = false

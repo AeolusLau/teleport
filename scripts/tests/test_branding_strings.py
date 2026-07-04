@@ -14,8 +14,24 @@ def test_rebrand_text_replaces_standalone_product_name():
 
 
 def test_rebrand_text_replaces_authors():
-    assert bs.rebrand_en_text("The Chromium Authors") == "BeanSec"
-    assert bs.rebrand_en_text("Chromium Authors") == "BeanSec"
+    assert (bs.rebrand_en_text("The Chromium Authors")
+            == "Beijing Xiaodou Shuan Technology Co., Ltd.")
+    assert (bs.rebrand_en_text("Chromium Authors")
+            == "Beijing Xiaodou Shuan Technology Co., Ltd.")
+
+
+def test_rebrand_text_authors_sentence_final_no_double_period():
+    # The replacement ends with "Ltd."; when the source has its own sentence
+    # period ("...The Chromium Authors. All rights reserved.") the two must
+    # collapse into one, or the about-page copyright renders "Ltd..".
+    assert (bs.rebrand_en_text(
+        "Copyright 2026 The Chromium Authors. All rights reserved.")
+        == "Copyright 2026 Beijing Xiaodou Shuan Technology Co., Ltd. "
+           "All rights reserved.")
+    # zh replacement has no trailing period: the English sentence period after
+    # the company name must survive untouched.
+    assert (bs.rebrand_zh_text("The Chromium Authors. 保留所有权利。", "zh-CN")
+            == "北京小豆数安科技有限公司. 保留所有权利。")
 
 
 def test_rebrand_text_preserves_non_product_names():

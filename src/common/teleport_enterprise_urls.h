@@ -25,7 +25,7 @@ std::vector<std::string> EnterpriseTrustedRedirectHosts();
 // Domain suffixes that cover all enrollment-flow hosts (enroll-landing,
 // per-tenant OP, central accounts). A request host ending with one of these
 // suffixes is considered part of the managed enrollment flow.
-// dev=.fairyland.io, release=.beansec.com.
+// dev=.fairyland.io, release=.douan.cn.
 std::vector<std::string> EnterpriseEnrollmentDomainSuffixes();
 
 }  // namespace teleport
