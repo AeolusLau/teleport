@@ -1,5 +1,7 @@
 import os
-from pathlib import Path
+import re
+import subprocess
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -75,6 +77,81 @@ def _grit_id(chromium_src: Path, presentable: str) -> str:
     return tclib.GenerateMessageId(presentable)
 
 
+# --- pristine-input mirror ---------------------------------------------------
+#
+# apply_patches.py rebrands the checkout's grd/grdp/xtb IN PLACE, so the
+# working tree normally holds the transform's *output*. Tests that exercise
+# the transform need its *input* (pristine upstream text), which is always
+# available as git HEAD: the checkout sits detached at the CHROMIUM_VERSION
+# tag and all branding edits are unstaged. These helpers materialize HEAD
+# content into a tmp mirror that branding_strings can consume as a src root —
+# <part> includes resolve inside the mirror, and tools/grit is symlinked so
+# _load_grd_reader(mirror) imports the real grit.
+
+_PART_FILE = re.compile(r'<part file="([^"]+)"')
+_XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _pristine_bytes(src: Path, rel: str) -> bytes:
+    proc = subprocess.run(
+        ["git", "-C", str(src), "show", f"HEAD:{rel}"], capture_output=True)
+    assert proc.returncode == 0, (
+        f"cannot read pristine HEAD:{rel} from the checkout: "
+        f"{proc.stderr.decode(errors='replace').strip()}")
+    return proc.stdout
+
+
+def _materialize_pristine(src: Path, mirror: Path, rel: str, done: set,
+                          part_base: PurePosixPath | None = None) -> None:
+    """Copy pristine (git HEAD) content of ``rel`` into ``mirror/rel``; for
+    grd/grdp files recurse into every ``<part file=...>`` reference (grit
+    parses all of them, even inside inactive ``<if>`` blocks, and raises
+    FileNotFound for missing ones). grd_reader joins each part path — at any
+    nesting depth — onto the top grd's directory, so ``part_base`` stays the
+    grd's directory through the whole recursion."""
+    if rel in done:
+        return
+    done.add(rel)
+    data = _pristine_bytes(src, rel)
+    out = mirror / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    if rel.endswith((".grd", ".grdp")):
+        base = part_base or PurePosixPath(rel).parent
+        text = _XML_COMMENT.sub("", data.decode("utf-8"))
+        for part in _PART_FILE.findall(text):
+            _materialize_pristine(src, mirror, (base / part).as_posix(),
+                                  done, base)
+
+
+def _grit_mirror(src: Path, root: Path) -> Path:
+    """Prepare ``root`` to act as a chromium-src stand-in for branding_strings:
+    tools/grit is symlinked from the real checkout so _load_grd_reader works."""
+    (root / "tools").mkdir(parents=True, exist_ok=True)
+    (root / "tools" / "grit").symlink_to(src / "tools" / "grit")
+    return root
+
+
+@pytest.fixture(scope="session")
+def pristine(tmp_path_factory):
+    """Factory materializing pristine checkout files into a shared mirror.
+
+    Returns ``materialize(*rels) -> Path`` (the mirror root). The mirror is
+    session-shared for speed, so tests must leave it as they found it
+    (write-then-restore inside the helpers under test is fine); a test that
+    rewrites files without restoring must build its own mirror instead."""
+    src = _chromium_src()
+    mirror = _grit_mirror(src, tmp_path_factory.mktemp("pristine-mirror"))
+    done: set[str] = set()
+
+    def materialize(*rels: str) -> Path:
+        for rel in rels:
+            _materialize_pristine(src, mirror, rel, done)
+        return mirror
+
+    return materialize
+
+
 def test_remap_changes_id_when_text_changes():
     src = _chromium_src()
     old_id = _grit_id(src, "About Chromium")
@@ -99,33 +176,32 @@ def test_rekey_xtb_dedupes_colliding_new_ids():
     assert "重启闪现" in out                # surviving translation localized
 
 
-def test_message_name_to_id_reads_real_grd_stably():
+def test_message_name_to_id_reads_real_grd_stably(pristine):
     """grit enumerates message ids deterministically for the real grd."""
-    src = _chromium_src()
-    grd = src / "chrome" / "app" / "chromium_strings.grd"
-    m1 = bs.message_name_to_id(src, grd)
-    m2 = bs.message_name_to_id(src, grd)
+    mirror = pristine("chrome/app/chromium_strings.grd")
+    grd = mirror / "chrome" / "app" / "chromium_strings.grd"
+    m1 = bs.message_name_to_id(mirror, grd)
+    m2 = bs.message_name_to_id(mirror, grd)
     assert len(m1) > 100  # the real grd has hundreds of messages
     assert m1 == m2  # ids are stable across parses of the unmodified grd
     assert "IDS_PRODUCT_NAME" in m1
 
 
-def test_build_id_remap_only_changed_ids():
+def test_build_id_remap_only_changed_ids(pristine):
     """Remapping the pristine grd against its rebranded form yields only
     the ids whose source text changed, keyed old->new."""
-    src = _chromium_src()
-    grd = src / "chrome" / "app" / "chromium_strings.grd"
+    mirror = pristine("chrome/app/chromium_strings.grd")
+    grd = mirror / "chrome" / "app" / "chromium_strings.grd"
     original = grd.read_text(encoding="utf-8")
     transformed = bs.transform_en_grd(original)
-    if transformed == original:
-        pytest.skip("checkout already rebranded; build_id_remap needs a pristine grd")
-    # Both copies live in the real grd dir so <part> includes resolve.
+    assert transformed != original  # pristine input: the transform must bite
+    # Both copies live in the mirror grd dir so <part> includes resolve.
     old_copy = grd.parent / "_branding_old.grd"
     new_copy = grd.parent / "_branding_new.grd"
     try:
         old_copy.write_text(original, encoding="utf-8")
         new_copy.write_text(transformed, encoding="utf-8")
-        remap = bs.build_id_remap(src, old_copy, new_copy)
+        remap = bs.build_id_remap(mirror, old_copy, new_copy)
     finally:
         old_copy.unlink(missing_ok=True)
         new_copy.unlink(missing_ok=True)
@@ -272,10 +348,10 @@ def test_restore_spans_desc_containing_chrome_keep():
     assert "\x00" not in out                           # no sentinel stranded
 
 
-def test_components_strings_renamed_set_is_frozen():
-    src = _chromium_src()
+def test_components_strings_renamed_set_is_frozen(pristine):
     grd = "components/components_strings.grd"
-    got = bs.renamed_message_names(src, grd, bs._target_grdp(grd), sweep_chrome=True)
+    got = bs.renamed_message_names(pristine(grd), grd, bs._target_grdp(grd),
+                                   sweep_chrome=True)
     fixture = Path(__file__).parent / "fixtures" / "branding_renamed_components_strings.txt"
     assert fixture.exists(), "fixture not generated yet — see Step 3"
     expected = fixture.read_text(encoding="utf-8").split()
@@ -284,10 +360,10 @@ def test_components_strings_renamed_set_is_frozen():
         "diff and update the fixture only after confirming new entries are correct")
 
 
-def test_generated_resources_renamed_set_is_frozen():
-    src = _chromium_src()
+def test_generated_resources_renamed_set_is_frozen(pristine):
     grd = "chrome/app/generated_resources.grd"
-    got = bs.renamed_message_names(src, grd, bs._target_grdp(grd), sweep_chrome=True)
+    got = bs.renamed_message_names(pristine(grd), grd, bs._target_grdp(grd),
+                                   sweep_chrome=True)
     fixture = Path(__file__).parent / "fixtures" / "branding_renamed_generated_resources.txt"
     assert fixture.exists(), "fixture not generated yet — see Step 4"
     expected = fixture.read_text(encoding="utf-8").split()
@@ -300,26 +376,22 @@ def test_rebrand_target_handles_unlisted_parts_via_inplace_snapshot(tmp_path):
     """The snapshot must compute old ids from the pristine on-disk grd (so all
     <part> includes resolve) without enumerating them. We assert _rebrand_target
     no longer requires copying grdp includes: it accepts a grd with parts it was
-    not told about."""
+    not told about. Runs on a private mirror (not the session-shared one):
+    _rebrand_target rewrites the grd + xtbs in place and does not restore."""
     src = _chromium_src()
     grd_rel = "chrome/app/generated_resources.grd"
     xtb_map = {
         "zh-CN": "chrome/app/resources/generated_resources_zh-CN.xtb",
         "zh-TW": "chrome/app/resources/generated_resources_zh-TW.xtb",
     }
-    grd_path = src / grd_rel
-    backups = {grd_path: grd_path.read_text(encoding="utf-8")}
-    for rel in xtb_map.values():
-        p = src / rel
-        backups[p] = p.read_text(encoding="utf-8")
-    try:
-        remapped, injected = bs._rebrand_target(
-            src, grd_rel, xtb_map, grdp_includes=(), inject_names=(),
-            sweep_chrome=True)
-        assert remapped > 0  # generated_resources has product-name strings
-    finally:
-        for p, original in backups.items():
-            p.write_text(original, encoding="utf-8")
+    mirror = _grit_mirror(src, tmp_path)
+    done: set[str] = set()
+    for rel in (grd_rel, *xtb_map.values()):
+        _materialize_pristine(src, mirror, rel, done)
+    remapped, injected = bs._rebrand_target(
+        mirror, grd_rel, xtb_map, grdp_includes=(), inject_names=(),
+        sweep_chrome=True)
+    assert remapped > 0  # generated_resources has product-name strings
 
 
 def test_sweep_chrome_keeps_external_products_zh():
@@ -352,12 +424,12 @@ def test_sweep_chrome_keeps_external_products_zh():
         "試用 Chrome Enterprise 基本版", "zh-TW", sweep_chrome=True)
 
 
-def test_surviving_chrome_phrases_are_frozen():
-    src = _chromium_src()
+def test_surviving_chrome_phrases_are_frozen(pristine):
     got = set()
     for grd in ("chrome/app/generated_resources.grd",
                 "components/components_strings.grd"):
-        got.update(bs.surviving_chrome_phrases(src, grd, bs._target_grdp(grd)))
+        got.update(bs.surviving_chrome_phrases(pristine(grd), grd,
+                                               bs._target_grdp(grd)))
     fixture = Path(__file__).parent / "fixtures" / "branding_chrome_kept.txt"
     assert fixture.exists(), "fixture not generated yet — see Step 3"
     expected = fixture.read_text(encoding="utf-8").split("\n")
@@ -383,14 +455,14 @@ def test_surviving_chrome_phrases_are_frozen():
         "branding_renamed_plus_addresses_strings.txt",
     ),
 ])
-def test_standalone_grd_renamed_set_is_frozen(grd_rel, fixture_name):
+def test_standalone_grd_renamed_set_is_frozen(grd_rel, fixture_name, pristine):
     """Frozen snapshot of message names that change under sweep_chrome rebranding.
 
     Mirrors test_generated_resources_renamed_set_is_frozen for the three
     standalone grds that were previously missing from _GRD_TARGETS.
     """
-    src = _chromium_src()
-    got = bs.renamed_message_names(src, grd_rel, bs._target_grdp(grd_rel), sweep_chrome=True)
+    got = bs.renamed_message_names(pristine(grd_rel), grd_rel,
+                                   bs._target_grdp(grd_rel), sweep_chrome=True)
     fixture = Path(__file__).parent / "fixtures" / fixture_name
     assert fixture.exists(), f"fixture not generated yet: {fixture_name}"
     expected = fixture.read_text(encoding="utf-8").split()
