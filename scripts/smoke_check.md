@@ -64,6 +64,7 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | en 文案 | `strings .../en.lproj/locale.pak \| grep -i "Xiaodou\|Teleport"` 出现 Teleport / Xiaodou Shuan / "Make Teleport the default browser" | ✅ |
 | 运行 | `Teleport …` 启动有 banner、0 FATAL | ✅ |
 | 幂等 | `branding_strings.py` 二次运行 = 0 ids remapped | ✅ |
+| 版本不暴露 | `PlistBuddy -c 'Print :SCMRevision' …/Info.plist` = Does Not Exist(app/Framework/Alerts helper);`InfoPlist.strings` 的 `CFBundleGetInfoString` 不含 Chromium 版本号(TD-014 记录剩余暴露面) | ✅ |
 
 GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"Beijing Xiaodou Shuan Technology Co., Ltd.";各处 product logo = 我方标记。
 

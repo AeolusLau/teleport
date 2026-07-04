@@ -1,5 +1,5 @@
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index cc98a1463c539..0cfa5020c951f 100644
+index cc98a1463c539..e58054949023a 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
 @@ -31,6 +31,7 @@ import("//tools/resources/generate_resource_allowlist.gni")
@@ -10,6 +10,15 @@ index cc98a1463c539..0cfa5020c951f 100644
  
  assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
  
+@@ -489,7 +490,7 @@ if (is_win) {
+     info_plist = "app/app-Info.plist"
+     args = [
+       "--breakpad=0",
+-      "--scm=1",
++      "--scm=0",
+       "--bundle_id=$chrome_mac_bundle_id",
+     ]
+     if (enable_updater) {
 @@ -535,6 +536,11 @@ if (is_win) {
        deps += [ ":chromium_updater_privileged_helper" ]
      }
@@ -38,3 +47,20 @@ index cc98a1463c539..0cfa5020c951f 100644
    action("clean_up_old_versions") {
      script = "//chrome/tools/build/mac/clean_up_old_versions.py"
  
+@@ -843,6 +858,7 @@ if (is_win) {
+     deps = [ ":chrome_helper_plist" ]
+     info_plists = get_target_outputs(":chrome_helper_plist") +
+                   [ "app/helper-alerts-Info.plist" ]
++    args = [ "--scm=0" ]
+   }
+ 
+   # Create and bundle an InfoPlist.strings for the alert helper app.
+@@ -1070,7 +1086,7 @@ if (is_win) {
+     args = [
+       "--breakpad=0",
+       "--keystone=0",
+-      "--scm=1",
++      "--scm=0",
+       "--branding",
+       chrome_product_short_name,
+     ]

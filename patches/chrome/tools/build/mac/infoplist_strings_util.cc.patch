@@ -1,0 +1,17 @@
+diff --git a/chrome/tools/build/mac/infoplist_strings_util.cc b/chrome/tools/build/mac/infoplist_strings_util.cc
+index 94297f412e885..ea2067997aa72 100644
+--- a/chrome/tools/build/mac/infoplist_strings_util.cc
++++ b/chrome/tools/build/mac/infoplist_strings_util.cc
+@@ -179,8 +179,11 @@ int main(int argc, char* const argv[]) {
+ 
+     // For now, assume this is ok for all languages. If we need to, this could
+     // be moved into generated_resources.grd and fetched.
++    // Teleport: the version here is the Chromium version, which must not leak
++    // into user-visible metadata (Finder Get Info); product versioning is
++    // handled by //teleport. Emit only "<name>, <copyright>".
+     std::string get_info = base::StringPrintf(
+-        "%s %s, %s", name.c_str(), version_string, copyright.c_str());
++        "%s, %s", name.c_str(), copyright.c_str());
+ 
+     // Generate the InfoPlist.strings file contents.
+     std::map<std::string, std::string> infoplist_strings = {
