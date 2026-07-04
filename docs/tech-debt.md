@@ -151,6 +151,19 @@
   2. **关联备忘(同属推送链路的二期增强,非本条但一并留档)**:Chromium 实时失效走 Google FCM(硬绑、不可改向),故一期「主动推送强制」由 teleport-gateway 让浏览器**短间隔(~30–60s)轮询** command-invalidation topic 实现**准实时**(强制延迟 = 轮询周期);二期可自建 invalidation 服务做**真·实时推送**。
 - **关键引用**:`components/sync/base/sync_util.h`(`GetSyncServiceURL` / `--sync-url`)、`components/sync/protocol/*.proto`(Google 私有协议)、`chrome/browser/browsing_data/chrome_browsing_data_remover_delegate.*`(`BrowsingDataRemover`)、设备管理远程命令 `DEVICE_WIPE_USERS` / `BROWSER_CLEAR_BROWSING_DATA`(`components/policy/proto/device_management_backend.proto`)。
 
+### TD-013 DMToken 存储目录嵌套在 stable/dev 用户数据目录内(`kDmTokenStorageDir` 布局缺陷)
+
+- **登记日期**:2026-07-04 · **优先级**:P1(布局设计缺陷;pre-release 修复成本 S,拖到发布后则需长期保留迁移逻辑)
+- **背景**:`src/common/teleport_enterprise_enrollment.h:25` 的 `kDmTokenStorageDir = "Teleport/Cloud Enrollment/"` 注释声称「Mirrors Chrome's "Google/Chrome Cloud Enrollment/"」,但直译时丢掉了公司伞目录层级:Chrome 的 `Google/` 是伞目录,`Chrome Cloud Enrollment` 与各渠道数据目录(`Chrome`、`Chrome Canary`)**平级**;而我们裸渠道(dev/stable)的用户数据目录本身就是 `Teleport`(`patches/chrome/common/chrome_paths_mac.mm.patch` 的非品牌回退值),于是机器级 DMToken 缓存 `~/Library/Application Support/Teleport/Cloud Enrollment/` **嵌套进了 dev/stable 的用户数据目录内部**——渠道无关的机器级状态寄生在单渠道私有目录里,违背同一头文件注释声明的 channel-agnostic 意图。当时 plan(`docs/superpowers/plans/2026-06-04-enterprise-alignment-phase1-device-enrollment.md:528`)只验证了「不与 per-channel 目录(如 `Teleport Canary`)**冲突**」,嵌套副作用未被识别——属漏看,非有记录的权衡。
+- **影响**(功能今日自洽:各渠道读写同一路径、注册链路已 live 验证;以下均为布局带来的耦合):
+  - `rm -rf ~/Library/Application Support/Teleport`(最自然的「重置 dev/stable」操作:IT 支持脚本、AppCleaner 类清理工具、用户手动重置)会**静默反注册整台机器的所有渠道**(机器级 token 随单渠道数据陪葬);Chrome 里删 `Google/Chrome` 永远不会碰到 token。
+  - 单独运行 canary/beta 会在 stable 的(未来)用户数据目录内创建并写文件(Chrome 从不跨渠道数据目录边界);反向清空 canary 自身目录却**不**清 token——语义不对称、反直觉。
+  - 清理文档/脚本被迫 carve-out(`find ... ! -name 'Cloud Enrollment'`)才能做「只清浏览数据、保留注册」。
+  - 该常量是未来 Windows/Linux 移植会照抄的模板,不修则错误模式被复制。
+- **当前处置**:无。注意给用户/测试机的清理指引须排除 `Cloud Enrollment` 子目录。
+- **将来方向(S)**:常量改为**平级兄弟目录** `"Teleport Cloud Enrollment/"`(无公司伞目录时对 Chrome 布局最忠实的直译;不采用 `"BeanSec/Teleport Cloud Enrollment/"`——只为此一处引入伞目录而产品目录仍在顶层,不彻底)。改动面已 grep 收口:头文件常量+注释、`src/common/teleport_enterprise_enrollment_unittest.cc:26` 断言(TDD 先行)、`docs/enterprise-device-enrollment.md:97`;fairyland 侧零引用(服务端不关心客户端文件布局)。迁移:pre-release 仅内部测试机,可不写迁移代码——旧目录成无害遗留(顺手删),测试机下次启动经强制注册自动重取 token;需确认 device-manager 按 client id(硬件 UUID 派生,不随清理变)幂等 upsert、不产生重复设备记录。若想省测试机一次重注册,可加「新路径不存在且旧路径存在则搬运」的三行一次性迁移。**须在首个外部发布前完成**,否则升级为带兼容回退的正式迁移工程。
+- **关键引用**:`src/common/teleport_enterprise_enrollment.h:25`、`src/common/teleport_enterprise_enrollment_unittest.cc:26`、`patches/chrome/browser/policy/browser_dm_token_storage_mac.mm.patch`、`patches/chrome/common/chrome_paths_mac.mm.patch`、`docs/enterprise-device-enrollment.md:97`、plan `2026-06-04-enterprise-alignment-phase1-device-enrollment.md:528`。
+
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
 
 - **登记日期**:2026-05-31
