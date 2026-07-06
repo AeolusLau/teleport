@@ -23,19 +23,25 @@ TEST(TeleportEnterpriseUrlsTest, TrustedRedirectHostsAreHttpsAndNonEmpty) {
 }
 
 // The enroll / register-handler hosts are baked per build via
-// teleport_use_release_endpoints: release points at douan.cn, dev at
-// fairyland.io. The register-handler URL must always carry the
+// teleport_use_release_endpoints: release points at teleport.douan.cn, dev at
+// teleport.fairyland.io — both with the /enroll path prefix. The
+// register-handler URL must always carry the
 // /profile-enrollment/register-handler path the device-manager dispatches on.
 TEST(TeleportEnterpriseUrlsTest, EnrollUrlMatchesEndpointBuildflag) {
   const std::string enroll = EnterpriseEnrollUrl();
   const std::string reg = EnterpriseRegisterHandlerUrl();
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-  EXPECT_NE(enroll.find("teleport.douan.cn"), std::string::npos) << enroll;
-  EXPECT_NE(reg.find("teleport.douan.cn"), std::string::npos) << reg;
-#else
-  EXPECT_NE(enroll.find("enroll.teleport.fairyland.io"), std::string::npos)
+  EXPECT_NE(enroll.find("https://teleport.douan.cn/enroll/"), std::string::npos)
       << enroll;
-  EXPECT_NE(reg.find("enroll.teleport.fairyland.io"), std::string::npos) << reg;
+  EXPECT_NE(reg.find("https://teleport.douan.cn/enroll/"), std::string::npos)
+      << reg;
+#else
+  EXPECT_NE(enroll.find("https://teleport.fairyland.io/enroll/"),
+            std::string::npos)
+      << enroll;
+  EXPECT_NE(reg.find("https://teleport.fairyland.io/enroll/"),
+            std::string::npos)
+      << reg;
 #endif
   EXPECT_NE(reg.find("/profile-enrollment/register-handler"),
             std::string::npos)

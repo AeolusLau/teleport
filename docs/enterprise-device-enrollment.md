@@ -6,7 +6,7 @@
 
 - Teleport 复用 Chromium 的 **CBCM(Chrome Browser Cloud Management)**:启动时读取受管偏好里的 enrollment token,向 device-manager `register_browser`,换取**机器 DMToken**,再拉取 `google/chrome/machine-level-user` 作用域的签名策略。
 - **单一固定基础域**:Teleport 所有渠道(stable/canary/beta)的机器纳管都读取固定 bundle id **`cn.douan.Teleport`** 与固定路径 **`/Library/Teleport/`**——机器级纳管是整机维度、与渠道无关,**一份 MDM 配置即可纳管所有渠道**(对齐 Chrome 固定 `com.google.Chrome` 的设计)。
-- DM 服务端点由构建期 buildflag 决定(dev=`dm.teleport.fairyland.io`,release=生产域),命令行覆盖在 stable/beta 渠道会被忽略,故走内置默认。
+- DM 服务端点由构建期 buildflag 决定(dev=`teleport.fairyland.io/dm`,release=生产域),命令行覆盖在 stable/beta 渠道会被忽略,故走内置默认。
 - 机器纳管**默认启用**(非品牌构建已 patch `IsEnabled()` 返回 true);**是否真正注册取决于有没有 enrollment token**——无 token 时控制器静默 no-op,不外联。
 
 ## 2. 下发 enrollment token
@@ -92,7 +92,7 @@ out/mac/arm64/dev/Teleport.app/Contents/MacOS/Teleport --no-proxy-server \
 
 预期(已实测,2026-06-05):
 
-1. 日志:`Enrollment token = ＜token＞` → `Creating machine level user cloud policy manager` → `request=register_browser` 到 `dm.teleport.fairyland.io`(头 `authorization: GoogleEnrollmentToken token=…`)→ `Client registration succeeded` + `DMToken = …`。
+1. 日志:`Enrollment token = ＜token＞` → `Creating machine level user cloud policy manager` → `request=register_browser` 到 `teleport.fairyland.io`(路径 `/dm/devicemanagement/data/api`,头 `authorization: GoogleEnrollmentToken token=…`)→ `Client registration succeeded` + `DMToken = …`。
 2. 日志:`[machine-level-user] Signature verification succeeded` → `Policy validation complete: status = 0` → `Policy fetch succeeded`(策略签名经内置根验签钥校验通过)。
 3. 机器 DMToken 缓存落 **`~/Library/Application Support/Teleport/Cloud Enrollment/`**(非 Google 路径)。
 4. `chrome://policy`:`google/chrome/machine-level-user` 作用域、来源 **Cloud**、Status OK(如样例 `AuthServerAllowlist`)。

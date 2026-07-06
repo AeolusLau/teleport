@@ -44,7 +44,7 @@ TEST(TeleportEnterpriseEnrollment, ErrorUrlCarriesFailureCode) {
 TEST(TeleportEnterpriseEnrollment, ErrorUrlStaysOnEnrollStart) {
   const GURL url = EnrollmentErrorUrl(EnrollmentResult::kPolicyRejected);
   EXPECT_TRUE(url.is_valid());
-  EXPECT_EQ(url.path(), "/start");
+  EXPECT_EQ(url.path(), "/enroll/start");
   EXPECT_EQ(EnrollmentErrorUrl(EnrollmentResult::kSuccess).query(), "");
 }
 

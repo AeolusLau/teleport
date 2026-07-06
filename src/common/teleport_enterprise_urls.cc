@@ -11,18 +11,18 @@ namespace {
 // channel/test-gated upstream and unreliable on STABLE/BETA).
 #if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
 // Release: production douan.cn endpoints.
-constexpr char kEnrollUrl[] = "https://enroll.teleport.douan.cn/start";
+constexpr char kEnrollUrl[] = "https://teleport.douan.cn/enroll/start";
 constexpr char kRegisterHandlerUrl[] =
-    "https://enroll.teleport.douan.cn/profile-enrollment/register-handler";
+    "https://teleport.douan.cn/enroll/profile-enrollment/register-handler";
 constexpr char kKeystoneOpHost[] = "https://id.douan.cn";
 constexpr char kEnrollmentDomainSuffix[] = ".douan.cn";
 #else
 // Dev: fairyland.io endpoints. The OP host is a sample value — under
 // generic-OIDC the trusted-redirect-host check is skipped by the throttle, so
 // it only serves as a placeholder.
-constexpr char kEnrollUrl[] = "https://enroll.teleport.fairyland.io/start";
+constexpr char kEnrollUrl[] = "https://teleport.fairyland.io/enroll/start";
 constexpr char kRegisterHandlerUrl[] =
-    "https://enroll.teleport.fairyland.io/profile-enrollment/register-handler";
+    "https://teleport.fairyland.io/enroll/profile-enrollment/register-handler";
 constexpr char kKeystoneOpHost[] = "https://dadou.fairyland.io";
 constexpr char kEnrollmentDomainSuffix[] = ".fairyland.io";
 #endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
