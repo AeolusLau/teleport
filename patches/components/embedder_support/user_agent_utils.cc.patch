@@ -1,0 +1,46 @@
+diff --git a/components/embedder_support/user_agent_utils.cc b/components/embedder_support/user_agent_utils.cc
+index 557eadb18229e..704b6660c08b4 100644
+--- a/components/embedder_support/user_agent_utils.cc
++++ b/components/embedder_support/user_agent_utils.cc
+@@ -31,6 +31,7 @@
+ #include "components/policy/core/common/policy_pref_names.h"
+ #include "components/prefs/pref_service.h"
+ #include "components/version_info/version_info.h"
++#include "components/version_info/teleport_engine_version.h"
+ #include "net/http/http_util.h"
+ #include "third_party/blink/public/common/features.h"
+ #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
+@@ -183,8 +184,9 @@ const blink::UserAgentBrandList GetUserAgentBrandList(
+ // GetVersionNumber()
+ const blink::UserAgentBrandList GetUserAgentBrandMajorVersionListInternal(
+     std::optional<blink::UserAgentBrandVersion> additional_brand_version) {
+-  return GetUserAgentBrandList(version_info::GetMajorVersionNumber(),
+-                               std::string(version_info::GetVersionNumber()),
++  // Teleport: UA-CH carries the engine version, not the product version.
++  return GetUserAgentBrandList(TELEPORT_ENGINE_VERSION_MAJOR,
++                               TELEPORT_ENGINE_VERSION_STRING,
+                                blink::UserAgentBrandVersionType::kMajorVersion,
+                                additional_brand_version);
+ }
+@@ -205,8 +207,9 @@ bool ShouldSendUserAgentUnifiedPlatform() {
+ // GetVersionNumber()
+ const blink::UserAgentBrandList GetUserAgentBrandFullVersionListInternal(
+     std::optional<blink::UserAgentBrandVersion> additional_brand_version) {
+-  return GetUserAgentBrandList(version_info::GetMajorVersionNumber(),
+-                               std::string(version_info::GetVersionNumber()),
++  // Teleport: UA-CH carries the engine version, not the product version.
++  return GetUserAgentBrandList(TELEPORT_ENGINE_VERSION_MAJOR,
++                               TELEPORT_ENGINE_VERSION_STRING,
+                                blink::UserAgentBrandVersionType::kFullVersion,
+                                additional_brand_version);
+ }
+@@ -664,7 +667,8 @@ blink::UserAgentMetadata GetUserAgentMetadata(bool only_low_entropy_ch) {
+   // High entropy client hints.
+   metadata.brand_full_version_list =
+       GetUserAgentBrandFullVersionListInternal(std::nullopt);
+-  metadata.full_version = std::string(version_info::GetVersionNumber());
++  // Teleport: UA-CH carries the engine version, not the product version.
++  metadata.full_version = TELEPORT_ENGINE_VERSION_STRING;
+   metadata.architecture = GetCpuArchitecture();
+   metadata.model = BuildModelInfo();
+   metadata.form_factors = GetFormFactorsClientHint(metadata, metadata.mobile);

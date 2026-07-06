@@ -1,0 +1,24 @@
+diff --git a/components/version_info/version_info_with_user_agent.h b/components/version_info/version_info_with_user_agent.h
+index beb5a2c97a796..31a25b5f0ca4b 100644
+--- a/components/version_info/version_info_with_user_agent.h
++++ b/components/version_info/version_info_with_user_agent.h
+@@ -9,6 +9,7 @@
+ #include <string_view>
+ 
+ #include "base/version_info/version_info_values.h"
++#include "components/version_info/teleport_engine_version.h"
+ 
+ namespace version_info {
+ 
+@@ -18,8 +19,10 @@ std::string GetProductNameAndVersionForReducedUserAgent();
+ 
+ // Returns the product name and version information for the User-Agent header,
+ // in the format: Chrome/<major_version>.<minor_version>.<build>.<patch>.
++// Teleport: the UA must carry the pinned Chromium ENGINE version for web
++// compatibility; PRODUCT_VERSION is Teleport's own product version.
+ constexpr std::string_view GetProductNameAndVersionForUserAgent() {
+-  return "Chrome/" PRODUCT_VERSION;
++  return "Chrome/" TELEPORT_ENGINE_VERSION_STRING;
+ }
+ 
+ }  // namespace version_info

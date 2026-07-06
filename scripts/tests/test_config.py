@@ -53,7 +53,7 @@ def test_require_keys_present_ok():
 
 
 def test_key_tuples_exist():
-    assert "public_ed_key" in _config.STAMP_KEYS
-    assert "feed_url" in _config.STAMP_KEYS
+    assert "public_ed_key" in _config.SPARKLE_KEYS
+    assert "feed_url" in _config.SPARKLE_KEYS
     assert "notary_profile" in _config.NOTARIZE_KEYS
     assert set(_config.PUBLISH_KEYS) == {"download_base_url", "oss_upload_target"}

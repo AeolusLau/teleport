@@ -1,0 +1,19 @@
+diff --git a/components/version_info/version_info_with_user_agent.cc b/components/version_info/version_info_with_user_agent.cc
+index 1bdda99788b59..18a3d64a38447 100644
+--- a/components/version_info/version_info_with_user_agent.cc
++++ b/components/version_info/version_info_with_user_agent.cc
+@@ -6,11 +6,13 @@
+ 
+ #include "base/strings/strcat.h"
+ #include "base/version_info/version_info.h"
++#include "components/version_info/teleport_engine_version.h"
+ 
+ namespace version_info {
+ 
+ std::string GetProductNameAndVersionForReducedUserAgent() {
+-  return base::StrCat({"Chrome/", GetMajorVersionNumber(), ".0.0.0"});
++  // Teleport: engine (not product) major version — see the .h counterpart.
++  return "Chrome/" TELEPORT_ENGINE_VERSION_MAJOR ".0.0.0";
+ }
+ 
+ }  // namespace version_info

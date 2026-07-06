@@ -32,24 +32,24 @@ def test_dev_build_invokes_build_only(monkeypatch, capsys):
     monkeypatch.setattr(package, "read_teleport_version", lambda: "9.9.9")
     calls = []
     monkeypatch.setattr(package, "build", lambda out, ch: calls.append((out, ch.name)))
-    monkeypatch.setattr(package._package, "stamp_version_only",
-                        lambda app, v: calls.append(("stamp_version_only", v)))
+    monkeypatch.setattr(package._package, "assert_baked_version",
+                        lambda app, v: calls.append(("assert_baked_version", v)))
     rc = package.main([])  # default channel = dev, no distribute
     assert rc == 0
     assert ("out/mac/arm64/dev", "dev") in calls
-    assert ("stamp_version_only", "9.9.9") in calls
+    assert ("assert_baked_version", "9.9.9") in calls
 
 
-def test_dev_build_stamps_version_after_build(monkeypatch, capsys):
+def test_dev_build_asserts_baked_version_after_build(monkeypatch, capsys):
     monkeypatch.setattr(package, "read_teleport_version", lambda: "0.1.3")
     order = []
     monkeypatch.setattr(package, "build",
                         lambda out, ch: order.append(("build", ch.name)))
-    monkeypatch.setattr(package._package, "stamp_version_only",
-                        lambda app, v: order.append(("stamp", v)))
+    monkeypatch.setattr(package._package, "assert_baked_version",
+                        lambda app, v: order.append(("assert_baked_version", v)))
     rc = package.main([])
     assert rc == 0
-    assert order.index(("build", "dev")) < order.index(("stamp", "0.1.3"))
+    assert order.index(("build", "dev")) < order.index(("assert_baked_version", "0.1.3"))
     out = capsys.readouterr().out
     assert "0.1.3" in out
 
@@ -67,8 +67,10 @@ def _stub_distributable(monkeypatch, order, *, distribute):
         "git_remote": "origin",
     }
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: dict(cfg))
-    monkeypatch.setattr(package._package, "stamp_and_inject",
-                        lambda app, v, c, ch: order.append(("stamp", v, ch)))
+    monkeypatch.setattr(package._package, "assert_baked_version",
+                        lambda app, v: order.append(("assert_baked_version", v)))
+    monkeypatch.setattr(package._package, "inject_sparkle_keys",
+                        lambda app, c, ch: order.append(("inject_sparkle_keys", ch)))
     monkeypatch.setattr(package._package, "stage_channel_icons",
                         lambda app, ch: order.append(("stage_icons", ch)))
     monkeypatch.setattr(package._package, "sign_app",
@@ -113,13 +115,15 @@ def test_distribute_runs_guards_before_build_and_tags_after_upload(monkeypatch, 
     # fail-fast: all three guards precede the build
     assert names.index("assert_on_main") < names.index("build")
     assert names.index("assert_clean_tree") < names.index("build")
-    # pipeline order
-    assert names.index("build") < names.index("stamp") < names.index("sign") < names.index("dmg")
+    # pipeline order: assert_baked_version and inject_sparkle_keys both precede sign
+    assert names.index("build") < names.index("assert_baked_version") < names.index("sign") < names.index("dmg")
+    assert names.index("inject_sparkle_keys") < names.index("sign")
     # tag strictly after upload; appcast uses the dmg name as keep
     assert names.index("upload") < names.index("tag_and_push")
     assert ("generate_appcast", "Teleport-1.2.3.dmg") in order
     assert ("tag_and_push", "1.2.3", "origin") in order
-    assert ("stamp", "1.2.3", "canary") in order
+    assert ("assert_baked_version", "1.2.3") in order
+    assert ("inject_sparkle_keys", "canary") in order
     assert "published 1.2.3 (canary)" in capsys.readouterr().out
 
 

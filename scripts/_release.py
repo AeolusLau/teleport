@@ -3,15 +3,21 @@ from __future__ import annotations
 
 import re
 
-_SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$")
 
 
-def parse_semver(version: str) -> tuple[int, int, int]:
-    """Parse 'MAJOR.MINOR.PATCH' into a comparable tuple. Raises ValueError."""
-    m = _SEMVER_RE.match(version.strip())
+def parse_semver(version: str) -> tuple[int, int, int, int]:
+    """Parse 'MAJOR.MINOR.BUILD[.PATCH]' into a comparable 4-tuple.
+
+    A missing 4th segment defaults to 0 so pre-4-segment history (old tags and
+    feed items like '0.1.12') stays comparable. New TELEPORT_VERSION values
+    must be written 4-segment — enforced by read_teleport_version().
+    """
+    m = _VERSION_RE.match(version.strip())
     if not m:
-        raise ValueError(f"not a MAJOR.MINOR.PATCH semver: {version!r}")
-    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        raise ValueError(f"not a MAJOR.MINOR.BUILD[.PATCH] version: {version!r}")
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)),
+            int(m.group(4) or 0))
 
 
 def is_newer(candidate: str, baseline: str) -> bool:
@@ -32,7 +38,7 @@ def max_appcast_version(appcast_xml: str) -> str | None:
     <enclosure> (both forms occur in the wild).
     """
     root = ET.fromstring(appcast_xml)
-    best: tuple[int, int, int] | None = None
+    best: tuple[int, int, int, int] | None = None
     best_raw: str | None = None
     for item in root.iter("item"):
         el = item.find(f"{{{_SPARKLE_NS}}}version")
@@ -66,9 +72,12 @@ def assert_publishable(new_version: str, appcast_xml: str | None) -> None:
 
 
 def read_teleport_version(root: Path | None = None) -> str:
-    """Read + validate the TELEPORT_VERSION semver from the repo root."""
+    """Read + validate the 4-segment TELEPORT_VERSION from the repo root."""
     from _lib import repo_root
     p = (root or repo_root()) / "TELEPORT_VERSION"
     v = p.read_text().strip()
-    parse_semver(v)  # validate; raises on garbage
+    if v.count(".") != 3:
+        raise ValueError(
+            f"TELEPORT_VERSION must be 4-segment MAJOR.MINOR.BUILD.PATCH, got {v!r}")
+    parse_semver(v)  # validate digits; raises on garbage
     return v

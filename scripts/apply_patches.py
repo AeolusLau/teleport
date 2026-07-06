@@ -81,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         apply_branding(branding, src)
     import branding_strings
     branding_strings.main()
+    import generate_version
+    if generate_version.write_engine_header(args.root):
+        print("engine version header written")
+    if generate_version.write_chrome_version(args.root):
+        print("chrome/VERSION written from TELEPORT_VERSION")
     print("overlay applied.")
     return 0
 

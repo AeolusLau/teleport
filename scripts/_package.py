@@ -1,4 +1,4 @@
-"""Packaging steps for a distributable channel: stamp version + Sparkle keys,
+"""Packaging steps for a distributable channel: verify baked version + inject Sparkle keys,
 sign the .app via the generated signing module, and build the styled dmg
 (sign + notarize + staple). All macOS / Developer-ID specific.
 """
@@ -19,23 +19,30 @@ from fetch_sparkle import SPARKLE_VERSION
 _CHECK_INTERVAL_SECONDS = 3600
 
 
-def version_plist_keys(version: str) -> dict[str, str]:
-    """The Info.plist version fields stamped for any channel (Sparkle compares
-    CFBundleVersion; CFBundleShortVersionString is the user-facing string)."""
-    return {
-        "CFBundleShortVersionString": version,
-        "CFBundleVersion": version,
-    }
-
-
-def stamp_version_only(app: Path, version: str) -> None:
-    """Stamp just the version fields into the app's Info.plist (no Sparkle keys,
-    no signing). Used by the dev channel so dev builds also display the real
-    Teleport version on the About page / chrome://version."""
+def read_baked_short_version(app: Path) -> str:
+    """CFBundleShortVersionString baked into the built app's Info.plist."""
     info = app / "Contents" / "Info.plist"
-    for key, val in version_plist_keys(version).items():
-        subprocess.run(["plutil", "-replace", key, "-string", val, str(info)],
-                       check=True)
+    try:
+        r = subprocess.run(
+            ["plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-",
+             str(info)],
+            capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError:
+        raise SystemExit(
+            f"cannot read baked version from {info}: "
+            "packaging expects a built app (run autoninja first)")
+    return r.stdout.strip()
+
+
+def assert_baked_version(app: Path, version: str) -> None:
+    """The build must already carry TELEPORT_VERSION (chrome/VERSION is
+    generated from it at overlay time). A mismatch means a stale build or a
+    missed apply_patches run after a version bump — refuse to package."""
+    baked = read_baked_short_version(app)
+    if baked != version:
+        raise SystemExit(
+            f"baked app version {baked!r} != TELEPORT_VERSION {version!r}; "
+            "re-run scripts/apply_patches.py and rebuild before packaging")
 
 
 def detect_codesign_identity() -> str:
@@ -65,23 +72,23 @@ def sparkle_bin(name: str) -> Path:
     return deps_cache_dir() / "sparkle" / SPARKLE_VERSION / "bin" / name
 
 
-def sparkle_plist_string_keys(version: str, cfg: dict, channel_name: str) -> dict[str, str]:
-    """The string-valued Info.plist keys stamped for a distributable channel:
-    version fields, the Sparkle feed/key, and the TeleportChannel marker that
-    drives chrome::GetChannel() at runtime."""
+def sparkle_plist_string_keys(cfg: dict, channel_name: str) -> dict[str, str]:
+    """The string-valued Info.plist keys injected for a distributable channel:
+    the Sparkle feed/key, and the TeleportChannel marker that drives
+    chrome::GetChannel() at runtime. Version fields are baked at build time."""
     return {
-        **version_plist_keys(version),
         "SUFeedURL": cfg["feed_url"],
         "SUPublicEDKey": cfg["public_ed_key"],
         "TeleportChannel": channel_name,
     }
 
 
-def stamp_and_inject(app: Path, version: str, cfg: dict, channel_name: str) -> None:
-    """Stamp version + Sparkle keys + the TeleportChannel marker into the app's
-    Info.plist (pre-sign)."""
+def inject_sparkle_keys(app: Path, cfg: dict, channel_name: str) -> None:
+    """Inject Sparkle keys + the TeleportChannel marker into the app's
+    Info.plist (pre-sign). Version fields are baked at build time and verified
+    by assert_baked_version()."""
     info = app / "Contents" / "Info.plist"
-    for key, val in sparkle_plist_string_keys(version, cfg, channel_name).items():
+    for key, val in sparkle_plist_string_keys(cfg, channel_name).items():
         subprocess.run(["plutil", "-replace", key, "-string", val, str(info)], check=True)
     subprocess.run(
         ["plutil", "-replace", "SUEnableAutomaticChecks", "-bool", "YES", str(info)],

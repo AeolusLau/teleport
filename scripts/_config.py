@@ -4,7 +4,7 @@ Top-level keys are account-shared (notary_profile, codesign_identity,
 git_remote); [channel.<name>] holds per-channel publish settings (Sparkle
 public key, feed URL, OSS endpoints). Validation is deferred to require_keys()
 so each operation only demands what it actually needs (a dev build needs no
-config at all; a local channel package needs stamp+notarize keys; publishing
+config at all; a local channel package needs sparkle+notarize keys; publishing
 additionally needs the OSS keys).
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ import tomllib
 from pathlib import Path
 
 # Keys required per operation phase.
-STAMP_KEYS = ("public_ed_key", "feed_url")
+SPARKLE_KEYS = ("public_ed_key", "feed_url")
 NOTARIZE_KEYS = ("notary_profile",)
 PUBLISH_KEYS = ("download_base_url", "oss_upload_target")
 

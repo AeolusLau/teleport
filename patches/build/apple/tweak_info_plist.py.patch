@@ -1,0 +1,17 @@
+diff --git a/build/apple/tweak_info_plist.py b/build/apple/tweak_info_plist.py
+index e0bf689eeb8f7..c598d81267a6d 100755
+--- a/build/apple/tweak_info_plist.py
++++ b/build/apple/tweak_info_plist.py
+@@ -423,7 +423,11 @@ def Main(argv):
+         # http://lists.apple.com/archives/carbon-dev/2006/Jun/msg00139.html
+         # BUILD will always be an increasing value, so BUILD_PATH gives us
+         # something unique that meetings what LS wants.
+-        'CFBundleVersion': '@BUILD@.@PATCH@',
++        # Teleport: CFBundleVersion is Sparkle's comparison key. The upstream
++        # BUILD.PATCH form is non-monotonic across product minor bumps
++        # (0.1.12.0 -> "12.0" but 0.2.0.0 -> "0.0"), so write the full
++        # 4-segment version. Values stay far below the 429496.72.95 LS limit.
++        'CFBundleVersion': '@MAJOR@.@MINOR@.@BUILD@.@PATCH@',
+     }
+   else:
+     version_format_for_key = {

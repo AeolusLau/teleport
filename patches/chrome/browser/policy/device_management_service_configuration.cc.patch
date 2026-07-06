@@ -1,0 +1,26 @@
+diff --git a/chrome/browser/policy/device_management_service_configuration.cc b/chrome/browser/policy/device_management_service_configuration.cc
+index d07d1ebc44682..5f8ed74011363 100644
+--- a/chrome/browser/policy/device_management_service_configuration.cc
++++ b/chrome/browser/policy/device_management_service_configuration.cc
+@@ -15,6 +15,7 @@
+ #include "build/build_config.h"
+ #include "components/policy/core/browser/browser_policy_connector.h"
+ #include "components/version_info/version_info.h"
++#include "components/version_info/teleport_engine_version.h"
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+ #include "chromeos/ash/components/system/statistics_provider.h"
+@@ -45,8 +46,12 @@ std::string DeviceManagementServiceConfiguration::GetDMServerUrl() const {
+ }
+ 
+ std::string DeviceManagementServiceConfiguration::GetAgentParameter() const {
++  // Teleport: GetVersionNumber() is the product version; append the pinned
++  // Chromium engine version so the fairyland device-manager can persist and
++  // display both (management UI shows product + engine).
+   return base::StrCat({version_info::GetProductName(), " ",
+-                       version_info::GetVersionNumber(), "(",
++                       version_info::GetVersionNumber(),
++                       " Chromium/" TELEPORT_ENGINE_VERSION_STRING "(",
+                        version_info::GetLastChange(), ")"});
+ }
+ 

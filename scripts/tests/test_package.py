@@ -7,15 +7,29 @@ import _package
 
 
 # ---------------------------------------------------------------------------
-# version_plist_keys
+# assert_baked_version
 # ---------------------------------------------------------------------------
 
 
-def test_version_plist_keys_sets_both_version_fields():
-    assert _package.version_plist_keys("0.1.3") == {
-        "CFBundleShortVersionString": "0.1.3",
-        "CFBundleVersion": "0.1.3",
-    }
+def test_assert_baked_version_ok(monkeypatch, tmp_path):
+    monkeypatch.setattr(_package, "read_baked_short_version", lambda app: "0.1.12.0")
+    _package.assert_baked_version(tmp_path / "Teleport.app", "0.1.12.0")  # no raise
+
+
+def test_assert_baked_version_mismatch_raises(monkeypatch, tmp_path):
+    monkeypatch.setattr(_package, "read_baked_short_version", lambda app: "0.1.11.0")
+    with pytest.raises(SystemExit, match="re-run scripts/apply_patches.py"):
+        _package.assert_baked_version(tmp_path / "Teleport.app", "0.1.12.0")
+
+
+def test_read_baked_short_version_missing_app_raises(monkeypatch, tmp_path):
+    """plutil failure (missing plist / unbuilt app) must produce a clean SystemExit."""
+    monkeypatch.setattr(
+        _package.subprocess, "run",
+        lambda *a, **kw: (_ for _ in ()).throw(
+            subprocess.CalledProcessError(1, ["plutil"])))
+    with pytest.raises(SystemExit, match="run autoninja first"):
+        _package.read_baked_short_version(tmp_path / "Teleport.app")
 
 
 # ---------------------------------------------------------------------------
@@ -64,16 +78,16 @@ def test_detect_codesign_multiple_raises(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# stamp_and_inject (hermetic: capture plutil calls instead of touching a plist)
+# inject_sparkle_keys (hermetic: capture plutil calls instead of touching a plist)
 # ---------------------------------------------------------------------------
 
 
-def test_stamp_and_inject_sets_hourly_check_interval(monkeypatch, tmp_path):
+def test_inject_sparkle_keys_sets_hourly_check_interval(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(_package.subprocess, "run",
                         lambda argv, **kw: calls.append(argv))
     cfg = {"feed_url": "https://h/a.xml", "public_ed_key": "k"}
-    _package.stamp_and_inject(tmp_path / "Teleport.app", "0.1.3", cfg, "canary")
+    _package.inject_sparkle_keys(tmp_path / "Teleport.app", cfg, "canary")
 
     interval = next(c for c in calls if "SUScheduledCheckInterval" in c)
     assert interval[:4] == ["plutil", "-replace", "SUScheduledCheckInterval", "-integer"]
@@ -81,12 +95,12 @@ def test_stamp_and_inject_sets_hourly_check_interval(monkeypatch, tmp_path):
     assert _package._CHECK_INTERVAL_SECONDS == 3600
 
 
-def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
+def test_inject_sparkle_keys_writes_all_plist_keys(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(_package.subprocess, "run",
                         lambda argv, **kw: calls.append(argv))
     cfg = {"feed_url": "https://h/a.xml", "public_ed_key": "edkey"}
-    _package.stamp_and_inject(tmp_path / "Teleport.app", "1.2.3", cfg, "canary")
+    _package.inject_sparkle_keys(tmp_path / "Teleport.app", cfg, "canary")
 
     # Build a lookup {key: argv} for plutil -replace calls
     plist_calls = {
@@ -95,11 +109,7 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
         if len(c) == 6 and c[:2] == ["plutil", "-replace"]
     }
 
-    expected_plist = str(tmp_path / "Teleport.app" / "Contents" / "Info.plist")
-
     for key, (typeflag, value) in {
-        "CFBundleShortVersionString": ("-string", "1.2.3"),
-        "CFBundleVersion": ("-string", "1.2.3"),
         "SUFeedURL": ("-string", "https://h/a.xml"),
         "SUPublicEDKey": ("-string", "edkey"),
         "TeleportChannel": ("-string", "canary"),
@@ -114,6 +124,10 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
             f"{key}: plist path {argv[5]!r} does not end with expected suffix"
         )
 
+    # version keys must NOT be injected by inject_sparkle_keys (baked at build time)
+    assert "CFBundleShortVersionString" not in plist_calls
+    assert "CFBundleVersion" not in plist_calls
+
 
 # ---------------------------------------------------------------------------
 # sparkle_plist_string_keys
@@ -122,12 +136,12 @@ def test_stamp_and_inject_writes_all_plist_keys(monkeypatch, tmp_path):
 
 def test_sparkle_plist_string_keys_includes_channel_marker():
     cfg = {"feed_url": "https://h/appcast.xml", "public_ed_key": "k"}
-    keys = _package.sparkle_plist_string_keys("0.1.5", cfg, "canary")
+    keys = _package.sparkle_plist_string_keys(cfg, "canary")
     assert keys["TeleportChannel"] == "canary"
-    assert keys["CFBundleShortVersionString"] == "0.1.5"
-    assert keys["CFBundleVersion"] == "0.1.5"
     assert keys["SUFeedURL"] == "https://h/appcast.xml"
     assert keys["SUPublicEDKey"] == "k"
+    assert "CFBundleShortVersionString" not in keys
+    assert "CFBundleVersion" not in keys
 
 
 # ---------------------------------------------------------------------------

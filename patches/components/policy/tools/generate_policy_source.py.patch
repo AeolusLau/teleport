@@ -1,0 +1,15 @@
+diff --git a/components/policy/tools/generate_policy_source.py b/components/policy/tools/generate_policy_source.py
+index 775a99a25a9dc..25eb70e0ab9fb 100755
+--- a/components/policy/tools/generate_policy_source.py
++++ b/components/policy/tools/generate_policy_source.py
+@@ -312,7 +312,9 @@ def main():
+           ' --policy-templates-file=<path to policy_templates.json>')
+     has_arg_error = True
+ 
+-  if not args.chrome_version_major and not args.all_chrome_versions:
++  # Teleport's product version can have MAJOR=0, which is falsy -- `is None` distinguishes
++  # "not provided" from 0, avoiding a false error when MAJOR is legitimately zero.
++  if args.chrome_version_major is None and not args.all_chrome_versions:
+     print('Error: Missing'
+           ' --chrome-version-major=<major version>\n'
+           ' or --all-chrome-versions')

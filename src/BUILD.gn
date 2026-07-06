@@ -62,7 +62,6 @@ source_set("teleport") {
     # built; otherwise a no-op stub keeps dev builds free of Sparkle.
     sources += [ "browser/mac/teleport_updater.h" ]
     sources += [ "common/teleport_channel_mac.mm" ]
-    sources += [ "common/teleport_version_mac.mm" ]
     if (teleport_enable_updater) {
       sources += [
         "browser/mac/teleport_sparkle_user_driver.h",

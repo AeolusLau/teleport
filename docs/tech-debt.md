@@ -164,20 +164,23 @@
 - **将来方向(S)**:常量改为**平级兄弟目录** `"Teleport Cloud Enrollment/"`(无公司伞目录时对 Chrome 布局最忠实的直译;不采用 `"Xiaodou Shuan/Teleport Cloud Enrollment/"`——只为此一处引入伞目录而产品目录仍在顶层,不彻底)。改动面已 grep 收口:头文件常量+注释、`src/common/teleport_enterprise_enrollment_unittest.cc:26` 断言(TDD 先行)、`docs/enterprise-device-enrollment.md:97`;fairyland 侧零引用(服务端不关心客户端文件布局)。迁移:pre-release 仅内部测试机,可不写迁移代码——旧目录成无害遗留(顺手删),测试机下次启动经强制注册自动重取 token;需确认 device-manager 按 client id(硬件 UUID 派生,不随清理变)幂等 upsert、不产生重复设备记录。若想省测试机一次重注册,可加「新路径不存在且旧路径存在则搬运」的三行一次性迁移。**须在首个外部发布前完成**,否则升级为带兼容回退的正式迁移工程。
 - **关键引用**:`src/common/teleport_enterprise_enrollment.h:25`、`src/common/teleport_enterprise_enrollment_unittest.cc:26`、`patches/chrome/browser/policy/browser_dm_token_storage_mac.mm.patch`、`patches/chrome/common/chrome_paths_mac.mm.patch`、`docs/enterprise-device-enrollment.md:97`、plan `2026-06-04-enterprise-alignment-phase1-device-enrollment.md:528`。
 
-### TD-014 分发包内多处暴露 Chromium 版本号(根治需构建期版本方案工程)
+### TD-015 MAJOR=0 产品版本的残余暴露面(扩展版本门 / flags 过期失效 / 政策过滤超集)
 
-- **登记日期**:2026-07-04 · **优先级**:P2(信息暴露/品牌一致性;无功能故障)
-- **背景**:产品对外版本应只呈现 `TELEPORT_VERSION`(About/`chrome://version` 已由 `//teleport` 的 `teleport_version` 处理;dmg 命名、appcast、主 app 两个版本键的打包期 stamp 亦然),但 2026-07-04 对 dev 构建 + 已装 canary 包的全量审计(遍历 plist 键值 + 路径名 + `strings -a` 二进制,扫 `148.0.7778.180`)发现 .app 内部仍多处为 Chromium 版本。
-- **已修(commit 本条同批)**:① 各 locale `InfoPlist.strings` 的 `CFBundleGetInfoString`(Finder 简介可见「Teleport 148.0.7778.180」)——patch `infoplist_strings_util.cc` 去掉版本段,只保留「产品名, 版权」;② `SCMRevision`(主 app/Framework/Alerts helper 三处 plist,泄露 chromium 检出 commit + `branch-heads/7778`)——`chrome/BUILD.gn` 的 `tweak_info_plist` 三处置 `--scm=0`(注意:该开关**默认开**,Alerts helper 因未显式传参而中招)。
-- **未修(即本条,均需同一工程根治)**:
-  1. **框架 versioned 目录名** `Teleport Framework.framework/Versions/148.0.7778.180/`——与主 exe 硬耦合:`chrome/app/chrome_exe_main_mac.cc:182` 以编译期常量 `CHROME_VERSION_STRING` 拼相对路径 `dlopen`,打包期改名必启动失败;
-  2. **嵌套 bundle 版本键**:4 个 Helper .app、Framework `Resources/Info.plist`、`app_mode-Info.plist`(app shim 模板)的 `CFBundleShortVersionString=148.0.7778.180` / `CFBundleVersion=7778.180`(`_package.py` 只 stamp 主 app);
-  3. **二进制内嵌串**:主 exe 的 dlopen 路径、Framework 内裸版本串与 `Chrome/148.0.7778.180`(UA 模板常量;实际外发 UA 经 UA reduction 为 `Chrome/148.0.0.0`);
-  4. **Web 可见指纹**:UA major(148)与 UA-CH brands——web 兼容性依赖,业界(含 Brave)均不隐藏,**视为不可修**;
-  5. **企业上报**:DM 状态上报的浏览器版本 = Chromium 版本(fairyland 管理面可见)——功能性信息(服务端按引擎版本适配策略),是否改为产品版本属产品决策、牵动跨仓库协议。
-- **当前处置**:症状点已修(见上);其余保持现状。
-- **将来方向(L,建议 brainstorm→spec)**:构建期版本方案工程(Brave 路线)——以 `TELEPORT_VERSION` 替换/派生 `chrome/VERSION`,让 `CHROME_VERSION_STRING`、框架 `Versions/` 目录、全部嵌套 plist 版本键一体变为产品版本。设计面:UA 必须保留 Chromium 版本(否则 `Chrome/0.x` 致 web 兼容崩坏,需双版本常量,Brave 即如此)、Sparkle 比较键语义(构建期即产品版本后,打包期 stamp 冗余化)、DM 上报版本语义(fairyland 协议面)、发版 bump 触发的全量重编成本。替代小方案(仅框架目录解耦:枚举全部 `CHROME_VERSION_STRING` 资源定位点逐一 patch)面窄但脆弱、易漏,倾向不采用。
-- **关键引用**:`chrome/app/chrome_exe_main_mac.cc:182`、`patches/chrome/BUILD.gn.patch`(`--scm=0` ×3)、`patches/chrome/tools/build/mac/infoplist_strings_util.cc.patch`、`build/apple/tweak_info_plist.py:336`(`--scm` 默认开)、`scripts/_package.py`(stamp 仅主 app)。
+- **登记日期**:2026-07-04 · **优先级**:P2(当下无功能故障;扩展 force-install 落地前升 P1)
+- **背景**:产品版本方案(TD-014 的根治工程)把 `chrome/VERSION` 设为四段产品版本(MAJOR=0)。两处 codegen 真值判断已 patch;终审在真实产物中证实仍有三处按 Chromium 里程碑语义消费 MAJOR 的机制受影响。
+- **影响**:①`chrome/common/extensions/manifest_handlers/minimum_chrome_version_checker.cc` 以 `version_info::GetVersion()`(=0.1.12.0)比对扩展 manifest 的 `minimum_chrome_version`——几乎所有商店扩展都声明(如 "88"),一律被拒载;Web Store 协议上行 `prodversion=0.1.12.0` 同理会被服务端版本门拦。当下未启用扩展分发,无实际故障;**启用 ExtensionInstallForcelist 前必须处理**。②`tools/flags/generate_expired_list.py` 以 MAJOR 为当前 mstone → `expired_flags_list.cc` 的 `kExpiredFlags` 为空表(已在 dev 产物证实;M148 应有数百条)——上游已过期实验 flag 在 chrome://flags 全部重新可用,企业安全浏览器的用户可达配置面静默扩大。③`components/policy/tools/generate_policy_source.py:130` 的 `if chrome_major_version:` 使 `supported_on` 过滤整体失效,等效 `--all-chrome-versions`,生成政策为超集——**方向安全**(只多不少,无在管政策被丢弃),备案防止将来升基线时被「修好」成会丢政策的方向。
+- **当前处置**:无(记录在案)。
+- **将来方向**:①扩展门在扩展能力落地时按 UA 同款一文件 patch 换成 `TELEPORT_ENGINE_VERSION_STRING` 比对(S);②flags 过期可接受现状(受管场景可另以策略锁 chrome://flags)或 patch `generate_expired_list.py` 改读引擎版本(S);③政策超集保持现状并在升基线检查清单中注明(零成本)。
+- **关键引用**:`minimum_chrome_version_checker.cc:41-51`、`tools/flags/generate_expired_list.py`、`out/.../gen/chrome/browser/expired_flags_list.cc`(空表证据)、`generate_policy_source.py:130`、spec `2026-07-04-product-version-scheme-design.md` §8。
+
+### TD-016 共享 chromium 检出的跨 worktree 状态污染(overlay 只应用不复原、打包无状态守卫)
+
+- **登记日期**:2026-07-05 · **优先级**:P1(污染是**静默的**且直接进入分发产物;当前靠操作纪律而非机制保证,首个外部发布前须落最低守卫)
+- **背景**:chromium 检出与 out 目录按设计全局共享(几百 GB 不绑 worktree),`src/teleport` 符号链接是指向某一个 worktree 的**全局单指针**。`apply_patches.py` 的幂等是「向前收敛不复原」:patch reverse-check 命中即跳过、从不回滚(`apply_patches.py:39-44`);`branding_strings` 就地变换**只进不退**(已烘焙的 grd 匹配不到源模式即 no-op);`generate_version` 是唯一无条件收敛项。`package.py` 不前置 `apply_patches.py`、无任何检出状态校验,唯一护栏 `assert_baked_version` 只看版本号一个维度。
+- **影响**(多 worktree 来回切换时,三条通道,两条完全静默):①**遗留 patch 混入**——A worktree 独有的 patch 留在检出,B 打包静默带上(仅当 A/B 对同一文件的 patch 冲突才 fail-fast);②**grd 烘焙态残留**——A 烘焙的品牌串使 B 的 `branding_strings` no-op,B 的包带 A 的文案(本轮公司改名时已实际踩过,靠手动恢复 56 个 pristine grd 解决);③**符号链接指错**——B 打包编进 A 的 `//teleport` 源码,无任何脚本校验链接指向。净效果 = 打出「本 worktree 源 + 他 worktree patch/文案」的杂交分发包。
+- **当前处置**:操作纪律——同一时刻单活跃 worktree;切换时 `ln -sfn <repo>/src "$TELEPORT_CHROMIUM_DIR/src/teleport"` + 重跑 `apply_patches.py`;品牌串类变更前先恢复 pristine grd 族再重跑。无机制保证。
+- **将来方向**:①`package.py` 与 `apply_patches.py` 前置校验 `src/teleport` 链接 realpath == 当前 repo 的 `src/`,不符拒绝(S,几行,最高杠杆);②`package.py` 强制前置跑 `apply_patches.py`(S);③检出内落 overlay 来源 marker(repo root + patches 树 hash + branding 输入指纹),不匹配时拒绝并指引恢复(M);④补「恢复 pristine」工具(reverse 全部 patch + checkout grd 族 + 清生成物)——即 CLAUDE.md「待定」已承认的 patch 工具链缺口(M)。①+②为最低守卫;③④随多人/CI 阶段。
+- **关键引用**:`scripts/apply_patches.py:39-44`、`scripts/branding_strings.py`(就地变换)、`scripts/package.py:52-121`(无 overlay 前置/状态校验)、`scripts/_package.py` `assert_baked_version`(仅版本维度)、CLAUDE.md gotcha「从 worktree 跑发布脚本必须 export TELEPORT_CHROMIUM_DIR」(只防路径、不防状态)。
 
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
 
@@ -199,3 +202,18 @@
 - **登记日期**:2026-05-31 · **结清日期**:2026-06-01 · **优先级**:P2
 - **背景**:「让搜索和浏览更好」开关(`url_keyed_anonymized_data_collection`)位于 `_google_chrome` 块**之外**(`chrome/browser/resources/settings/privacy_page/personalization_options.html:93`),非品牌构建仍渲染;但 UKM 上送 URL 在公开 Chromium 为空(`components/metrics/server_urls.grd` 占位 `-`)→ `NetMetricsLogUploader` 短路丢弃日志,成为「点了有反应却无任何后果」的死控件。
 - **处置**:新增 patch `patches/chrome/browser/resources/settings/privacy_page/personalization_options.html.patch`,把 `urlCollectionToggle` 裹进 `<if expr="_google_chrome">...</if>`,使本构建(`_google_chrome=false`)不渲染该 toggle(与相邻 toggle 的上游写法一致)。见 spec/plan `docs/superpowers/{specs,plans}/2026-05-31-settings-residual-branding-cleanup*`。
+
+### TD-014 分发包内多处暴露 Chromium 版本号(根治需构建期版本方案工程)(已解决)
+
+- **登记日期**:2026-07-04 · **优先级**:P2(信息暴露/品牌一致性;无功能故障) · **结清日期**:2026-07-04
+- **背景**:产品对外版本应只呈现 `TELEPORT_VERSION`(About/`chrome://version` 已由 `//teleport` 的 `teleport_version` 处理;dmg 命名、appcast、主 app 两个版本键的打包期 stamp 亦然),但 2026-07-04 对 dev 构建 + 已装 canary 包的全量审计(遍历 plist 键值 + 路径名 + `strings -a` 二进制,扫 `148.0.7778.180`)发现 .app 内部仍多处为 Chromium 版本。
+- **已修(commit 本条同批)**:① 各 locale `InfoPlist.strings` 的 `CFBundleGetInfoString`(Finder 简介可见「Teleport 148.0.7778.180」)——patch `infoplist_strings_util.cc` 去掉版本段,只保留「产品名, 版权」;② `SCMRevision`(主 app/Framework/Alerts helper 三处 plist,泄露 chromium 检出 commit + `branch-heads/7778`)——`chrome/BUILD.gn` 的 `tweak_info_plist` 三处置 `--scm=0`(注意:该开关**默认开**,Alerts helper 因未显式传参而中招)。
+- **未修(根治由本工程完成)**:
+  1. **框架 versioned 目录名** `Teleport Framework.framework/Versions/148.0.7778.180/`——与主 exe 硬耦合:`chrome/app/chrome_exe_main_mac.cc:182` 以编译期常量 `CHROME_VERSION_STRING` 拼相对路径 `dlopen`,打包期改名必启动失败;
+  2. **嵌套 bundle 版本键**:4 个 Helper .app、Framework `Resources/Info.plist`、`app_mode-Info.plist`(app shim 模板)的 `CFBundleShortVersionString=148.0.7778.180` / `CFBundleVersion=7778.180`(`_package.py` 只 stamp 主 app);
+  3. **二进制内嵌串**:主 exe 的 dlopen 路径、Framework 内裸版本串与 `Chrome/148.0.7778.180`(UA 模板常量;实际外发 UA 经 UA reduction 为 `Chrome/148.0.0.0`);
+  4. **Web 可见指纹**:UA major(148)与 UA-CH brands——web 兼容性依赖,业界(含 Brave)均不隐藏,**视为不可修**;
+  5. **企业上报**:DM 状态上报的浏览器版本 = Chromium 版本(fairyland 管理面可见)——功能性信息(服务端按引擎版本适配策略),是否改为产品版本属产品决策、牵动跨仓库协议。
+- **将来方向(L)**:构建期版本方案工程(Brave 路线)——以 `TELEPORT_VERSION` 替换/派生 `chrome/VERSION`,让 `CHROME_VERSION_STRING`、框架 `Versions/` 目录、全部嵌套 plist 版本键一体变为产品版本。设计面:UA 必须保留 Chromium 版本(否则 `Chrome/0.x` 致 web 兼容崩坏,需双版本常量,Brave 即如此)、Sparkle 比较键语义(构建期即产品版本后,打包期 stamp 冗余化)、DM 上报版本语义(fairyland 协议面)、发版 bump 触发的全量重编成本。
+- **关键引用**:`chrome/app/chrome_exe_main_mac.cc:182`、`patches/chrome/BUILD.gn.patch`(`--scm=0` ×3)、`patches/chrome/tools/build/mac/infoplist_strings_util.cc.patch`、`build/apple/tweak_info_plist.py:336`(`--scm` 默认开)、`scripts/_package.py`(stamp 仅主 app)。
+- **处置**:构建期以 `TELEPORT_VERSION`(四段化)生成 `chrome/VERSION`(`scripts/generate_version.py`,经 apply_patches 前置),框架目录/全部 plist/内嵌路径随之为产品版本;UA/UA-CH 经生成的 `teleport_engine_version.h` 钉住引擎版本(3 个 patch);`CFBundleVersion` patch 为完整四段;打包删 stamp 改烘焙断言;DM `agent` 参数附 `Chromium/<引擎版本>` 供 fairyland 存储展示。见 spec `docs/superpowers/specs/2026-07-04-product-version-scheme-design.md`。

@@ -49,22 +49,22 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             f"channel {channel.name!r} is not distributable; --distribute not allowed")
 
-    # ---- non-distributable channel (dev): build + stamp version ----
+    # ---- non-distributable channel (dev): build + verify baked version ----
     if not channel.distributable:
         app = chromium_src() / out / "Teleport.app"
         if args.dry_run:
             print(f"DRY RUN: autoninja -C {out} {' '.join(channel.targets)} + "
-                  f"stamp version {version} into {app}/Contents/Info.plist  "
+                  f"verify baked version {version} in {app}/Contents/Info.plist  "
                   f"(build only, channel {channel.name})")
             return 0
         build(out, channel)
-        _package.stamp_version_only(app, version)
+        _package.assert_baked_version(app, version)
         print(f"built {channel.name} app at {app} (version {version})")
         return 0
 
     # ---- distributable channel ----
     cfg = _config.load_channel_config(args.config, channel.name)
-    _config.require_keys(cfg, _config.STAMP_KEYS + _config.NOTARIZE_KEYS)
+    _config.require_keys(cfg, _config.SPARKLE_KEYS + _config.NOTARIZE_KEYS)
     if args.distribute:
         _config.require_keys(cfg, _config.PUBLISH_KEYS)
     app = chromium_src() / out / "Teleport.app"
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
                 "stapler staple")
         plan = [
             f"autoninja -C {out} {' '.join(channel.targets)}",
-            f"stamp version {version} + inject Sparkle keys into {app}/Contents/Info.plist",
+            f"verify baked version {version} + inject Sparkle keys into {app}/Contents/Info.plist",
             sign_dmg_line,
         ]
         if args.distribute:
@@ -112,10 +112,12 @@ def main(argv: list[str] | None = None) -> int:
         _publish.assert_clean_tree()
         _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
 
-    # Build -> stamp -> stage icons, then decide whether a previously-notarized
-    # dmg can be reused (app byte-identical) or must be rebuilt + re-notarized.
+    # Build -> verify baked version -> inject Sparkle keys -> stage icons, then
+    # decide whether a previously-notarized dmg can be reused (app byte-identical)
+    # or must be rebuilt + re-notarized.
     build(out, channel)
-    _package.stamp_and_inject(app, version, cfg, channel.name)
+    _package.assert_baked_version(app, version)
+    _package.inject_sparkle_keys(app, cfg, channel.name)
     _package.stage_channel_icons(app, channel.name)
 
     sp = _package_state.state_path(repo_root(), channel.name)

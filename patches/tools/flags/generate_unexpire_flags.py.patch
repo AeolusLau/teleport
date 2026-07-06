@@ -1,0 +1,24 @@
+diff --git a/tools/flags/generate_unexpire_flags.py b/tools/flags/generate_unexpire_flags.py
+index 98e2f03781c31..52d7038fdcfe7 100755
+--- a/tools/flags/generate_unexpire_flags.py
++++ b/tools/flags/generate_unexpire_flags.py
+@@ -35,7 +35,9 @@ def recent_mstones(mstone):
+   """Returns the list of milestones considered 'recent' for the given mstone.
+ 
+   Flag unexpiry is available only for flags that expired at recent mstones."""
+-  return [mstone - 1, mstone]
++  # Teleport bakes the 4-segment product version (MAJOR can be 0) into chrome/VERSION;
++  # negative milestones would generate invalid C++ identifiers (e.g. kUnexpireFlagsM-1).
++  return [m for m in [mstone - 1, mstone] if m >= 0]
+ 
+ 
+ def file_header(prog_name):
+@@ -157,7 +159,7 @@ def update_file_if_stale(filename, data):
+ def main():
+   mstone = get_chromium_version()
+ 
+-  if not mstone:
++  if mstone is None:
+     raise ValueError('Can\'t find or understand //chrome/VERSION')
+ 
+   progname = sys.argv[0]
