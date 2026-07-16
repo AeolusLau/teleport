@@ -1,0 +1,15 @@
+diff --git a/components/webui/version/resources/about_version.html b/components/webui/version/resources/about_version.html
+index 3b689206909bf..ca66077f36845 100644
+--- a/components/webui/version/resources/about_version.html
++++ b/components/webui/version/resources/about_version.html
+@@ -90,6 +90,10 @@ about:version template page
+           </td>
+         </tr>
+ </if>
++        <tr>
++          <td class="label">Deployment domain</td>
++          <td class="version"><span>$i18n{teleportDeploymentDomain}</span></td>
++        </tr>
+ <if expr="is_android">
+         <tr>
+           <td class="label">APK versionCode</td>

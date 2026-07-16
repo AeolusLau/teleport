@@ -1,0 +1,59 @@
+diff --git a/chrome/browser/ui/webui/BUILD.gn b/chrome/browser/ui/webui/BUILD.gn
+index 0cccaa551b871..34bad58db9515 100644
+--- a/chrome/browser/ui/webui/BUILD.gn
++++ b/chrome/browser/ui/webui/BUILD.gn
+@@ -8,6 +8,7 @@ import("//components/enterprise/buildflags/buildflags.gni")
+ import("//components/safe_browsing/buildflags.gni")
+ import("//components/signin/features.gni")
+ import("//extensions/buildflags/buildflags.gni")
++import("//mojo/public/tools/bindings/mojom.gni")
+ import("//tools/metrics/generate_allowlist_from_histograms_file.gni")
+ 
+ generate_allowlist_from_histograms_file("webui_url_hashes") {
+@@ -26,6 +27,38 @@ generate_allowlist_from_histograms_file("webui_hosts") {
+   allow_list_name = "WebUIHost"
+ }
+ 
++# Teleport enroll page (teleport://enroll -> chrome://enroll). Its own target
++# so the growing fetch/verify/persist deps stay isolated from the config registry;
++# :configs deps this and includes teleport_enroll_ui.h to register the config.
++# Mojo interface for the enroll page (browser <-> chrome://enroll). Source
++# lives in the //teleport overlay; the target is here alongside the controller.
++mojom("teleport_enroll_mojo") {
++  sources = [ "//teleport/browser/webui/enroll.mojom" ]
++  public_deps = [ "//mojo/public/mojom/base" ]
++  webui_module_path = "/"
++}
++
++source_set("teleport_enroll") {
++  sources = [
++    "//teleport/browser/webui/teleport_enroll_ui.cc",
++    "//teleport/browser/webui/teleport_enroll_ui.h",
++  ]
++  deps = [
++    ":teleport_enroll_mojo",
++    "//base",
++    "//components/policy/core/common:common_constants",
++    "//content/public/browser",
++    "//content/public/common",
++    "//net",
++    "//services/network/public/cpp",
++    "//services/network/public/mojom",
++    "//teleport",
++    "//teleport/browser/resources/enroll:resources",
++    "//ui/webui",
++    "//url",
++  ]
++}
++
+ source_set("configs") {
+   sources = [
+     "chrome_untrusted_web_ui_configs.cc",
+@@ -44,6 +77,7 @@ source_set("configs") {
+   }
+ 
+   deps = [
++    ":teleport_enroll",
+     ":webui",
+     "//chrome/browser/actor/ui:actor_overlay",
+     "//chrome/browser/contextual_tasks:ui",

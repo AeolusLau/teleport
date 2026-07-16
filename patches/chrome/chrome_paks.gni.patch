@@ -1,0 +1,19 @@
+diff --git a/chrome/chrome_paks.gni b/chrome/chrome_paks.gni
+index ffc4930414158..d682651fbae86 100644
+--- a/chrome/chrome_paks.gni
++++ b/chrome/chrome_paks.gni
+@@ -503,9 +503,13 @@ template("chrome_extra_paks") {
+     if (is_win || is_mac || is_linux) {
+       sources += [
+         "$root_gen_dir/chrome/app_settings_resources.pak",
++        "$root_gen_dir/chrome/enroll_resources.pak",
+         "$root_gen_dir/chrome/on_device_translation_internals_resources.pak",
+       ]
+-      deps += [ "//chrome/browser/resources/app_settings:resources" ]
++      deps += [
++        "//chrome/browser/resources/app_settings:resources",
++        "//teleport/browser/resources/enroll:resources",
++      ]
+     }
+ 
+     if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android) {

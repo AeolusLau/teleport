@@ -34,6 +34,7 @@
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/storage_partition.h"
+#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
 #include "teleport/browser/enterprise/teleport_inplace_enrollment_sequence.h"
 #include "teleport/common/teleport_enterprise_enrollment.h"
 
@@ -302,6 +303,9 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     const bool has_policy = store && store->has_policy();
     if (has_policy) {
       VLOG(1) << "[teleport-enroll] policy fetch succeeded";
+      // Record the deployment domain we enrolled against so a later admin-
+      // channel domain change is detected as a migration (§4.5).
+      PersistEnrolledDomain();
       RunDoneAndDelete(EnrollmentResult::kSuccess);
       return;
     }

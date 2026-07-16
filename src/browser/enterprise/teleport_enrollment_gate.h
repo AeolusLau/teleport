@@ -1,6 +1,9 @@
 #ifndef TELEPORT_BROWSER_ENTERPRISE_TELEPORT_ENROLLMENT_GATE_H_
 #define TELEPORT_BROWSER_ENTERPRISE_TELEPORT_ENROLLMENT_GATE_H_
 
+#include <optional>
+#include <string>
+
 class Profile;
 class PrefRegistrySimple;
 class ProfileAttributesEntry;
@@ -23,8 +26,32 @@ bool ShouldLockProfile(ProfileAttributesEntry* entry);
 // AND the user cloud policy has been fetched.
 bool IsEnrolled(Profile* profile);
 
-// Registers the gate's local_state pref (defaults to true = secure default).
+// Registers the gate's local_state prefs: kRequireEnrollmentToBrowse (defaults
+// to true = secure default) and kEnrolledDeploymentDomain (the domain D the
+// browser last enrolled against, for the §4.5 migration check).
 void RegisterEnrollmentGateLocalStatePrefs(PrefRegistrySimple* registry);
+
+// --- §4.5 management-domain migration -------------------------------------
+//
+// Record the deployment domain the browser just enrolled against. Called on
+// enrollment success so a later admin-channel domain change can be detected.
+void PersistEnrolledDomain();
+
+// If this profile is enrolled but the resolved deployment domain D no longer
+// matches the domain it enrolled against (an admin channel — MDM / machine
+// file — changed D on an already-enrolled browser), treat it as a management-
+// domain migration: reset the profile's enrollment (clear its management id) so
+// IsEnrolled() becomes false and the gate re-locks, forcing a fresh enrollment
+// against the new D instead of running in the half-managed zombie state (old DM
+// token is DEVICE_NOT_FOUND against the new server). Idempotent + a no-op when
+// not enrolled or D is unchanged. Called from the gate throttle before it
+// evaluates a navigation, so a stale-enrolled profile can never browse.
+void MaybeHandleDomainMigration(Profile* profile);
+
+// The domain the browser enrolled against when a migration is pending (enrolled
+// domain differs from the resolved D), else nullopt. Surfaced on chrome://version
+// as "changed from <old> (re-enrollment required)".
+std::optional<std::string> PendingDomainMigrationFrom();
 
 }  // namespace teleport
 

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package teleport.v1;
+
+// Client mirror of fairyland's teleport.v1.ServerIdentityData. Wire-compatible by
+// field number + type (package/message name need not match the server; only the
+// wire shape does). The browser verifies the enclosing root signature, then reads
+// message_type / domain / not_after_unix from this parsed message.
+message ServerIdentityData {
+  string message_type = 1;
+  uint32 version = 2;
+  string domain = 3;
+  int64 not_after_unix = 4;
+}

@@ -1,26 +1,49 @@
 diff --git a/chrome/browser/ui/webui/version/version_ui.cc b/chrome/browser/ui/webui/version/version_ui.cc
-index 66ec30207e57c..eddb40b65e39b 100644
+index 66ec30207e57c..f85b517134dd3 100644
 --- a/chrome/browser/ui/webui/version/version_ui.cc
 +++ b/chrome/browser/ui/webui/version/version_ui.cc
-@@ -40,6 +40,7 @@
+@@ -40,6 +40,12 @@
  #include "content/public/browser/url_data_source.h"
  #include "content/public/browser/web_ui.h"
  #include "content/public/browser/web_ui_data_source.h"
++#include "chrome/browser/browser_process.h"
++#include "components/prefs/pref_service.h"
++#include "teleport/common/teleport_deployment_config.h"
++#include "teleport/common/teleport_domain_migration.h"
++#include "teleport/common/teleport_pref_names.h"
 +#include "teleport/common/teleport_version.h"
  #include "ui/base/l10n/l10n_util.h"
  #include "ui/base/resource/resource_bundle.h"
  #include "ui/base/webui/web_ui_util.h"
-@@ -235,8 +236,7 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
+@@ -235,8 +241,25 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
                                    VersionProcessorVariation());
  
    // Data strings.
 -  html_source->AddString(version_ui::kVersion,
 -                         version_info::GetVersionNumber());
 +  html_source->AddString(version_ui::kVersion, teleport::GetDisplayVersion());
++  std::string teleport_deployment_domain =
++      teleport::DeploymentDomain() + " (source: " +
++      teleport::DeploymentDomainSourceLabel() + ")";
++  // §4.5: annotate a pending management-domain migration (an admin channel
++  // changed D on an already-enrolled browser; re-enrollment against the new D
++  // is required and the gate has re-locked).
++  if (PrefService* teleport_local_state = g_browser_process->local_state()) {
++    const std::string teleport_enrolled_domain = teleport_local_state->GetString(
++        teleport::prefs::kEnrolledDeploymentDomain);
++    if (teleport::ShouldRequireReenrollment(teleport_enrolled_domain,
++                                            teleport::DeploymentDomain())) {
++      teleport_deployment_domain += " — changed from " +
++                                    teleport_enrolled_domain +
++                                    " (re-enrollment required)";
++    }
++  }
++  html_source->AddString("teleportDeploymentDomain",
++                         teleport_deployment_domain);
    html_source->AddString(version_ui::kVersionSuffix,
                           GetVersionInformationalSuffix());
  
-@@ -328,7 +328,7 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
+@@ -328,7 +351,7 @@ void VersionUI::AddVersionDetailStrings(content::WebUIDataSource* html_source) {
  std::u16string VersionUI::GetAnnotatedVersionStringForUi() {
    return l10n_util::GetStringFUTF16(
        IDS_SETTINGS_ABOUT_PAGE_BROWSER_VERSION,

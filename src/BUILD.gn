@@ -4,6 +4,7 @@
 import("//build/buildflag_header.gni")
 import("//teleport/teleport.gni")
 import("//testing/test.gni")
+import("//third_party/protobuf/proto_library.gni")
 
 # The Chrome framework links Sparkle via @rpath but ships with no LC_RPATH of
 # its own. Add one resolving @rpath to the app's Contents/Frameworks (where
@@ -25,6 +26,54 @@ buildflag_header("teleport_policy_buildflags") {
   flags = [ "TELEPORT_USE_RELEASE_ENDPOINTS=$teleport_use_release_endpoints" ]
 }
 
+# Client mirror of fairyland's teleport.v1.ServerIdentityData (proto3),
+# wire-compatible by field number + type. Kept as its own target so ONLY the
+# heavier server-identity verification lib depends on protobuf — never the
+# //base+//url teleport_deployment_config leaf (which //components/policy
+# consumes; a proto/policy dep there would reintroduce the dependency cycle).
+# proto_out_dir pins the generated header to teleport/common/server_identity.pb.h.
+proto_library("server_identity_proto") {
+  sources = [ "common/server_identity.proto" ]
+  proto_in_dir = "//teleport/common"
+  proto_out_dir = "teleport/common"
+  cc_generator_options = "lite=true:"
+}
+
+# Server-identity verification lib. Heavier than the deployment-config leaf (deps
+# //crypto + the proto); the level-4 caller (Phase 2b, in //chrome/browser)
+# injects the baked root key DER, so this lib never touches //components/policy or
+# Local State. Kept separate from the leaf to preserve the no-cycle guarantee.
+source_set("teleport_server_identity") {
+  sources = [
+    "common/teleport_server_identity.cc",
+    "common/teleport_server_identity.h",
+  ]
+  deps = [
+    ":server_identity_proto",
+    "//base",
+    "//crypto",
+  ]
+}
+
+# Minimal-dependency deployment-domain resolver + endpoint derivation. Deps only
+# //base + //url (NOT //content), so //components/policy (browser_policy_connector)
+# can consume the derived endpoints without a dependency cycle on :teleport —
+# mirroring the teleport_policy_buildflags isolation above.
+source_set("teleport_deployment_config") {
+  sources = [
+    "common/teleport_deployment_config.cc",
+    "common/teleport_deployment_config.h",
+  ]
+  deps = [
+    ":teleport_policy_buildflags",
+    "//base",
+    "//url",
+  ]
+  if (is_mac) {
+    sources += [ "common/teleport_deployment_config_mac.mm" ]
+  }
+}
+
 source_set("teleport") {
   sources = [
     "browser/enterprise/teleport_inplace_enrollment_sequence.cc",
@@ -33,10 +82,16 @@ source_set("teleport") {
     "browser/teleport_startup.h",
     "common/teleport_channel.cc",
     "common/teleport_channel.h",
+    "common/teleport_enroll_logic.cc",
+    "common/teleport_enroll_logic.h",
+    "common/teleport_domain_migration.cc",
+    "common/teleport_domain_migration.h",
     "common/teleport_enrollment_gate_logic.cc",
     "common/teleport_enrollment_gate_logic.h",
     "common/teleport_enterprise_enrollment.cc",
     "common/teleport_enterprise_enrollment.h",
+    "common/teleport_server_identity_entry.cc",
+    "common/teleport_server_identity_entry.h",
     "common/teleport_enterprise_urls.cc",
     "common/teleport_enterprise_urls.h",
     "common/teleport_feed_url.cc",
@@ -50,8 +105,8 @@ source_set("teleport") {
   ]
   public_deps = [ "//components/version_info" ]
   deps = [
-    # teleport_enterprise_urls.cc bakes dev/release endpoints via this header.
-    ":teleport_policy_buildflags",
+    ":teleport_deployment_config",
+    ":teleport_server_identity",
     "//base",
     "//content/public/common",
     "//url",
@@ -90,19 +145,30 @@ test("teleport_unittests") {
     "browser/enterprise/teleport_inplace_enrollment_sequence_unittest.cc",
     "browser/teleport_startup_unittest.cc",
     "common/teleport_channel_unittest.cc",
+    "common/teleport_enroll_logic_unittest.cc",
+    "common/teleport_deployment_config_unittest.cc",
+    "common/teleport_domain_migration_unittest.cc",
     "common/teleport_enrollment_gate_logic_unittest.cc",
     "common/teleport_enterprise_enrollment_unittest.cc",
     "common/teleport_enterprise_urls_unittest.cc",
     "common/teleport_feed_url_unittest.cc",
     "common/teleport_url_scheme_unittest.cc",
     "common/teleport_version_unittest.cc",
+    "common/server_identity_proto_smoke_unittest.cc",
+    "common/teleport_server_identity_unittest.cc",
+    "common/teleport_server_identity_joint_unittest.cc",
+    "common/teleport_server_identity_entry_unittest.cc",
   ]
   deps = [
     ":teleport",
-    # teleport_enterprise_urls_unittest.cc includes the buildflag header to
-    # assert the dev/release endpoint selection (deps, not public, on :teleport).
+    ":teleport_deployment_config",
+    # teleport_deployment_config_unittest.cc includes the buildflag header to
+    # assert the baked dev/release default-domain selection.
     ":teleport_policy_buildflags",
+    ":server_identity_proto",
+    ":teleport_server_identity",
     "//base/test:run_all_unittests",
+    "//crypto",
     "//testing/gtest",
     "//url",
   ]

@@ -1,26 +1,89 @@
 #include "teleport/common/teleport_enrollment_gate_logic.h"
 
+#include "teleport/common/teleport_deployment_config.h"
+#include "teleport/common/teleport_enterprise_urls.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
 namespace teleport {
 namespace {
 
-TEST(TeleportEnrollmentGateLogicTest, IsEnrollmentFlowUrl) {
-  // All subhosts under the managed domain (dev=fairyland.io) are allowed.
-  EXPECT_TRUE(IsEnrollmentFlowUrl(GURL("https://teleport.fairyland.io/enroll/start")));
-  EXPECT_TRUE(IsEnrollmentFlowUrl(GURL("https://dadou.fairyland.io/authorize?x=1")));
-  EXPECT_TRUE(IsEnrollmentFlowUrl(GURL("https://accounts.fairyland.io/login")));
-  // The apex domain itself is also allowed (exercises the host==apex branch).
-  EXPECT_TRUE(IsEnrollmentFlowUrl(GURL("https://fairyland.io/path")));
-  // Non-managed domains are not allowed.
+// §3.4a: only the EXACT enrollment-flow hosts derived from D are allowed —
+// teleport.<D> and accounts.<D>. Arbitrary subdomains of <D> are NOT (the
+// wildcard that this replaces would expose every *.<D> internal site to the
+// unenrolled browser). D here is the baked dev default.
+TEST(TeleportEnrollmentGateLogicTest, IsEnrollmentFlowUrlExactHosts) {
+  ClearInjectedEnrollmentHosts();
+  const std::string d = DeploymentDomain();
+  const std::string teleport_host = TeleportHostFor(d);  // teleport.<D>
+  const std::string accounts_host = AccountsHostFor(d);  // accounts.<D>
+
+  // The two whitelisted hosts are allowed.
+  EXPECT_TRUE(
+      IsEnrollmentFlowUrl(GURL("https://" + teleport_host + "/enroll/start")));
+  EXPECT_TRUE(
+      IsEnrollmentFlowUrl(GURL("https://" + accounts_host + "/login")));
+
+  // An ARBITRARY subdomain of D is NO LONGER allowed (the security fix).
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://evil." + d + "/authorize")));
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://dadou." + d + "/x")));
+  // The apex domain itself is not an enrollment host.
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://" + d + "/path")));
+  // Unrelated + suffix-spoof hosts are not allowed.
   EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://example.com/")));
-  // Domain-suffix spoofing attacks are rejected (host must truly end with the suffix).
-  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://fairyland.io.evil.com/")));
-  // Non-https is not allowed.
-  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("http://teleport.fairyland.io/enroll/")));
-  // Invalid URLs are not allowed.
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://" + d + ".evil.com/")));
+  // Non-https / invalid.
+  EXPECT_FALSE(
+      IsEnrollmentFlowUrl(GURL("http://" + teleport_host + "/enroll/")));
   EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("not a url")));
+}
+
+// A runtime-injected host (future per-tenant OP) joins the allowed set.
+TEST(TeleportEnrollmentGateLogicTest, InjectedHostBecomesEnrollmentFlowUrl) {
+  const std::string d = DeploymentDomain();
+  const std::string op_host = "op-slug." + d;
+  ClearInjectedEnrollmentHosts();
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://" + op_host + "/authorize")));
+  AddInjectedEnrollmentHost(op_host);
+  EXPECT_TRUE(IsEnrollmentFlowUrl(GURL("https://" + op_host + "/authorize")));
+  ClearInjectedEnrollmentHosts();
+  EXPECT_FALSE(IsEnrollmentFlowUrl(GURL("https://" + op_host + "/authorize")));
+}
+
+// The server-injection header may only ever widen the whitelist to strict
+// subdomains of the SAME trusted deployment domain (§3.4a).
+TEST(TeleportEnrollmentGateLogicTest, ParseInjectableEnrollmentHosts) {
+  const std::string_view suffix = ".acme.internal";
+  // Valid per-tenant OP hosts (strict subdomains) are accepted, incl. a list.
+  EXPECT_EQ(ParseInjectableEnrollmentHosts("dadou.acme.internal", suffix),
+            (std::vector<std::string>{"dadou.acme.internal"}));
+  EXPECT_EQ(
+      ParseInjectableEnrollmentHosts("dadou.acme.internal, op.acme.internal",
+                                     suffix),
+      (std::vector<std::string>{"dadou.acme.internal", "op.acme.internal"}));
+  // The apex host-of-D itself is NOT a strict subdomain -> rejected.
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("acme.internal", suffix).empty());
+  // External / suffix-spoof / scheme / path / userinfo / uppercase -> rejected.
+  EXPECT_TRUE(ParseInjectableEnrollmentHosts("evil.com", suffix).empty());
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("acme.internal.evil.com", suffix).empty());
+  EXPECT_TRUE(ParseInjectableEnrollmentHosts("https://dadou.acme.internal",
+                                             suffix)
+                  .empty());
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("dadou.acme.internal/x", suffix).empty());
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("a@dadou.acme.internal", suffix).empty());
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("Dadou.acme.internal", suffix).empty());
+  // A subdomain with an explicit port is accepted (host:port form).
+  EXPECT_EQ(
+      ParseInjectableEnrollmentHosts("dadou.acme.internal:8443", suffix),
+      (std::vector<std::string>{"dadou.acme.internal:8443"}));
+  // Empty / malformed suffix -> nothing injectable.
+  EXPECT_TRUE(
+      ParseInjectableEnrollmentHosts("dadou.acme.internal", "").empty());
 }
 
 TEST(TeleportEnrollmentGateLogicTest, ShouldBlockNavigation) {

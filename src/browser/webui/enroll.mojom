@@ -1,0 +1,53 @@
+// Copyright 2026 The Teleport Authors
+
+module teleport.enroll.mojom;
+
+// Result of verifying a candidate deployment domain's root-signed identity.
+struct VerifyResult {
+  // EnrollStatus enum name (kSuccess / kBadSignature / kDomainMismatch / ...);
+  // the page maps it to a localized message.
+  string status;
+  // The canonical domain echoed back (shown as-is / punycode at the confirm UI).
+  string domain;
+};
+
+// Load-time state that decides which view the enroll page renders (§4.2 / §4.6).
+struct EnrollState {
+  // Current effective deployment domain D (canonical; never empty).
+  string domain;
+  // Human-readable source label ("built-in default", "managed preference", ...).
+  string source;
+  // True when the user must not change D (§4.6 corp-managed lock) -> read-only.
+  bool locked;
+  // True when D came from a user-accepted level-4 entry AND the page is not
+  // locked, so an "unbind" (disconnect) action is offered.
+  bool can_unbind;
+};
+
+// Used by the enroll page (teleport://enroll) to bootstrap communication.
+interface PageHandlerFactory {
+  CreatePageHandler(pending_receiver<PageHandler> handler);
+};
+
+// Browser-side handler for the enroll page.
+interface PageHandler {
+  // Load-time state: current domain + source + lock/unbind flags. The page calls
+  // this first to choose its view (read-only / bound-editable / unbound form).
+  GetState() => (EnrollState state);
+
+  // Fetch teleport.<domain>/dm/server-identity and verify it against the baked
+  // root key. Returns the classified status; on kSuccess the verified entry is
+  // held pending Confirm(). Refused (defensively) when the page is locked.
+  Verify(string domain) => (VerifyResult result);
+
+  // Clear the level-4 user-accepted entry so D falls back to the baked default
+  // (BYOD "disconnect"). Returns whether the clear succeeded. Restart applies it.
+  Unbind() => (bool ok);
+
+  // Persist the pending verified entry to Local State (level 4). Returns whether
+  // the write succeeded.
+  Confirm() => (bool ok);
+
+  // Restart the browser so the resolver re-reads the just-persisted entry.
+  Relaunch();
+};

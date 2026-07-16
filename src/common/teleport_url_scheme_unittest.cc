@@ -30,6 +30,14 @@ TEST_F(TeleportUrlSchemeTest, ForwardRewritesSchemeOnly) {
   EXPECT_EQ(url.spec(), "chrome://settings/passwords?q=1#frag");
 }
 
+TEST_F(TeleportUrlSchemeTest, EnrollDeepLinkPreservesDomainQuery) {
+  // The enroll page (§4.2) relies on teleport://enroll?domain=... reaching
+  // chrome://enroll with the ?domain= query intact for deep-link prefill.
+  GURL url("teleport://enroll?domain=acme.internal");
+  EXPECT_TRUE(RewriteTeleportToChrome(&url, nullptr));
+  EXPECT_EQ(url.spec(), "chrome://enroll/?domain=acme.internal");
+}
+
 TEST_F(TeleportUrlSchemeTest, ReverseRewritesSchemeOnly) {
   GURL url("chrome://settings/passwords?q=1#frag");
   EXPECT_TRUE(RewriteChromeToTeleport(&url, nullptr));

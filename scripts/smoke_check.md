@@ -123,6 +123,8 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 |---|---|---|
 | 1 | dev(`uv run python scripts/package.py --channel dev` 后)`chrome://settings/help` 版本行 | `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`,不含 `148.x` |
 | 2 | dev `chrome://version` 首行值 | `<TELEPORT_VERSION>`(非 `148.x`);**UA 行仍含 `Chrome/148`**(未误伤兼容性) |
+| 2.1 | dev `chrome://version` "Deployment domain" 行(默认,无覆盖) | `fairyland.io (source: built-in default)` |
+| 2.2 | 同上,加 `--teleport-deployment-domain=fairyland.test` 重启 | `fairyland.test (source: command-line switch)` |
 | 3 | 裸 `autoninja chrome`(未经 package.py stamp)版本 | `0.0.0-dev`,绝不暴露 chromium 版本号 |
 | 4 | canary 打包后版本行 | 含「正式版本」+ `arm64` + 真实 Teleport 版本 |
 | 4.1 | canary 包 `chrome://version` 通道行(Channel) | 显示 `canary`(非空/`unknown`),据此升级徽标走 1 小时档 |

@@ -1,12 +1,12 @@
 diff --git a/components/policy/core/browser/BUILD.gn b/components/policy/core/browser/BUILD.gn
-index ce126b2380681..ce126b2380682 100644
+index ce126b2380681..76e24d186d8d8 100644
 --- a/components/policy/core/browser/BUILD.gn
 +++ b/components/policy/core/browser/BUILD.gn
 @@ -101,6 +101,7 @@ source_set("internal") {
      "//net",
      "//services/network/public/cpp",
      "//third_party/re2",
-+    "//teleport:teleport_policy_buildflags",
++    "//teleport:teleport_deployment_config",
      "//ui/base",
      "//url",
    ]

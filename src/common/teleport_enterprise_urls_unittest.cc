@@ -1,67 +1,49 @@
 #include "teleport/common/teleport_enterprise_urls.h"
 
-#include "teleport/teleport_policy_buildflags.h"
+#include "teleport/common/teleport_deployment_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace teleport {
 namespace {
 
-// The enroll landing + register-handler URLs must always be https — they are
-// patched into the upstream OIDC enrollment throttle, which our managed-profile
-// security model trusts.
 TEST(TeleportEnterpriseUrlsTest, EnrollUrlsAreHttpsAndNonEmpty) {
   EXPECT_EQ(EnterpriseEnrollUrl().rfind("https://", 0), 0u);
   EXPECT_EQ(EnterpriseRegisterHandlerUrl().rfind("https://", 0), 0u);
 }
 
-TEST(TeleportEnterpriseUrlsTest, TrustedRedirectHostsAreHttpsAndNonEmpty) {
+// The enroll / register-handler / trusted-host URLs must be exactly the values
+// derived from the resolved deployment domain D — no hardcoded per-build
+// constant remains.
+TEST(TeleportEnterpriseUrlsTest, DelegatesToDeploymentDerivation) {
+  EXPECT_EQ(EnterpriseEnrollUrl(), DeploymentEnrollUrl());
+  EXPECT_EQ(EnterpriseRegisterHandlerUrl(), DeploymentRegisterHandlerUrl());
   const auto hosts = EnterpriseTrustedRedirectHosts();
-  ASSERT_FALSE(hosts.empty());
-  for (const auto& host : hosts) {
-    EXPECT_EQ(host.rfind("https://", 0), 0u) << host;
-  }
+  ASSERT_EQ(hosts.size(), 1u);
+  EXPECT_EQ(hosts[0], DeploymentTrustedRedirectHost());
 }
 
-// The enroll / register-handler hosts are baked per build via
-// teleport_use_release_endpoints: release points at teleport.douan.cn, dev at
-// teleport.fairyland.io — both with the /enroll path prefix. The
-// register-handler URL must always carry the
-// /profile-enrollment/register-handler path the device-manager dispatches on.
-TEST(TeleportEnterpriseUrlsTest, EnrollUrlMatchesEndpointBuildflag) {
-  const std::string enroll = EnterpriseEnrollUrl();
-  const std::string reg = EnterpriseRegisterHandlerUrl();
-#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-  EXPECT_NE(enroll.find("https://teleport.douan.cn/enroll/"), std::string::npos)
-      << enroll;
-  EXPECT_NE(reg.find("https://teleport.douan.cn/enroll/"), std::string::npos)
-      << reg;
-#else
-  EXPECT_NE(enroll.find("https://teleport.fairyland.io/enroll/"),
-            std::string::npos)
-      << enroll;
-  EXPECT_NE(reg.find("https://teleport.fairyland.io/enroll/"),
-            std::string::npos)
-      << reg;
-#endif
-  EXPECT_NE(reg.find("/profile-enrollment/register-handler"),
-            std::string::npos)
-      << reg;
+TEST(TeleportEnterpriseUrlsTest, RegisterHandlerCarriesDispatchPath) {
+  EXPECT_NE(EnterpriseRegisterHandlerUrl().find(
+                "/profile-enrollment/register-handler"),
+            std::string::npos);
 }
 
-TEST(TeleportEnterpriseUrlsTest, EnrollmentDomainSuffixesNonEmpty) {
-  const auto suffixes = EnterpriseEnrollmentDomainSuffixes();
-  ASSERT_FALSE(suffixes.empty());
-  // Each suffix starts with a dot, for use as a host suffix matcher.
-  for (const auto& s : suffixes) {
-    EXPECT_EQ('.', s.front());
-  }
-  // The suffix is baked per build via teleport_use_release_endpoints, mirroring
-  // EnrollUrlMatchesEndpointBuildflag: release=douan.cn, dev=fairyland.io.
-#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-  EXPECT_EQ(suffixes[0], ".douan.cn");
-#else
-  EXPECT_EQ(suffixes[0], ".fairyland.io");
-#endif
+TEST(TeleportEnterpriseUrlsTest, AllowedHostsAreTeleportAndAccountsOfD) {
+  ClearInjectedEnrollmentHosts();
+  const auto hosts = EnterpriseEnrollmentAllowedHosts();
+  ASSERT_EQ(hosts.size(), 2u);
+  EXPECT_EQ(hosts[0], TeleportHostFor(DeploymentDomain()));
+  EXPECT_EQ(hosts[1], AccountsHostFor(DeploymentDomain()));
+}
+
+TEST(TeleportEnterpriseUrlsTest, InjectedHostsAppendToAllowedSet) {
+  ClearInjectedEnrollmentHosts();
+  AddInjectedEnrollmentHost("op.tenant.example");
+  const auto hosts = EnterpriseEnrollmentAllowedHosts();
+  ASSERT_EQ(hosts.size(), 3u);
+  EXPECT_EQ(hosts[2], "op.tenant.example");
+  ClearInjectedEnrollmentHosts();
+  EXPECT_EQ(EnterpriseEnrollmentAllowedHosts().size(), 2u);
 }
 
 }  // namespace

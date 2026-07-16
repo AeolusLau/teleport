@@ -1,47 +1,47 @@
 #include "teleport/common/teleport_enterprise_urls.h"
 
-#include "teleport/teleport_policy_buildflags.h"
+#include "base/no_destructor.h"
+#include "teleport/common/teleport_deployment_config.h"
 
 namespace teleport {
 
 namespace {
-// Branded enterprise endpoints. Single source of truth consumed by the patched
-// upstream OIDC enrollment throttle. Baked per build via the
-// teleport_use_release_endpoints buildflag (switch-based overrides are
-// channel/test-gated upstream and unreliable on STABLE/BETA).
-#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-// Release: production douan.cn endpoints.
-constexpr char kEnrollUrl[] = "https://teleport.douan.cn/enroll/start";
-constexpr char kRegisterHandlerUrl[] =
-    "https://teleport.douan.cn/enroll/profile-enrollment/register-handler";
-constexpr char kKeystoneOpHost[] = "https://id.douan.cn";
-constexpr char kEnrollmentDomainSuffix[] = ".douan.cn";
-#else
-// Dev: fairyland.io endpoints. The OP host is a sample value — under
-// generic-OIDC the trusted-redirect-host check is skipped by the throttle, so
-// it only serves as a placeholder.
-constexpr char kEnrollUrl[] = "https://teleport.fairyland.io/enroll/start";
-constexpr char kRegisterHandlerUrl[] =
-    "https://teleport.fairyland.io/enroll/profile-enrollment/register-handler";
-constexpr char kKeystoneOpHost[] = "https://dadou.fairyland.io";
-constexpr char kEnrollmentDomainSuffix[] = ".fairyland.io";
-#endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
+
+// Runtime-injected enrollment-flow hosts (future per-tenant OP, server-signalled
+// via the intercept page). A NoDestructor holds them for the process lifetime.
+std::vector<std::string>& MutableInjectedHosts() {
+  static base::NoDestructor<std::vector<std::string>> hosts;
+  return *hosts;
+}
+
 }  // namespace
 
 std::string EnterpriseEnrollUrl() {
-  return kEnrollUrl;
+  return DeploymentEnrollUrl();
 }
 
 std::string EnterpriseRegisterHandlerUrl() {
-  return kRegisterHandlerUrl;
+  return DeploymentRegisterHandlerUrl();
 }
 
 std::vector<std::string> EnterpriseTrustedRedirectHosts() {
-  return {kKeystoneOpHost};
+  return {DeploymentTrustedRedirectHost()};
 }
 
-std::vector<std::string> EnterpriseEnrollmentDomainSuffixes() {
-  return {kEnrollmentDomainSuffix};
+std::vector<std::string> EnterpriseEnrollmentAllowedHosts() {
+  const std::string& d = DeploymentDomain();
+  std::vector<std::string> hosts = {TeleportHostFor(d), AccountsHostFor(d)};
+  const std::vector<std::string>& injected = MutableInjectedHosts();
+  hosts.insert(hosts.end(), injected.begin(), injected.end());
+  return hosts;
+}
+
+void AddInjectedEnrollmentHost(const std::string& host) {
+  MutableInjectedHosts().push_back(host);
+}
+
+void ClearInjectedEnrollmentHosts() {
+  MutableInjectedHosts().clear();
 }
 
 }  // namespace teleport

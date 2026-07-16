@@ -1,52 +1,61 @@
 diff --git a/components/policy/core/browser/browser_policy_connector.cc b/components/policy/core/browser/browser_policy_connector.cc
-index 6f234c0d5d242..2f99d231d7593 100644
+index 6f234c0d5d242..74f4443736c02 100644
 --- a/components/policy/core/browser/browser_policy_connector.cc
 +++ b/components/policy/core/browser/browser_policy_connector.cc
-@@ -28,21 +28,43 @@
+@@ -28,21 +28,25 @@
  #include "components/policy/policy_constants.h"
  #include "components/prefs/pref_registry_simple.h"
  #include "components/signin/public/identity_manager/account_managed_status_finder.h"
-+#include "teleport/teleport_policy_buildflags.h"
++#include "teleport/common/teleport_deployment_config.h"
  
  namespace policy {
  
  namespace {
  
 -// The URL for the device management server.
-+// The URL for the device management server. Teleport bakes the dev/release
-+// device-manager endpoint via teleport_use_release_endpoints (the upstream
-+// --device-management-url switch only applies on specific channels, so the
-+// default value is the reliable override point).
-+#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
- const char kDefaultDeviceManagementServerUrl[] =
+-const char kDefaultDeviceManagementServerUrl[] =
 -    "https://m.google.com/devicemanagement/data/api";
-+    "https://teleport.douan.cn/dm/devicemanagement/data/api";
-+#else
-+const char kDefaultDeviceManagementServerUrl[] =
-+    "https://teleport.fairyland.io/dm/devicemanagement/data/api";
-+#endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
- 
-+// Teleport repoints the reporting endpoints to the fairyland device-manager
-+// (dev) / douan.cn (release), same buildflag-driven default-value override as the
-+// DM server URL above (the upstream switches are ignored on stable/beta).
-+#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-+const char kDefaultEncryptedReportingServerUrl[] =
-+    "https://teleport.douan.cn/dm/v1/record";
-+#else
- const char kDefaultEncryptedReportingServerUrl[] =
+-
+-const char kDefaultEncryptedReportingServerUrl[] =
 -    "https://chromereporting-pa.googleapis.com/v1/record";
-+    "https://teleport.fairyland.io/dm/v1/record";
-+#endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
- 
- // The URL for the realtime reporting server.
-+#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
-+const char kDefaultRealtimeReportingServerUrl[] =
-+    "https://teleport.douan.cn/dm/v1/events";
-+#else
- const char kDefaultRealtimeReportingServerUrl[] =
+-
+-// The URL for the realtime reporting server.
+-const char kDefaultRealtimeReportingServerUrl[] =
 -    "https://chromereporting-pa.googleapis.com/v1/events";
-+    "https://teleport.fairyland.io/dm/v1/events";
-+#endif  // BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
++// Teleport derives the device-management + reporting endpoints from the resolved
++// deployment domain D (teleport_deployment_config.h) at call time, replacing the
++// former buildflag-baked constants so private/air-gapped deployments can point at
++// a customer domain without a rebuild.
++std::string DefaultDeviceManagementServerUrl() {
++  return teleport::DeploymentDeviceManagementServerUrl();
++}
++std::string DefaultEncryptedReportingServerUrl() {
++  return teleport::DeploymentEncryptedReportingUrl();
++}
++std::string DefaultRealtimeReportingServerUrl() {
++  return teleport::DeploymentRealtimeReportingUrl();
++}
  
  // The URL suffix for the File Storage Server endpoint in DMServer. File Storage
  // Server receives the requests on this URL.
+@@ -102,17 +106,17 @@ bool BrowserPolicyConnector::ProviderHasPolicies(
+ 
+ std::string BrowserPolicyConnector::GetDeviceManagementUrl() const {
+   return GetUrlOverride(switches::kDeviceManagementUrl,
+-                        kDefaultDeviceManagementServerUrl);
++                        DefaultDeviceManagementServerUrl());
+ }
+ 
+ std::string BrowserPolicyConnector::GetRealtimeReportingUrl() const {
+   return GetUrlOverride(switches::kRealtimeReportingUrl,
+-                        kDefaultRealtimeReportingServerUrl);
++                        DefaultRealtimeReportingServerUrl());
+ }
+ 
+ std::string BrowserPolicyConnector::GetEncryptedReportingUrl() const {
+   return GetUrlOverride(switches::kEncryptedReportingUrl,
+-                        kDefaultEncryptedReportingServerUrl);
++                        DefaultEncryptedReportingServerUrl());
+ }
+ 
+ std::string BrowserPolicyConnector::GetFileStorageServerUploadUrl() const {
