@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
-index ef58d81592120..76e14b08946ab 100644
+index ef58d81592120..2cd7f981c5900 100644
 --- a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
 +++ b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
-@@ -31,6 +31,11 @@
+@@ -31,6 +31,12 @@
  #include "services/metrics/public/cpp/ukm_builders.h"
  #include "services/metrics/public/cpp/ukm_recorder.h"
  #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -10,11 +10,12 @@ index ef58d81592120..76e14b08946ab 100644
 +#include "teleport/browser/enterprise/teleport_enrollment_done_user_data.h"
 +#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
 +#include "teleport/browser/enterprise/teleport_oidc_inplace_registrar.h"
++#include "teleport/browser/enterprise/teleport_voluntary_signin.h"
 +#include "teleport/common/teleport_enterprise_urls.h"
  #include "url/gurl.h"
  
  using ThrottleCheckResult = content::NavigationThrottle::ThrottleCheckResult;
-@@ -38,20 +43,10 @@ using url_matcher::URLMatcher;
+@@ -38,20 +44,10 @@ using url_matcher::URLMatcher;
  
  namespace {
  
@@ -39,7 +40,7 @@ index ef58d81592120..76e14b08946ab 100644
  
  constexpr char kRegistrationHeaderField[] = "X-Profile-Registration-Payload";
  
-@@ -85,7 +80,8 @@ base::flat_map<std::string, std::string> SplitUrl(const std::string& url) {
+@@ -85,7 +81,8 @@ base::flat_map<std::string, std::string> SplitUrl(const std::string& url) {
  std::unique_ptr<URLMatcher> CreateEnrollmentRedirectUrlMatcher() {
    auto matcher = std::make_unique<URLMatcher>();
    url_matcher::util::AddAllowFiltersWithLimit(
@@ -49,7 +50,7 @@ index ef58d81592120..76e14b08946ab 100644
    return matcher;
  }
  
-@@ -102,7 +98,8 @@ bool IsEnrollmentUrl(GURL& url) {
+@@ -102,7 +99,8 @@ bool IsEnrollmentUrl(GURL& url) {
  std::unique_ptr<URLMatcher> CreateEnrollmentHeaderUrlMatcher() {
    auto matcher = std::make_unique<URLMatcher>();
  
@@ -59,7 +60,7 @@ index ef58d81592120..76e14b08946ab 100644
  
    // Inserting more supported URLs should be only available on Canary and Dev
    // for security.
-@@ -140,7 +137,8 @@ bool IsEnrollmentHeaderUrl(GURL& url) {
+@@ -140,7 +138,8 @@ bool IsEnrollmentHeaderUrl(GURL& url) {
  std::unique_ptr<URLMatcher> CreateOidcEnrollmentUrlMatcher() {
    auto matcher = std::make_unique<URLMatcher>();
  
@@ -69,7 +70,7 @@ index ef58d81592120..76e14b08946ab 100644
    if (base::FeatureList::IsEnabled(
            profile_management::features::kOidcEnrollmentAuthSource)) {
      const std::vector<std::string>& hosts = base::SplitString(
-@@ -391,9 +389,8 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
+@@ -391,9 +390,8 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
      return Resume();
    }
  
@@ -81,20 +82,32 @@ index ef58d81592120..76e14b08946ab 100644
  
    VLOG_POLICY(2, OIDC_ENROLLMENT)
        << "OIDC redirection meets all requirements, starting enrollment "
-@@ -401,6 +398,22 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
+@@ -401,6 +399,34 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
    RecordOidcInterceptionFunnelStep(
        OidcInterceptionFunnelStep::kSuccessfulInfoParsed);
  
-+  // teleport: same reroute as the header path — bypass the Browser-anchored
-+  // interceptor dialog and enroll the current profile in place. This navigation
-+  // is DEFERRED (AttemptToTriggerUrlInterception returned DEFER), so resume it.
-+  if (teleport::ShouldGateProfile(profile) && !teleport::IsEnrolled(profile)) {
++  // teleport build: same reroute as the header path below — this build
++  // reroutes ALL captured D-domain register-handler OIDC to in-place
++  // enrollment, bypassing the Browser-anchored interceptor dialog and its
++  // NEW-profile flow entirely; the upstream new-profile interceptor is
++  // unreachable in this product. This navigation is DEFERRED
++  // (AttemptToTriggerUrlInterception returned DEFER), so resume it.
++  if (!teleport::IsEnrolled(profile)) {
 +    VLOG(1) << "[teleport-enroll] (url path) rerouting captured OIDC tokens "
 +               "to in-place registrar";
-+    teleport::EnrollCurrentProfileInPlace(
-+        profile, tokens, *issuer_id, *subject_id, std::string(),
-+        teleport::EnrollmentDoneUserData::Take(
-+            navigation_handle()->GetWebContents()));
++    content::WebContents* wc = navigation_handle()->GetWebContents();
++    if (teleport::EnrollmentDoneUserData::HasCallback(wc)) {
++      // The ProfilePicker enrollment step attaches its own done-callback.
++      teleport::EnrollCurrentProfileInPlace(
++          profile, tokens, *issuer_id, *subject_id, std::string(),
++          teleport::EnrollmentDoneUserData::Take(wc));
++    } else {
++      // Voluntary (menu-tab) flow: disclose management via the upstream
++      // managed-disclosure dialog before enrolling in place (§4.7); falls
++      // back to navigating the tab to the enrollment error page on failure.
++      teleport::MaybeShowDisclosureThenEnroll(wc, profile, tokens, *issuer_id,
++                                               *subject_id, std::string());
++    }
 +    Resume();
 +    return;
 +  }
@@ -104,34 +117,47 @@ index ef58d81592120..76e14b08946ab 100644
    interceptor->MaybeInterceptOidcAuthentication(
        navigation_handle()->GetWebContents(), tokens, *issuer_id, *subject_id,
        std::string(),
-@@ -494,9 +507,35 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
+@@ -494,9 +520,48 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
      RecordOidcInterceptionFunnelStep(
          OidcInterceptionFunnelStep::kSuccessfulInfoParsed);
  
 +    interception_triggered_ = true;
 +
-+    // teleport: in our gated, not-yet-enrolled enroll context the upstream
-+    // interceptor's consent dialog (DiceWebSigninInterceptorDelegate::
-+    // ShowOidcInterceptionDialog) is Browser-window-anchored and crashes when
-+    // the enroll page is hosted in the (Browser-less) ProfilePicker. Reroute the
-+    // captured payload to our self-driven in-place registrar, which enrolls the
-+    // CURRENT profile without any dialog, and let the page proceed.
-+    if (teleport::ShouldGateProfile(profile) &&
-+        !teleport::IsEnrolled(profile)) {
++    // teleport build: reroute ALL captured D-domain register-handler OIDC to
++    // in-place enrollment; the upstream new-profile interceptor is
++    // unreachable in this product. Its consent dialog
++    // (DiceWebSigninInterceptorDelegate::ShowOidcInterceptionDialog) is also
++    // Browser-window-anchored and crashes when the enroll page is hosted in
++    // the (Browser-less) ProfilePicker. Reroute the captured payload to our
++    // self-driven in-place registrar, which enrolls the CURRENT profile
++    // without any dialog, and let the page proceed.
++    if (!teleport::IsEnrolled(profile)) {
 +      VLOG(1) << "[teleport-enroll] rerouting captured X-Profile-"
 +                 "Registration-Payload to in-place registrar";
-+      teleport::EnrollCurrentProfileInPlace(
-+          profile,
-+          ProfileManagementOidcTokens(
-+              registration_payload.encrypted_user_information()),
-+          registration_payload.issuer(), registration_payload.subject(),
-+          registration_payload.email(),
-+          // The Teleport enrollment picker step attaches a profile-unlock closure
-+          // to this WebContents; the registrar runs it once policy is fetched. If
-+          // absent (e.g. enrollment reached outside the picker step), this is a
-+          // no-op.
-+          teleport::EnrollmentDoneUserData::Take(
-+              navigation_handle()->GetWebContents()));
++      content::WebContents* wc = navigation_handle()->GetWebContents();
++      if (teleport::EnrollmentDoneUserData::HasCallback(wc)) {
++        // The Teleport enrollment picker step attaches a profile-unlock
++        // closure to this WebContents; the registrar runs it once policy is
++        // fetched.
++        teleport::EnrollCurrentProfileInPlace(
++            profile,
++            ProfileManagementOidcTokens(
++                registration_payload.encrypted_user_information()),
++            registration_payload.issuer(), registration_payload.subject(),
++            registration_payload.email(),
++            teleport::EnrollmentDoneUserData::Take(wc));
++      } else {
++        // Voluntary (menu-tab) flow, outside the picker step: disclose
++        // management via the upstream managed-disclosure dialog before
++        // enrolling in place (§4.7); falls back to navigating the tab to the
++        // enrollment error page on failure.
++        teleport::MaybeShowDisclosureThenEnroll(
++            wc, profile,
++            ProfileManagementOidcTokens(
++                registration_payload.encrypted_user_information()),
++            registration_payload.issuer(), registration_payload.subject(),
++            registration_payload.email());
++      }
 +      return PROCEED;
 +    }
 +

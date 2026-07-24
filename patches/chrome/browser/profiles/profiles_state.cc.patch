@@ -1,0 +1,39 @@
+diff --git a/chrome/browser/profiles/profiles_state.cc b/chrome/browser/profiles/profiles_state.cc
+index f7e623e42ac67..c09bd8405c5c8 100644
+--- a/chrome/browser/profiles/profiles_state.cc
++++ b/chrome/browser/profiles/profiles_state.cc
+@@ -32,6 +32,7 @@
+ #include "components/signin/public/identity_manager/signin_constants.h"
+ #include "components/signin/public/identity_manager/tribool.h"
+ #include "content/public/browser/browsing_data_remover.h"
++#include "teleport/browser/enterprise/teleport_force_signin.h"
+ #include "ui/base/l10n/l10n_util.h"
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+@@ -200,6 +201,13 @@ bool IsGuestModeRequested(const base::CommandLine& command_line,
+   // Check if guest mode enforcement commandline switch or policy are provided.
+   if (command_line.HasSwitch(switches::kGuest) ||
+       local_state->GetBoolean(prefs::kBrowserGuestModeEnforced)) {
++    // teleport: --guest / BrowserGuestModeEnforced must not bypass the gate.
++    if (teleport::RequireEnrollmentGateEnabled()) {
++      if (show_warning) {
++        LOG(WARNING) << "Guest mode disabled by Teleport enrollment gate.";
++      }
++      return false;
++    }
+     // Check if guest mode is allowed by policy.
+     if (local_state->GetBoolean(prefs::kBrowserGuestModeEnabled))
+       return true;
+@@ -222,6 +230,12 @@ bool IsProfileCreationAllowed() {
+ bool IsGuestModeGloballyDisabledInternal() {
+   const PrefService* const pref_service = g_browser_process->local_state();
+   DCHECK(pref_service);
++  // teleport: gate ON force-disables guest — a Guest OTR profile is invisible to
++  // the enrollment gate (ShouldGateProfile excludes OTR) and would be an escape
++  // hatch to unmanaged browsing.
++  if (teleport::RequireEnrollmentGateEnabled()) {
++    return true;
++  }
+   return !pref_service->GetBoolean(prefs::kBrowserGuestModeEnabled);
+ }
+ 

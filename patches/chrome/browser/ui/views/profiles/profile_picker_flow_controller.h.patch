@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
-index 77ea5ac8846bc..71962b9598b86 100644
+index 77ea5ac8846bc..f23bf6e993302 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
 +++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
 @@ -38,6 +38,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
@@ -14,7 +14,7 @@ index 77ea5ac8846bc..71962b9598b86 100644
    void CancelSigninFlow() override;
  
    std::u16string GetFallbackAccessibleWindowTitle() const override;
-@@ -65,6 +70,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
+@@ -65,6 +70,18 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
        bool success,
        const ForceSigninUIError& error);
  
@@ -22,6 +22,13 @@ index 77ea5ac8846bc..71962b9598b86 100644
 +  // run by the in-place registrar once policy is fetched) when enrollment of
 +  // `profile` succeeds: unlocks the profile and finishes the flow in a browser.
 +  void OnEnrollmentSucceeded(Profile* profile);
++
++  // teleport: pop callback for the GAIA-free enrollment step (see
++  // SwitchToEnrollment), run on an explicit "back"/cancel out of the step.
++  // Switches back to the profile picker and unregisters the enrollment step,
++  // which releases a picker-added profile's ScopedProfileKeepAlive and (being
++  // ephemeral) deletes it.
++  void PopTeleportEnrollmentStep();
 +
    void OnProfilePickerStepShownReauthError(
        base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback,

@@ -27,8 +27,8 @@ bool ShouldLockProfile(ProfileAttributesEntry* entry);
 bool IsEnrolled(Profile* profile);
 
 // Registers the gate's local_state prefs: kRequireEnrollmentToBrowse (defaults
-// to true = secure default) and kEnrolledDeploymentDomain (the domain D the
-// browser last enrolled against, for the §4.5 migration check).
+// to false = BYOD-first; managed deployments opt in via policy/machine config)
+// and kEnrolledDeploymentDomain (the domain D last enrolled against, §4.5).
 void RegisterEnrollmentGateLocalStatePrefs(PrefRegistrySimple* registry);
 
 // --- §4.5 management-domain migration -------------------------------------
@@ -41,11 +41,12 @@ void PersistEnrolledDomain();
 // matches the domain it enrolled against (an admin channel — MDM / machine
 // file — changed D on an already-enrolled browser), treat it as a management-
 // domain migration: reset the profile's enrollment (clear its management id) so
-// IsEnrolled() becomes false and the gate re-locks, forcing a fresh enrollment
-// against the new D instead of running in the half-managed zombie state (old DM
-// token is DEVICE_NOT_FOUND against the new server). Idempotent + a no-op when
-// not enrolled or D is unchanged. Called from the gate throttle before it
-// evaluates a navigation, so a stale-enrolled profile can never browse.
+// IsEnrolled() becomes false and, when the gate is enabled, re-locks, forcing a
+// fresh enrollment against the new D instead of running in the half-managed
+// zombie state (old DM token is DEVICE_NOT_FOUND against the new server).
+// Idempotent + a no-op when not enrolled or D is unchanged. Called from the
+// gate throttle before it evaluates a navigation, so a stale-enrolled profile
+// can never browse when the gate is enabled.
 void MaybeHandleDomainMigration(Profile* profile);
 
 // The domain the browser enrolled against when a migration is pending (enrolled

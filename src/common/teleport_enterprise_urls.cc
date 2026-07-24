@@ -7,8 +7,10 @@ namespace teleport {
 
 namespace {
 
-// Runtime-injected enrollment-flow hosts (future per-tenant OP, server-signalled
-// via the intercept page). A NoDestructor holds them for the process lifetime.
+// Runtime-injected enrollment-flow hosts: per-tenant OP hosts the server
+// signals via the X-Teleport-Enroll-Allow-Hosts response header on the
+// intercept page (§3.4a), live-verified end to end. A NoDestructor holds
+// them for the process lifetime.
 std::vector<std::string>& MutableInjectedHosts() {
   static base::NoDestructor<std::vector<std::string>> hosts;
   return *hosts;

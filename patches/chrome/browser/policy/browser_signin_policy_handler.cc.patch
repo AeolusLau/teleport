@@ -1,0 +1,18 @@
+diff --git a/chrome/browser/policy/browser_signin_policy_handler.cc b/chrome/browser/policy/browser_signin_policy_handler.cc
+index 67f6fe20b32b3..8b92b70a889f7 100644
+--- a/chrome/browser/policy/browser_signin_policy_handler.cc
++++ b/chrome/browser/policy/browser_signin_policy_handler.cc
+@@ -45,9 +45,10 @@ void BrowserSigninPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
+       policies.GetValue(policy_name(), base::Value::Type::INTEGER);
+   switch (static_cast<BrowserSigninMode>(value->GetInt())) {
+     case BrowserSigninMode::kForced:
+-#if !BUILDFLAG(IS_CHROMEOS)
+-      prefs->SetValue(prefs::kForceBrowserSignin, base::Value(true));
+-#endif
++      // teleport: this product has no GAIA sign-in; the upstream Force mode
++      // would force-signin-lock every profile into an unreachable Google login
++      // dead-end. The enrollment gate (kRequireEnrollmentToBrowse) is the sole
++      // source of forced enrollment, so Force is neutralized to Enable here.
+       [[fallthrough]];
+     case BrowserSigninMode::kEnabled:
+       prefs->SetValue(

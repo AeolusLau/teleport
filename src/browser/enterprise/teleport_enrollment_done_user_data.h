@@ -39,6 +39,13 @@ class EnrollmentDoneUserData
   // is attached. Safe to call on any WebContents.
   static EnrollmentDoneCallback Take(content::WebContents* web_contents);
 
+  // True iff a callback is currently attached to `web_contents`. Used by
+  // callers to distinguish the picker flow (which attaches one) from the
+  // voluntary tab flow (which does not), so they can supply their own
+  // fallback done-callback instead of silently getting base::DoNothing() from
+  // Take().
+  static bool HasCallback(content::WebContents* web_contents);
+
  private:
   friend class content::WebContentsUserData<EnrollmentDoneUserData>;
 

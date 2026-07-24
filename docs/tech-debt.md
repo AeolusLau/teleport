@@ -87,14 +87,6 @@
 - **当前处置**:无。
 - **将来方向**:**高杠杆 S** = 把默认搜索锚点从 `google.id` 换成占位企业引擎 → `DefaultSearchProviderIsGoogle()` 变 false → NTP **自动**切到极简 `chrome://new-tab-page-third-party`(无搜索框/无 doodle/无 OneGoogleBar),一举消除 Google 首页。富企业门户 NTP 自研为 L、依赖 fairyland。与 TD-005 同属「锁定企业默认搜索」的产品决策。
 
-### TD-005 release 构建下 Google 登录按钮可见且通向失败流程
-
-- **登记日期**:2026-05-31 · **优先级**:P1
-- **背景**:Dice 因 `HasOAuthClientConfigured()==false` 被构建级禁用,但 profile 菜单登录按钮只看 `prefs::kSigninAllowed`(默认 true,`signin_utils_desktop.cc:35`),**不查 OAuth client 是否配置**;且 `ShowDiceSigninTab` 对「Dice 未启用」的检查只在 `DCHECK_IS_ON()` 内(`signin_view_controller.cc:599`)。official/release 构建 DCHECK 关闭 → 跳过检查 → 打开真实 `accounts.google.com`,OAuth 用 `dummytoken` 交换令牌**失败**(dev 构建则命中 DCHECK abort)。
-- **影响**:用户能从 profile 菜单/`chrome://settings/syncSetup` 走到 Google 登录页并失败。关联 TD-001 B 类。
-- **当前处置**:无(overlay 未触碰 signin/sync;grep 命中的 "signin" 实为代码 **signing** 误报)。
-- **将来方向**:**首选 S(policy,零改码零后端)** = 默认下发 `BrowserSignin=0`(+ 可选 `SyncDisabled=true`)策略,经 macOS managed preferences plist(`cn.douan.Teleport` 域)注入,`CanOfferSignin` 立即返回 disallowed → 登录按钮消失、syncSetup 入口关闭,profile 管理/头像不受影响。彻底做法 = 编译期 `enable_dice_support=false` 整段移除 Dice(成本更高、与「加法为主」理念冲突,暂不)。自有受管身份是独立未来大工程,强依赖 fairyland。
-
 ### TD-006 「报告问题」反馈提交到 Google(数据外泄)
 
 - **登记日期**:2026-05-31 · **优先级**:P1
@@ -182,6 +174,82 @@
 - **将来方向**:①`package.py` 与 `apply_patches.py` 前置校验 `src/teleport` 链接 realpath == 当前 repo 的 `src/`,不符拒绝(S,几行,最高杠杆);②`package.py` 强制前置跑 `apply_patches.py`(S);③检出内落 overlay 来源 marker(repo root + patches 树 hash + branding 输入指纹),不匹配时拒绝并指引恢复(M);④补「恢复 pristine」工具(reverse 全部 patch + checkout grd 族 + 清生成物)——即 CLAUDE.md「待定」已承认的 patch 工具链缺口(M)。①+②为最低守卫;③④随多人/CI 阶段。
 - **关键引用**:`scripts/apply_patches.py:39-44`、`scripts/branding_strings.py`(就地变换)、`scripts/package.py:52-121`(无 overlay 前置/状态校验)、`scripts/_package.py` `assert_baked_version`(仅版本维度)、CLAUDE.md gotcha「从 worktree 跑发布脚本必须 export TELEPORT_CHROMIUM_DIR」(只防路径、不防状态)。
 
+---
+
+> **以下 TD-017 ~ TD-024 来自 voluntary-enrollment-ux 特性实现评审(2026-07-24)**,均基于该特性 spec `docs/superpowers/specs/2026-07-24-voluntary-enrollment-ux-design.md` 与实现期核实。背景统一:该特性把强制纳管 gate 默认值翻转为关闭(BYOD-first),新增 profile 菜单自愿登录入口与 GAIA 结构性抑制;以下均为实现期评审发现、明确记录为暂缓处理的残余,而非本特性范围内的阻断项。
+
+### TD-017 gate 的企业下发通道未实现(仅 dev 本地生效)
+
+- **登记日期**:2026-07-24 · **优先级**:P2(功能自洽——BYOD-first 默认对当前发布阶段正确;企业客户要求强制纳管前必须补)
+- **背景**:强制纳管唯一开关 `kRequireEnrollmentToBrowse`(`teleport_pref_names.h`)是纯 local_state 布尔 pref,注册于 `RegisterEnrollmentGateLocalStatePrefs`(默认 false)。本特性**没有**提供任何企业下发该开关的通道——既非 MDM forced pref(macOS managed preferences),也非机器配置文件字段(`/Library/Teleport/DeploymentConfig.json` 目前只承载 `DeploymentDomain`,不含 gate 开关),也未映射为 CBCM 云策略。
+- **影响**:企业客户今天**没有任何生产可用的方式**把浏览器切到强制纳管模式;唯一验证手段是手改 local_state 或测试钩子(`ResetRequireEnrollmentGateForTesting`),不可用于真实设备下发。
+- **当前处置**:无(spec §2 非目标,dev-only 验证)。
+- **将来方向**:比照 `DeploymentDomain` 已有的三级下发模式(命令行 / MDM forced pref / 机器配置文件)新增一个 gate 布尔键,读取时机与 `RequireEnrollmentGateEnabled()` 的会话冻结语义对齐(§4.1);CBCM 云策略映射需与 fairyland 策略协议同步设计。
+- **关键引用**:`src/browser/enterprise/teleport_enrollment_gate.{h,cc}`、`src/browser/enterprise/teleport_force_signin.{h,cc}`、spec §2「非目标」。
+
+### TD-018 `chrome://settings` guest 开关回显与动态禁用 desync
+
+- **登记日期**:2026-07-24 · **优先级**:P2(视觉误导,无安全缺口——实际动作已 fail-closed)
+- **背景**:gate ON 时 `profiles_state.cc.patch` 的 `IsGuestModeGloballyDisabledInternal()` 无条件 `return true`(不查 `kBrowserGuestModeEnabled` pref),`IsGuestModeRequested()` 同样在 gate ON 时提前拒绝 `--guest`/`BrowserGuestModeEnforced`。但 `chrome://settings` 里 guest 开关的显示态绑定的是底层 pref `kBrowserGuestModeEnabled` 本身(未改动),该 pref 值不受 gate 影响,故 UI 仍显示「已启用」,与实际行为(禁用)不一致。
+- **影响**:管理员/用户在 settings 页看到 guest 开关「开」,但实际点击 profile 菜单/picker 里的 guest 入口已不可用(隐藏或 fail-closed guard 拦截)——纯展示误导,不构成绕过(§4.4 四点覆盖已 fail-closed)。
+- **当前处置**:无(spec §4.4 已记录为已知限制)。
+- **将来方向**:S,settings 数据源(`people_page`/`guest_mode`相关 handler)接入 `teleport::RequireEnrollmentGateEnabled()` 谓词,gate ON 时开关本身回显禁用态(而非仅动作被拦)。
+- **关键引用**:`patches/chrome/browser/profiles/profiles_state.cc.patch`、spec §4.4。
+
+### TD-019 settings「Sync and Google services」死行 + `chrome://signin-*` 死壳未清理
+
+- **登记日期**:2026-07-24 · **优先级**:P2(品牌/体验一致性,非安全)
+- **背景**:GAIA 已经 §4.8 结构性抑制(`CanEnableDiceForBuild()=false`),但 `chrome://settings` 内仍残留「Sync and Google services」相关行(死路,点击不可达任何功能),且 `chrome://signin-*` 系列 WebUI(如 `signin-internals`)仍作为死壳出现在 `teleport://teleport-urls`(`chrome://chrome-urls`)目录列表里。
+- **影响**:非功能性但观感不专业——用户在 URL 目录页看到一批点了无意义的 `signin-*` 条目,settings 页有一行导向无实际内容的入口。
+- **当前处置**:无(TD-005 结清时记录的已知残余)。
+- **将来方向**:S,从 `teleport-urls`/`chrome-urls` 目录页隐藏这批 WebUI host(比照已有 host 隐藏机制,若无则新增);settings 侧隐藏或删除该死行(可能需 patch `people_page.html` 或相邻 grdp)。
+- **关键引用**:spec §4.8;`chrome/browser/ui/webui/signin_internals_ui.{h,cc}`。
+
+### TD-020 device-signals 永久同意位未由就地注册器设置
+
+- **登记日期**:2026-07-24 · **优先级**:P3(评估型;当前无已知功能故障)
+- **背景**:上游 OIDC 新建 profile 流程(`OidcAuthenticationSigninInterceptor` / `ManagedProfileCreator` 路径)在纳管时会顺带设置 device-signals 的永久同意 pref;本特性的就地注册器(`TeleportOidcInPlaceRegistrar::ApplyManagedAttributes`)只设置了 management id / OIDC tokens / dasherless 标记 / 身份显示名与邮箱(见 `teleport_oidc_inplace_registrar.cc:156-196`),**未**设置该同意位。
+- **影响**:待评估——若企业策略(如设备信号上报)依赖该 pref 判断「用户已同意」,就地纳管的 profile 可能被判定为未同意,阻塞相关信号采集;若该 pref 只是上游遗留的 UX 记忆而非策略强依赖,则无实际影响。
+- **当前处置**:无(spec §4.5 记为待评估 TD)。
+- **将来方向**:S,核实该 pref 是否被任何已启用的策略/信号采集路径读取;若是,则在 `ApplyManagedAttributes` 内同批设置。
+- **关键引用**:`src/browser/enterprise/teleport_oidc_inplace_registrar.cc:156-196`、spec §4.5。
+
+### TD-021 picker 纳管中途取消的删除竞态:现有 guard 只是纵深防御,非精确修复
+
+- **登记日期**:2026-07-24 · **优先级**:P2(已知残余,已接受;非阻断)
+- **背景**:gate ON 的 picker 新建 profile 流程中,用户中途取消会触发半成品 profile 删除(ephemeral 语义)。Task 6.4 加的 guard(`teleport_oidc_inplace_registrar.cc:331-337`)在 `OnPolicyFetchComplete` 里检查 `profile_->GetPath().empty() || IsProfileDirectoryMarkedForDeletion(...)`,命中则跳过 `PersistEnrolledDomain()`。但实测时序追踪显示:删除标记(deletion mark)是在该 guard 检查**之后**才落下的——即这条 guard 是纵深防御(缩小竞态窗口),不是精确修复;真正精确的修复需要一个从「picker 取消」贯穿到「注册器」的显式取消信号(如 `base::WeakPtr` 失效检测,或注册器持有的 `IsCancelled()` 查询点)。
+- **影响**(已接受的已知残余,与机器 DM token 清理同池):取消竞态命中时,①`kEnrolledDeploymentDomain` 全局 pref 可能被写入一个随后即被删除的 profile 的纳管域名(不阻断——下次成功纳管会覆盖该值);②服务端可能留下一条孤儿注册记录(同 §4.6 item 5 已知残余)。均非安全缺口,只是清理不彻底。
+- **当前处置**:Task 6.4 的 guard 作为纵深防御保留;残余记录在案,不阻断发布。
+- **将来方向**:M,给 `TeleportOidcInPlaceRegistrar` 接一个取消信号(picker pop 闭包触发时置位,注册器在 `OnPolicyFetchComplete`/`RunDoneAndDelete` 前查询),彻底消除该竞态窗口而非仅缩小。
+- **关键引用**:`src/browser/enterprise/teleport_oidc_inplace_registrar.cc:322-337`、spec §4.6 item 5。
+
+### TD-022 换域迁移时已开浏览器窗口的关闭策略未定义
+
+- **登记日期**:2026-07-24 · **优先级**:P2(已知限制,非阻断)
+- **背景**:§4.9(Task 7.1)的运行期换域迁移修复让 `MaybeHandleDomainMigration` 在检测到 `resolved_D ≠ enrolled_D` 时,gate ON 下同步 `entry->LockForceSigninProfile(true)`,确保**该 entry**在未来的窗口/启动即被锁定;运行期的 http(s) 主框架导航则由 throttle 兜底重定向。但**当前已经打开的浏览器窗口**(已加载的页面、已打开的 chrome:// 标签等)在锁定生效那一刻应该被强制关闭、最小化,还是允许用户继续操作直至下次导航被 throttle 拦截——这一策略未定义,当前实现只覆盖了「锁 + throttle」两点,未覆盖「已开窗口本身」。
+- **影响**:迁移发生的瞬间,用户已打开的窗口/标签仍可继续与已加载页面交互(仅新的 http(s) 主框架导航会被拦),行为在锁定态与「浏览器窗口仍存活」之间存在一个未明确定义的中间态。
+- **当前处置**:无(spec §4.9 记为已知限制)。
+- **将来方向**:M,产品决策 + 实现:明确迁移瞬间对已开窗口的处理策略(强制关闭 / 提示后关闭 / 维持现状仅拦新导航),据此决定是否需要新增窗口层面的响应逻辑。
+- **关键引用**:`src/browser/enterprise/teleport_enrollment_gate.cc:73-124`、spec §4.9。
+
+### TD-023 profile 菜单 Teleport 登录入口缺 browsertest 覆盖
+
+- **登记日期**:2026-07-24 · **优先级**:P2(测试覆盖缺口,非功能故障)
+- **背景**:`ProfileMenuView::OnTeleportSigninButtonClicked()`(`profile_menu_view.cc.patch`)镜像上游其余菜单按钮处理器的模式:先 `OnActionableItemClicked()`(这一步同时记录 UMA 桶、且是抑制菜单关闭后 HaTS 调查弹出的关键副作用),再检查 `perform_menu_actions()` 测试门(测试态下短路,不真正关闭菜单/跳转),最后关闭菜单并打开纳管 tab。这套「HaTS 抑制 + 测试门」行为目前**没有任何 browsertest** 覆盖(仓库内搜索 `OnTeleportSigninButtonClicked`/相关 browsertest 均零命中)。
+- **影响**:该点击处理器的正确性(尤其是 HaTS 抑制副作用与 `perform_menu_actions` 测试门是否真的生效)只能靠人工验证或代码走读确认,回归风险无自动化兜底。
+- **当前处置**:无。
+- **将来方向**:S,新增一个 browsertest(比照上游其余 `OnSigninButtonClicked` 等处理器已有的测试模式),断言点击后:UMA 记录、`perform_menu_actions_for_testing(false)` 下不跳转、菜单正常关闭并打开 `EnterpriseEnrollUrl()`。
+- **关键引用**:`patches/chrome/browser/ui/views/profiles/profile_menu_view.cc.patch:40-48`。
+
+### TD-024 `SetProfileManagementOidcTokens` 的 `identity_name` 写入未做空值 guard
+
+- **登记日期**:2026-07-24 · **优先级**:P3(观感一致性,非功能故障)
+- **背景**:`TeleportOidcInPlaceRegistrar::ApplyManagedAttributes`(`teleport_oidc_inplace_registrar.cc:162-164`)无条件把 `user_display_name_`(可能为空串)塞进 `tokens_with_name.identity_name` 再调用 `entry_->SetProfileManagementOidcTokens(tokens_with_name)`;而同一函数内紧随其后的 `kProfileUserDisplayName`/`kProfileUserEmail` pref 写入(`:183-190`)都有 `!empty()` 判空 guard 才写。两处对「显示名可能为空」的处理不一致。
+- **影响**:纯粹的代码一致性问题——若 `user_display_name_` 为空,`identity_name` 会被显式设为空 `std::u16string`(而非保持未设置/默认值),目前未观察到因此导致的可见异常(下游读取路径大概率对空串已有兜底),但风格上与旁边的判空写法不对称,容易被后续维护者误解为「有意为之的差异」。
+- **当前处置**:无。
+- **将来方向**:S,评估是否给 `identity_name` 赋值同样加 `!user_display_name_.empty()` guard,或反过来把旁边两处 pref 写入的判空去掉、统一为无条件写入——两个方向都可,择一并写清楚理由注释即可。
+- **关键引用**:`src/browser/enterprise/teleport_oidc_inplace_registrar.cc:156-190`。
+
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
 
 - **登记日期**:2026-05-31
@@ -196,6 +264,14 @@
 ---
 
 ## 已结清
+
+### TD-005 release 构建下 Google 登录按钮可见且通向失败流程(已解决:菜单面)
+
+- **登记日期**:2026-05-31 · **结清日期**:2026-07-24 · **优先级**:P1
+- **背景**:Dice 因 `HasOAuthClientConfigured()==false` 被构建级禁用,但 profile 菜单登录按钮只看 `prefs::kSigninAllowed`(默认 true,`signin_utils_desktop.cc:35`),**不查 OAuth client 是否配置**;且 `ShowDiceSigninTab` 对「Dice 未启用」的检查只在 `DCHECK_IS_ON()` 内(`signin_view_controller.cc:599`)。official/release 构建 DCHECK 关闭 → 跳过检查 → 打开真实 `accounts.google.com`,OAuth 用 `dummytoken` 交换令牌**失败**(dev 构建则命中 DCHECK abort)。
+- **处置(voluntary-enrollment-ux 特性,spec §4.8)**:不再是「policy 顺带短路」的权宜止血,而是**结构性**修复——patch `AccountConsistencyModeManager::CanEnableDiceForBuild()` 恒 `return false`,使 `kSigninAllowed` 恒为 false、DICE 恒 `kDisabled`,`CanOfferSignin` 结构性失败,上游 GAIA 登录按钮/建号/FRE 登录屏/DICE web 拦截/头像 pill 等**全部表面**一次钉死(不再依赖「构建无 OAuth key」的偶然性)。同时 profile 菜单(`profile_menu_view.cc.patch` 的 `GetIdentitySectionParams`)新增 Teleport 自有「登录」入口(未纳管态)与「由 <机构> 管理」header(已纳管态),替代上游 GAIA 分支——菜单面不再有任何指向 `accounts.google.com` 的按钮。People 设置页的 dasherless「isn't associated with Google」残留通知同批用 `people_page.html.patch` 强制 `dom-if` 恒 false 抑制。
+- **仍未解决(见 TD-019)**:`chrome://settings`「Sync and Google services」死行、`chrome://signin-*` 系列死壳 WebUI 未清理,`teleport-urls` 目录仍列出这些不可达/无实际功能的入口。
+- **关键引用**:`patches/chrome/browser/signin/account_consistency_mode_manager.cc.patch`、`patches/chrome/browser/ui/views/profiles/profile_menu_view.cc.patch`、`patches/chrome/browser/resources/settings/people_page/people_page.html.patch`、spec `docs/superpowers/specs/2026-07-24-voluntary-enrollment-ux-design.md` §4.5/§4.8。
 
 ### TD-010 隐私设置存在 UKM「死 toggle」(已解决)
 

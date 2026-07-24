@@ -312,6 +312,20 @@ def message_name_to_id(
     return out
 
 
+def id_for_message_name(
+    chromium_src: Path, grd_path: Path, name: str, grd_dir: Path | None = None
+) -> str:
+    """Return the grit message id for a single message ``name`` in ``grd_path``.
+
+    Thin wrapper over :func:`message_name_to_id` (grit has no cheaper
+    single-message lookup — computing one id still walks the whole grd). Gives
+    callers that need to hand-key a zh .xtb ``<translation id=...>`` for a
+    *new* message a name-keyed entry point instead of re-deriving the id map
+    inline, so the id is guaranteed to match what grit will emit at build time.
+    """
+    return message_name_to_id(chromium_src, grd_path, grd_dir)[name]
+
+
 def build_id_remap(
     chromium_src: Path, old_grd: Path, new_grd: Path, grd_dir: Path | None = None
 ) -> dict[str, str]:

@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
-index 5907498d01115..8dce70ed0552d 100644
+index 5907498d01115..0f29ea8d21ca4 100644
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
 @@ -27,6 +27,7 @@ import("//third_party/protobuf/proto_library.gni")
@@ -10,7 +10,16 @@ index 5907498d01115..8dce70ed0552d 100644
  
  assert(enable_supervised_users)
  assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
-@@ -251,6 +252,8 @@ static_library("ui") {
+@@ -206,6 +207,8 @@ static_library("ui") {
+     "webui/version/version_ui.h",
+     "webui/webui_load_timer.cc",
+     "webui/webui_load_timer.h",
++    "//teleport/browser/enterprise/teleport_voluntary_signin.cc",
++    "//teleport/browser/enterprise/teleport_voluntary_signin.h",
+   ]
+ 
+   if (enable_session_service) {
+@@ -251,6 +254,8 @@ static_library("ui") {
    ]
  
    deps = [
@@ -19,7 +28,7 @@ index 5907498d01115..8dce70ed0552d 100644
      ":browser_element_identifiers",
      ":ui_features",
      ":url_identity",
-@@ -3369,6 +3372,14 @@ static_library("ui") {
+@@ -3369,6 +3374,14 @@ static_library("ui") {
        ]
      }
  

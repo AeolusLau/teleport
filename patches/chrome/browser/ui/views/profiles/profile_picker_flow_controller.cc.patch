@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-index 9cd8efe899789..3a62e954a6265 100644
+index 9cd8efe899789..eede6c923d6bc 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
 +++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-@@ -45,6 +45,19 @@
+@@ -45,6 +45,21 @@
  #include "chrome/browser/ui/views/profiles/profile_picker_sign_in_provider.h"
  #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
  #include "chrome/browser/ui/webui/signin/profile_picker_handler.h"
@@ -12,6 +12,8 @@ index 9cd8efe899789..3a62e954a6265 100644
 +#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 +#include "chrome/browser/profiles/profile_attributes_entry.h"
 +#include "chrome/browser/profiles/profile_attributes_storage.h"
++#include "chrome/common/pref_names.h"
++#include "components/prefs/pref_service.h"
 +#include "content/public/browser/navigation_controller.h"
 +#include "content/public/browser/web_contents.h"
 +#include "teleport/browser/enterprise/teleport_enrollment_done_user_data.h"
@@ -22,7 +24,7 @@ index 9cd8efe899789..3a62e954a6265 100644
  #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
  #include "chrome/common/webui_url_constants.h"
  #include "chrome/grit/branded_strings.h"
-@@ -322,6 +335,118 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
+@@ -322,6 +337,118 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
        profile);
  }
  
@@ -141,7 +143,7 @@ index 9cd8efe899789..3a62e954a6265 100644
  void RecordProfilingFinishReason(
      metrics::StartupProfilingFinishReason finish_reason) {
    base::UmaHistogramEnumeration(
-@@ -578,6 +703,43 @@ void ProfilePickerFlowController::OnReauthCompleted(
+@@ -578,6 +705,97 @@ void ProfilePickerFlowController::OnReauthCompleted(
    FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
  }
  
@@ -166,18 +168,72 @@ index 9cd8efe899789..3a62e954a6265 100644
 +          base::BindOnce(&ProfilePickerFlowController::OnEnrollmentSucceeded,
 +                         weak_ptr_factory_.GetWeakPtr(), profile)));
 +
++  // teleport: unlike the generic CreateSwitchToStepPopCallback(current_step())
++  // used elsewhere (e.g. SwitchToReauth above), an explicit "back"/cancel out
++  // of the enrollment step needs a custom pop callback -- see
++  // PopTeleportEnrollmentStep() -- that also unregisters the step so a
++  // picker-added hidden profile's ScopedProfileKeepAlive is released (and thus
++  // deleted). This only fires on an explicit pop; enrollment failure keeps the
++  // step registered and shows an inline retry (TeleportEnrollmentProvider::
++  // OnEnrollmentFinished above), it does not pop.
 +  SwitchToStep(
 +      Step::kTeleportEnrollment, true, std::move(switch_finished_callback),
-+      /*pop_step_callback=*/CreateSwitchToStepPopCallback(current_step()));
++      /*pop_step_callback=*/
++      base::BindOnce(&ProfilePickerFlowController::PopTeleportEnrollmentStep,
++                     base::Unretained(this)));
++}
++
++void ProfilePickerFlowController::PopTeleportEnrollmentStep() {
++  // teleport: pop callback for the enrollment step's "back"/cancel path (as
++  // opposed to enrollment failure, which stays on the step -- see
++  // TeleportEnrollmentProvider::OnEnrollmentFinished's inline error-page
++  // retry, and never runs this). Switch away from the step FIRST:
++  // UnregisterStep() CHECK_NE()s the step being removed against the currently
++  // tracked step, so kTeleportEnrollment must no longer be current before we
++  // unregister it. Unregistering destroys the TeleportEnrollmentStepController
++  // -> TeleportEnrollmentProvider, releasing its ScopedProfileKeepAlive; for a
++  // picker-added (ephemeral) profile that is the profile's last keep-alive and
++  // triggers automatic deletion of its directory, so an abandoned
++  // never-finalized enrollment (see OnEnrollmentSucceeded) never leaks a
++  // profile. The first profile is non-ephemeral, so this is a no-op deletion-
++  // wise for it; it can still reach this step via TryLaunchLockedProfile().
++  SwitchToStep(Step::kProfilePicker, /*reset_state=*/false);
++  UnregisterStep(Step::kTeleportEnrollment);
 +}
 +
 +void ProfilePickerFlowController::OnEnrollmentSucceeded(Profile* profile) {
-+  // The enrolled profile is an existing (non-omitted) profile; just unlock it.
-+  // "Add profile" / new-profile creation is intentionally not supported here.
-+  g_browser_process->profile_manager()
-+      ->GetProfileAttributesStorage()
-+      .GetProfileAttributesWithPath(profile->GetPath())
-+      ->LockForceSigninProfile(false);
++  ProfileAttributesEntry* entry =
++      g_browser_process->profile_manager()
++          ->GetProfileAttributesStorage()
++          .GetProfileAttributesWithPath(profile->GetPath());
++
++  // teleport: a picker-added profile (see
++  // ProfilePickerHandler::OnNewProfileForEnrollmentCreated) is created hidden
++  // -- ephemeral + omitted -- so it is silently deleted at next startup if
++  // enrollment is never finished. On success, finalize it here (de-omit,
++  // de-ephemeral) so it survives restart instead. The first (auto-created,
++  // non-ephemeral) profile is never omitted, so it skips this block entirely
++  // and falls straight through to the unlock below -- unchanged from before.
++  //
++  // We deliberately do NOT call upstream FinalizeNewProfileSetup(): it
++  // CHECK(HasPrimaryAccount(kSync)) for non-managed accounts, which a
++  // dasherless (GAIA-free OIDC) profile never has -- it would crash here. We
++  // also skip its SetLocalProfileName() call: that renames the profile to a
++  // GAIA/account-resolved display name, which doesn't exist in this flow --
++  // the profile already carries the name chosen at creation time
++  // (CreateMultiProfileAsync's ChooseNameForNewProfile() call), and calling
++  // ChooseNameForNewProfile() again here would just collide with that same
++  // entry's own (already-taken) name and rename it to the next number for no
++  // reason, since GetAllProfilesAttributes() does not exclude omitted
++  // profiles.
++  if (entry->IsOmitted()) {
++    entry->SetIsOmitted(false);
++    if (!profile->GetPrefs()->GetBoolean(prefs::kForceEphemeralProfiles)) {
++      entry->SetIsEphemeral(false);
++    }
++  }
++
++  entry->LockForceSigninProfile(false);
 +
 +  FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
 +}

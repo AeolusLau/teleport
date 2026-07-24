@@ -1,20 +1,144 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_menu_view.cc b/chrome/browser/ui/views/profiles/profile_menu_view.cc
-index 684e24c211901..1163fa4964bfe 100644
+index 684e24c211901..8926d438fa1b4 100644
 --- a/chrome/browser/ui/views/profiles/profile_menu_view.cc
 +++ b/chrome/browser/ui/views/profiles/profile_menu_view.cc
-@@ -684,10 +684,12 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
+@@ -23,6 +23,7 @@
+ #include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/enterprise/browser_management/browser_management_service.h"
++#include "chrome/browser/enterprise/browser_management/management_identity.h"
+ #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+ #include "chrome/browser/enterprise/util/managed_browser_utils.h"
+ #include "chrome/browser/feature_engagement/tracker_factory.h"
+@@ -82,6 +83,7 @@
+ #include "components/autofill/core/browser/metrics/autofill_settings_metrics.h"
+ #include "components/autofill/core/common/autofill_features.h"
+ #include "components/feature_engagement/public/feature_constants.h"
++#include "components/prefs/pref_service.h"
+ #include "components/signin/core/browser/signin_error_controller.h"
+ #include "components/signin/public/base/consent_level.h"
+ #include "components/signin/public/base/signin_metrics.h"
+@@ -96,6 +98,10 @@
+ #include "components/vector_icons/vector_icons.h"
+ #include "device/fido/public/features.h"
+ #include "net/base/url_util.h"
++#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
++#include "teleport/browser/enterprise/teleport_voluntary_signin.h"
++#include "teleport/common/teleport_pref_names.h"
++#include "teleport/common/teleport_signin_entry_logic.h"
+ #include "ui/base/interaction/element_tracker.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/models/image_model.h"
+@@ -422,6 +428,25 @@ void ProfileMenuView::OnSigninButtonClicked(
+                                                    access_point);
+ }
+ 
++// teleport: click handler for the Teleport enrollment sign-in button set up in
++// GetIdentitySectionParams(). Mirrors every other handler in this file
++// (e.g. OnSigninButtonClicked() above): record the actionable-item click
++// first via OnActionableItemClicked() (this both logs the UMA bucket and is
++// what suppresses the post-close HaTS survey — see
++// ProfileMenuViewBase::OnClose()), bail out under the
++// set_perform_menu_actions_for_testing(false) test gate, then close-then-act.
++// kSigninButton is reused rather than adding a new ActionableItem value: it
++// is upstream's own "non-personalized signin button" bucket (no existing
++// account info attached), which is exactly this CTA's shape.
++void ProfileMenuView::OnTeleportSigninButtonClicked() {
++  OnActionableItemClicked(ActionableItem::kSigninButton);
++  if (!perform_menu_actions()) {
++    return;
++  }
++  GetWidget()->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
++  teleport::OpenVoluntaryEnrollmentTab(&browser());
++}
++
+ void ProfileMenuView::OnSignoutButtonClicked() {
+   DCHECK(ChromeSigninClientFactory::GetForProfile(&profile())
+              ->IsClearPrimaryAccountAllowed())
+@@ -684,10 +709,69 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
      }
    }
  
 -  // Clarify Dasherless profile with subtitle while not adding the button.
++  // teleport: Teleport enrollment identity replaces the upstream GAIA
++  // signed-out / managed-badge logic. Placed before the dasherless
++  // early-return below; web-app suppression comes from the is_web_app arg
++  // passed to ShouldShowTeleportSigninEntry() (the web-app early-return is
++  // later in this function), so this branch must run before it too.
++  {
++    const bool is_enrolled = teleport::IsEnrolled(&profile());
++    if (teleport::ShouldShowTeleportSigninEntry(
++            is_enrolled, profile().IsRegularProfile(),
++            web_app::AppBrowserController::IsWebApp(&browser()))) {
++      // The CanShowEnterpriseBadgingForMenu block above may have already
++      // populated header_string/header_image/header_action (e.g. the
++      // IsChild() "Managed by parent" header bypasses the dasherless gate).
++      // Clear all three so that header and this sign-in CTA never render
++      // together — header_string/header_image are read as a pair
++      // (profile_menu_view_base.cc), so a stale header_action bound to
++      // OnProfileManagementButtonClicked() left dangling would be equally
++      // wrong even if the header text/image got suppressed some other way.
++      params.header_string.clear();
++      params.header_image = ui::ImageModel();
++      params.header_action = base::RepeatingClosure();
++      // MUST set subtitle too: SetProfileIdentityWithCallToAction CHECKs that
++      // a button always has a subtitle (profile_menu_view_base.cc).
++      params.subtitle = l10n_util::GetStringUTF16(
++          IDS_TELEPORT_PROFILE_MENU_SIGNIN_SUBTITLE);
++      params.button_text = l10n_util::GetStringUTF16(
++          IDS_TELEPORT_PROFILE_MENU_SIGNIN_BUTTON);
++      params.button_action = base::BindRepeating(
++          &ProfileMenuView::OnTeleportSigninButtonClicked,
++          base::Unretained(this));
++      return params;
++    }
++    if (is_enrolled) {
++      std::u16string org = base::UTF8ToUTF16(
++          GetAccountManagerIdentity(&profile()).value_or(std::string()));
++      if (org.empty()) {
++        if (PrefService* local_state = g_browser_process->local_state()) {
++          org = base::UTF8ToUTF16(local_state->GetString(
++              teleport::prefs::kEnrolledDeploymentDomain));
++        }
++      }
++      // header_string AND header_image must BOTH be non-empty or the header
++      // silently does not render (profile_menu_view_base.cc).
++      params.header_string = l10n_util::GetStringFUTF16(
++          IDS_TELEPORT_PROFILE_MENU_MANAGED_HEADER, org);
++      params.header_image = ui::ImageModel::FromVectorIcon(
++          GetManagedUiIcon(&profile()), ui::kColorIcon);
++      params.header_action = base::BindRepeating(
++          &ProfileMenuView::OnProfileManagementButtonClicked,
++          base::Unretained(this));
++      return params;
++    }
++  }
++
 +  // teleport: our enrolled profiles are all dasherless (enterprise OIDC, not a
 +  // GAIA account), so the upstream "This isn't a Google Account / items won't be
 +  // available on other devices" subtitle would always show. Suppress it — leave
 +  // no subtitle — while still skipping the GAIA sync-state logic below that does
-+  // not apply to a dasherless profile.
++  // not apply to a dasherless profile. Now a fallback: a dasherless-but-not-yet-
++  // IsEnrolled() profile falls through the teleport branch above into the
++  // sign-in CTA when eligible, so this hunk only fires for the remaining
++  // (non-regular-profile / web-app) dasherless combinations.
    if (is_dasherless_profile) {
 -    params.subtitle =
 -        l10n_util::GetStringUTF16(IDS_PROFILES_DASHER_FEATURE_DISABLED_TITLE);
      return params;
    }
+ 
+@@ -1012,6 +1096,13 @@ void ProfileMenuView::MaybeBuildChromeAccountSettingsButton() {
+ void ProfileMenuView::MaybeBuildChromeAccountSettingsButtonWithSync() {
+   CHECK(!profile().IsGuestSession());
+ 
++  // teleport: with kSigninAllowed pinned false (structural GAIA suppression),
++  // this Google-services-settings row would appear for every profile; our
++  // profiles have no Google services page, so drop it.
++  if (profile().IsRegularProfile()) {
++    return;
++  }
++
+   signin::IdentityManager* identity_manager =
+       IdentityManagerFactory::GetForProfile(&profile());
  

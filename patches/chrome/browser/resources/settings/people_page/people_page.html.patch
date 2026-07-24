@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/resources/settings/people_page/people_page.html b/chrome/browser/resources/settings/people_page/people_page.html
+index 4ff0446eb8297..f3751af0f0abe 100644
+--- a/chrome/browser/resources/settings/people_page/people_page.html
++++ b/chrome/browser/resources/settings/people_page/people_page.html
+@@ -152,7 +152,14 @@
+             label="$i18n{importTitle}"
+             on-click="onImportDataClick_"></cr-link-row>
+ 
+-        <template is="dom-if" if="[[isDasherlessProfile_]]">
++        <!-- teleport: our enrolled profiles are dasherless; suppress the
++             upstream "isn't associated with Google … sync unavailable"
++             notice (matches the profile-menu dasherless subtitle
++             suppression). Force this dom-if to never stamp rather than
++             gate on isDasherlessProfile_, since every one of our enrolled
++             profiles is dasherless (set by our in-place registrar) and
++             this string is the only consumer of that flag in this file. -->
++        <template is="dom-if" if="false">
+           <div id="sync-not-allowed" class="cr-row continuation">
+             <cr-icon id="info-icon" icon="cr:info-outline"></cr-icon>
+             <div id="sync-not-allowed-text" class="flex cr-padded-text">

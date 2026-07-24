@@ -3,7 +3,9 @@
 
 namespace teleport::prefs {
 
-// local_state bool. true (secure default) = unmanaged devices cannot browse.
+// local_state bool. false (BYOD-first default) = browsing allowed without
+// enrollment; true = unmanaged devices are force-signin-locked into the
+// enrollment picker. Single source of truth for the enrollment gate.
 inline constexpr char kRequireEnrollmentToBrowse[] =
     "teleport.enrollment.require_enrollment_to_browse";
 

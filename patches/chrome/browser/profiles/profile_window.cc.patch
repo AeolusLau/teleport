@@ -1,0 +1,25 @@
+diff --git a/chrome/browser/profiles/profile_window.cc b/chrome/browser/profiles/profile_window.cc
+index 4f381722b30a9..8d4941b3b9f2f 100644
+--- a/chrome/browser/profiles/profile_window.cc
++++ b/chrome/browser/profiles/profile_window.cc
+@@ -28,6 +28,7 @@
+ #include "chrome/browser/profiles/profile_attributes_storage.h"
+ #include "chrome/browser/profiles/profile_avatar_icon_util.h"
+ #include "chrome/browser/profiles/profile_manager.h"
++#include "chrome/browser/profiles/profiles_state.h"
+ #include "chrome/browser/signin/account_reconcilor_factory.h"
+ #include "chrome/browser/signin/identity_manager_factory.h"
+ #include "chrome/browser/signin/signin_ui_util.h"
+@@ -222,6 +223,12 @@ void SwitchToProfile(const base::FilePath& path,
+ }
+ 
+ void SwitchToGuestProfile(base::OnceCallback<void(Browser*)> callback) {
++  // teleport: IDC_OPEN_GUEST_PROFILE is unconditionally enabled upstream; block
++  // the action itself when guest is disabled (gate ON) rather than relying on
++  // hidden buttons.
++  if (!profiles::IsGuestModeEnabled()) {
++    return;
++  }
+   SwitchToProfile(ProfileManager::GetGuestProfilePath(),
+                   /*always_create=*/false, std::move(callback));
+ }

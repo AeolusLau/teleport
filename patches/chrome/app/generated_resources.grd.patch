@@ -1,0 +1,22 @@
+diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
+index 33c0b42d826b5..dac20eff563fb 100644
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -18412,6 +18412,17 @@ Please help our engineers fix this problem. Tell us what happened right before y
+       Exit Incognito
+     </message>
+ 
++    <!-- Teleport profile-menu voluntary enrollment sign-in entry. -->
++    <message name="IDS_TELEPORT_PROFILE_MENU_SIGNIN_BUTTON" desc="Profile menu button that starts Teleport enterprise enrollment sign-in.">
++      Sign in
++    </message>
++    <message name="IDS_TELEPORT_PROFILE_MENU_SIGNIN_SUBTITLE" desc="Subtitle under the Teleport profile-menu sign-in button explaining managed enrollment.">
++      Sign in to let your organization manage this browser
++    </message>
++    <message name="IDS_TELEPORT_PROFILE_MENU_MANAGED_HEADER" desc="Profile menu header shown for a Teleport-enrolled (managed) profile. $1 is the managing organization/domain.">
++      Managed by <ph name="ORGANIZATION">$1<ex>example.com</ex></ph>
++    </message>
++
+     <!-- Incognito Delete Browsing Data dialog bubble. -->
+     <message name="IDS_INCOGNITO_CLEAR_BROWSING_DATA_DIALOG_PRIMARY_TEXT" desc ="The primary text of the delete browsing data dialog which is shown in Incognito when users invokes a delete browsing data action in Incognito. The text describes how Incognito users can delete the browsing data by closing all Incognito windows.">
+       To delete data, close all Incognito windows

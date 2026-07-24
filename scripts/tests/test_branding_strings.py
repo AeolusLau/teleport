@@ -203,6 +203,27 @@ def test_message_name_to_id_reads_real_grd_stably(pristine):
     assert "IDS_PRODUCT_NAME" in m1
 
 
+def test_id_for_message_name_matches_known_xtb_pair(pristine):
+    """id_for_message_name must compute the exact id grit assigns for a message
+    NAME, proven against a message already matched grd/xtb in the real tree —
+    this is the de-risking check that our id computation is bit-for-bit what
+    grit will emit at build time, before we hand-key NEW zh .xtb translations
+    for messages that don't exist yet.
+
+    Pinned pair (from the pristine chrome/app/generated_resources.grd +
+    generated_resources_zh-CN.xtb): IDS_PERMISSION_CUSTOMIZE ("Customize") has
+    grit id 7180865173735832675, translated "自定义" in the zh-CN xtb.
+    """
+    grd_rel = "chrome/app/generated_resources.grd"
+    xtb_rel = "chrome/app/resources/generated_resources_zh-CN.xtb"
+    mirror = pristine(grd_rel, xtb_rel)
+    grd_path = mirror / grd_rel
+    computed = bs.id_for_message_name(mirror, grd_path, "IDS_PERMISSION_CUSTOMIZE")
+    assert computed == "7180865173735832675"
+    xtb_text = (mirror / xtb_rel).read_text(encoding="utf-8")
+    assert f'<translation id="{computed}">自定义</translation>' in xtb_text
+
+
 def test_build_id_remap_only_changed_ids(pristine):
     """Remapping the pristine grd against its rebranded form yields only
     the ids whose source text changed, keyed old->new."""

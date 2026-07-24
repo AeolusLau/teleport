@@ -20,6 +20,7 @@
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
+#include "chrome/browser/profiles/nuke_profile_directory_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -174,6 +175,21 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     profile_->GetPrefs()->SetString(
         enterprise_signin::prefs::kPolicyRecoveryClientId, client_id_);
 
+    // Mirror the upstream OIDC-managed profile's identity prefs (see
+    // OidcManagedProfileCreationDelegate::OnManagedProfileInitialized) so the
+    // profile menu shows the managed identity instead of the "not signed in"
+    // local-profile string.
+    if (PrefService* prefs = profile_->GetPrefs()) {
+      if (!user_display_name_.empty()) {
+        prefs->SetString(enterprise_signin::prefs::kProfileUserDisplayName,
+                          user_display_name_);
+      }
+      if (!user_email_.empty()) {
+        prefs->SetString(enterprise_signin::prefs::kProfileUserEmail,
+                          user_email_);
+      }
+    }
+
     VLOG(1) << "[teleport-enroll] attributes-set: management_id+oidc_tokens"
                "+dasherless(true)";
     return true;
@@ -303,6 +319,22 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     const bool has_policy = store && store->has_policy();
     if (has_policy) {
       VLOG(1) << "[teleport-enroll] policy fetch succeeded";
+      // teleport: the picker may have cancelled and released its keep-alive on
+      // this half-created profile while enrollment was still in flight (see
+      // ProfilePickerFlowController::PopTeleportEnrollmentStep). If the profile
+      // is already scheduled for deletion (or somehow has no path), don't
+      // persist the GLOBAL enrolled-domain for it -- that would leave a stale
+      // local_state domain unbacked by any surviving enrolled profile, plus a
+      // server-side orphan. The orphan is known/acceptable residue (same pool
+      // as machine DM-token cleanup); log and skip the persist, but still run
+      // the normal success teardown so this self-owned registrar doesn't leak.
+      if (profile_->GetPath().empty() ||
+          IsProfileDirectoryMarkedForDeletion(profile_->GetPath())) {
+        LOG(WARNING) << "[teleport-enroll] profile scheduled for deletion; "
+                        "skipping PersistEnrolledDomain (server orphan possible)";
+        RunDoneAndDelete(EnrollmentResult::kSuccess);
+        return;
+      }
       // Record the deployment domain we enrolled against so a later admin-
       // channel domain change is detected as a migration (§4.5).
       PersistEnrolledDomain();

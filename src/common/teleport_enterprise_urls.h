@@ -39,15 +39,20 @@ std::vector<std::string> EnterpriseTrustedRedirectHosts();
 //   - accounts.<D>  (the fixed universal login springboard of the current
 //                    fairyland topology; tenant is chosen via select_tenant on
 //                    this shared host, not a per-tenant OP subdomain)
-//   - any hosts injected at runtime via AddInjectedEnrollmentHost (reserved for
-//     a future per-tenant OP topology, server-signalled through the intercept
-//     page; empty today).
+//   - any hosts injected at runtime via AddInjectedEnrollmentHost: per-tenant
+//     OP hosts (<slug>.<D>) the server signals via the
+//     X-Teleport-Enroll-Allow-Hosts response header on an enrollment-flow
+//     page, read by TeleportEnrollmentGateThrottle::
+//     MaybeInjectAllowedHostsFromResponse and live-verified end to end.
 // Each entry is a canonical "host[:port]" (port present only when D carries one).
 std::vector<std::string> EnterpriseEnrollmentAllowedHosts();
 
-// Runtime injection seam for additional enrollment-flow hosts (future per-tenant
-// OP hosts the server signals via the gate intercept page). No-ops for the
-// current topology; the static teleport.<D>/accounts.<D> pair already covers it.
+// Runtime injection seam for additional enrollment-flow hosts: per-tenant OP
+// hosts the server signals via the X-Teleport-Enroll-Allow-Hosts response
+// header on the gate intercept page (see
+// TeleportEnrollmentGateThrottle::MaybeInjectAllowedHostsFromResponse). This
+// is the production path that dynamically extends the static
+// teleport.<D>/accounts.<D> pair, not a placeholder.
 void AddInjectedEnrollmentHost(const std::string& host);
 void ClearInjectedEnrollmentHosts();
 

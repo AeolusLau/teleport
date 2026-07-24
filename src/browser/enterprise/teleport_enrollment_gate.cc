@@ -5,6 +5,7 @@
 #include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/signin/enterprise_signin_prefs.h"
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
@@ -15,6 +16,7 @@
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "teleport/browser/enterprise/teleport_force_signin.h"
 #include "teleport/common/teleport_deployment_config.h"
 #include "teleport/common/teleport_domain_migration.h"
 #include "teleport/common/teleport_pref_names.h"
@@ -25,9 +27,7 @@ bool ShouldGateProfile(Profile* profile) {
   if (!profile || profile->IsOffTheRecord() || !profile->IsRegularProfile()) {
     return false;
   }
-  PrefService* local_state = g_browser_process->local_state();
-  return local_state &&
-         local_state->GetBoolean(prefs::kRequireEnrollmentToBrowse);
+  return RequireEnrollmentGateEnabled();
 }
 
 bool IsEnrolled(Profile* profile) {
@@ -54,13 +54,11 @@ bool ShouldLockProfile(ProfileAttributesEntry* entry) {
     // Unknown entry, or already enrolled (management id set).
     return false;
   }
-  PrefService* local_state = g_browser_process->local_state();
-  return local_state &&
-         local_state->GetBoolean(prefs::kRequireEnrollmentToBrowse);
+  return RequireEnrollmentGateEnabled();
 }
 
 void RegisterEnrollmentGateLocalStatePrefs(PrefRegistrySimple* registry) {
-  registry->RegisterBooleanPref(prefs::kRequireEnrollmentToBrowse, true);
+  registry->RegisterBooleanPref(prefs::kRequireEnrollmentToBrowse, false);
   registry->RegisterStringPref(prefs::kEnrolledDeploymentDomain, std::string());
 }
 
@@ -92,23 +90,37 @@ void MaybeHandleDomainMigration(Profile* profile) {
   // enrolled browser. Reset this profile's enrollment so the gate re-locks and
   // a fresh enrollment runs against the new D — never a half-managed zombie.
   ProfileManager* pm = g_browser_process->profile_manager();
-  if (pm) {
-    ProfileAttributesEntry* entry =
-        pm->GetProfileAttributesStorage().GetProfileAttributesWithPath(
-            profile->GetPath());
-    if (entry) {
-      entry->SetProfileManagementId(std::string());
-    }
+  ProfileAttributesEntry* entry =
+      pm ? pm->GetProfileAttributesStorage().GetProfileAttributesWithPath(
+               profile->GetPath())
+         : nullptr;
+  if (entry) {
+    entry->SetProfileManagementId(std::string());
   }
   // Clear the cached MACHINE (CBCM) DM token too: it was issued by the OLD D's
   // device-management server and is DEVICE_NOT_FOUND against the new one, so a
   // stale token would keep failing machine policy fetches. Clearing lets CBCM
   // re-register against the new D with the enrollment token.
   policy::BrowserDMTokenStorage::Get()->ClearDMToken(base::DoNothing());
+  // Also clear the enterprise-signin identity prefs written by the OIDC
+  // registrar (profile display name / email, see teleport_inplace_enrollment_
+  // sequence.cc): the migration above resets the management id + DM token but
+  // leaves these behind, which would otherwise keep showing a stale managed
+  // identity in the profile menu for a now-unenrolled profile.
+  if (PrefService* prefs = profile->GetPrefs()) {
+    prefs->ClearPref(enterprise_signin::prefs::kProfileUserDisplayName);
+    prefs->ClearPref(enterprise_signin::prefs::kProfileUserEmail);
+  }
   LOG(ERROR) << "[teleport-migration] deployment domain changed from '"
              << enrolled << "' to '" << DeploymentDomain()
              << "' — profile enrollment + machine DM token reset, "
                 "re-enrollment required";
+  // teleport: gate ON — re-lock immediately so the now-unmanaged profile can't
+  // keep browsing in a running window until the next restart. The throttle
+  // only covers http(s) main-frame navigations; the lock is the reliable edge.
+  if (RequireEnrollmentGateEnabled() && entry) {
+    entry->LockForceSigninProfile(true);
+  }
 }
 
 std::optional<std::string> PendingDomainMigrationFrom() {

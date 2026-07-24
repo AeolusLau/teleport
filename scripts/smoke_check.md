@@ -64,7 +64,7 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | en 文案 | `strings .../en.lproj/locale.pak \| grep -i "Xiaodou\|Teleport"` 出现 Teleport / Xiaodou Shuan / "Make Teleport the default browser" | ✅ |
 | 运行 | `Teleport …` 启动有 banner、0 FATAL | ✅ |
 | 幂等 | `branding_strings.py` 二次运行 = 0 ids remapped | ✅ |
-| 版本不暴露 | `ls ".../Teleport Framework.framework/Versions/"` = `<TELEPORT_VERSION>`;`PlistBuddy -c 'Print :SCMRevision' …` = Does Not Exist;`python3 - <<'EOF'`(遍历 .app 全部 plist/路径名 grep `7778`)零命中;`curl :9222/json/version` 的 UA 仍 `Chrome/148.0.0.0`;UA-CH brands 经 CDP `Runtime.evaluate`(`navigator.userAgentData.brands`)验证——`--dump-dom` 对 `data:` URL 会被强制纳管门禁悬置而挂起,勿用 | ✅ |
+| 版本不暴露 | `ls ".../Teleport Framework.framework/Versions/"` = `<TELEPORT_VERSION>`;`PlistBuddy -c 'Print :SCMRevision' …` = Does Not Exist;`python3 - <<'EOF'`(遍历 .app 全部 plist/路径名 grep `7778`)零命中;`curl :9222/json/version` 的 UA 仍 `Chrome/148.0.0.0`;UA-CH brands 经 CDP `Runtime.evaluate`(`navigator.userAgentData.brands`)验证——**仅当 `kRequireEnrollmentToBrowse` gate 显式开启时**,`--dump-dom` 对 `data:` URL 会被强制纳管门禁悬置而挂起,勿用;gate 默认**关闭**(BYOD-first),默认构建不受影响 | ✅ |
 
 GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"Beijing Xiaodou Shuan Technology Co., Ltd.";各处 product logo = 我方标记。
 

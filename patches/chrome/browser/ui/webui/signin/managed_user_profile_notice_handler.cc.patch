@@ -1,0 +1,34 @@
+diff --git a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
+index 9d849925ecd37..847102979df0e 100644
+--- a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
++++ b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
+@@ -435,16 +435,22 @@ base::DictValue ManagedUserProfileNoticeHandler::GetProfileInfoValue() {
+       dict.Set("proceedLabel", l10n_util::GetStringUTF8(IDS_DONE));
+       break;
+     case ManagedUserProfileNoticeUI::ScreenType::kEnterpriseOIDC:
+-      title =
+-          l10n_util::GetStringUTF8(IDS_ENTERPRISE_WELCOME_PROFILE_SETUP_TITLE);
++      // teleport: This dialog is also reused by our voluntary-enrollment flow
++      // (spec §4.7, Task 5.3) to enroll the user's CURRENT profile in place
++      // — it never creates a new/separate profile, unlike the upstream
++      // profile-creation flows that share this ScreenType. Upstream hardcodes
++      // `profile_creation_required_by_policy_` to true for this screen type
++      // (see OidcEnterpriseSigninInterceptionHandle in
++      // dice_web_signin_interceptor_delegate.cc), which would otherwise pick
++      // the "Set up your work profile" / "Create" copy below and falsely
++      // imply a new profile is being created. Use the accurate
++      // "will-be-managed" title and non-create button unconditionally.
++      title = l10n_util::GetStringUTF8(
++          IDS_ENTERPRISE_WELCOME_PROFILE_WILL_BE_MANAGED_TITLE);
+       dict.Set("showEnterpriseBadge", true);
+       subtitle = l10n_util::GetStringUTF8(
+           IDS_ENTERPRISE_PROFILE_WELCOME_PROFILE_SEPARATION_ACCOUNT_MANAGED);
+-      dict.Set("proceedLabel",
+-               l10n_util::GetStringUTF8(
+-                   profile_creation_required_by_policy_
+-                       ? IDS_ENTERPRISE_PROFILE_WELCOME_CREATE_PROFILE_BUTTON
+-                       : IDS_APP_CONTINUE));
++      dict.Set("proceedLabel", l10n_util::GetStringUTF8(IDS_APP_CONTINUE));
+       break;
+     case ManagedUserProfileNoticeUI::ScreenType::kFirstRun:
+       // TODO(crbug.com/483637730): Specify the exact UI for the First Run case

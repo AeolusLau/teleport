@@ -1,16 +1,17 @@
 diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
-index a8ebab6e15ac1..e03d446e2a91c 100644
+index a8ebab6e15ac1..b58ebc8a36e87 100644
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/chrome_browser_main.h"
++#include "teleport/browser/enterprise/teleport_enrollment_gate.h"  // teleport overlay
 +#include "teleport/browser/teleport_startup.h"  // teleport overlay
  
  #include <memory>
  #include <string>
-@@ -1440,6 +1441,8 @@ void ChromeBrowserMainParts::PostCreateThreads() {
+@@ -1440,6 +1442,8 @@ void ChromeBrowserMainParts::PostCreateThreads() {
  int ChromeBrowserMainParts::PreMainMessageLoopRun() {
    TRACE_EVENT0("startup", "ChromeBrowserMainParts::PreMainMessageLoopRun");
  
@@ -19,3 +20,18 @@ index a8ebab6e15ac1..e03d446e2a91c 100644
    result_code_ = PreMainMessageLoopRunImpl();
  
    for (auto& chrome_extra_part : chrome_extra_parts_) {
+@@ -1545,6 +1549,14 @@ void ChromeBrowserMainParts::PostProfileInit(Profile* profile,
+     chrome_extra_part->PostProfileInit(profile, is_initial_profile);
+   }
+ 
++  // teleport overlay: catch an admin-channel deployment-domain change even for
++  // a session that never issues an http(s) main-frame navigation (chrome://
++  // pages only, or restored tabs) — the gate throttle alone would miss it.
++  // Runs for the initial profile and for every profile added afterward
++  // (secondary profiles, profile picker); idempotent + cheap when unenrolled
++  // or D unchanged.
++  teleport::MaybeHandleDomainMigration(profile);
++
+ #if BUILDFLAG(IS_WIN)
+   // Verify that the profile is not on a network share and if so prepare to show
+   // notification to the user.

@@ -43,6 +43,11 @@ EnrollmentDoneCallback EnrollmentDoneUserData::Take(
   return closure;
 }
 
+// static
+bool EnrollmentDoneUserData::HasCallback(content::WebContents* web_contents) {
+  return EnrollmentDoneUserData::FromWebContents(web_contents) != nullptr;
+}
+
 WEB_CONTENTS_USER_DATA_KEY_IMPL(EnrollmentDoneUserData);
 
 }  // namespace teleport

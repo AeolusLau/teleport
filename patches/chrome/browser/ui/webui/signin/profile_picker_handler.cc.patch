@@ -1,16 +1,17 @@
 diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.cc b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
-index 71b1f7b48544c..8601dc0da1856 100644
+index 71b1f7b48544c..b2819753054af 100644
 --- a/chrome/browser/ui/webui/signin/profile_picker_handler.cc
 +++ b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
-@@ -62,6 +62,7 @@
+@@ -62,6 +62,8 @@
  #include "components/signin/public/base/signin_switches.h"
  #include "components/signin/public/identity_manager/account_info.h"
  #include "components/signin/public/identity_manager/tribool.h"
 +#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
++#include "teleport/browser/enterprise/teleport_force_signin.h"
  #include "components/startup_metric_utils/browser/startup_metric_utils.h"
  #include "components/sync/base/features.h"
  #include "content/public/browser/url_data_source.h"
-@@ -420,6 +421,20 @@ void ProfilePickerHandler::TryLaunchLockedProfile(
+@@ -420,6 +422,20 @@ void ProfilePickerHandler::TryLaunchLockedProfile(
      return;
    }
  
@@ -31,7 +32,7 @@ index 71b1f7b48544c..8601dc0da1856 100644
    // Default profile, not yet active, fresh sign in is allowed as the profile
    // was not used yet. Default profile is the automatically created profile,
    // initial profile or after deleting the last profile for example.
-@@ -462,6 +477,16 @@ void ProfilePickerHandler::OnProfileLoadedForSwitchToReauth(Profile* profile) {
+@@ -462,6 +478,16 @@ void ProfilePickerHandler::OnProfileLoadedForSwitchToReauth(Profile* profile) {
                       weak_factory_.GetWeakPtr(), profile->GetPath()));
  }
  
@@ -48,27 +49,68 @@ index 71b1f7b48544c..8601dc0da1856 100644
  void ProfilePickerHandler::DisplaySigninErrorDialog(
      const base::FilePath& profile_path,
      const std::variant<ForceSigninUIError, SigninUIError>& error) {
-@@ -829,12 +854,19 @@ void ProfilePickerHandler::OnProfileStatisticsReceived(
+@@ -551,6 +577,11 @@ void ProfilePickerHandler::HandleLaunchGuestProfile(
+     const base::ListValue& args) {
+   // TODO(crbug.com/40123459): Add check |IsGuestModeEnabled| once policy
+   // checking has been added to the UI.
++  // teleport: the upstream TODO acknowledges this IPC does no server-side
++  // guest policy check. Enforce it here (gate ON disables guest).
++  if (!profiles::IsGuestModeEnabled()) {
++    return;
++  }
+   ProfilePicker::PickProfile(
+       ProfileManager::GetGuestProfilePath(),
+       ProfilePicker::ProfilePickingArgs{.open_settings = false,
+@@ -829,12 +860,30 @@ void ProfilePickerHandler::OnProfileStatisticsReceived(
  void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
    AllowJavascript();
    CHECK_EQ(1U, args.size());
 -  std::optional<SkColor> profile_color = args[0].GetIfInt();
-+  // teleport: under the enterprise enrollment model, creating a new profile from
-+  // the picker is not supported — GAIA new-profile creation CHECK-fails for our
-+  // dasherless profiles, and creating a profile to enroll in place is deferred
-+  // (see the Layer-1 design). The "add profile" tile is hidden by default via the
-+  // BrowserAddPersonEnabled policy (kBrowserAddPersonEnabled defaults false ->
-+  // profiles::IsProfileCreationAllowed() false -> the WebUI hides the tile). If
-+  // this handler is still reached (policy re-enabled), do nothing rather than
-+  // start the crashing GAIA flow.
-   if (signin_util::IsForceSigninEnabled()) {
+-  if (signin_util::IsForceSigninEnabled()) {
 -    // Force sign-in policy uses a separate flow that doesn't initialize the
 -    // profile color. Generate a new profile color here.
 -    profile_color = GenerateNewProfileColor().color;
-+    OnResetPickerButtons(false);
++  // teleport: under the enrollment gate, "Add profile" creates a hidden
++  // (ephemeral+omitted, auto-locked by the existing profile_attributes_entry
++  // force-signin patch) profile and routes it straight to the GAIA-free
++  // Teleport enrollment step, mirroring how TryLaunchLockedProfile() routes an
++  // existing not-yet-enrolled profile above. Success finalizes it (see
++  // ProfilePickerFlowController::OnEnrollmentSucceeded); an explicit
++  // return/cancel out of the step deletes it via ephemeral semantics (see
++  // SwitchToEnrollment's pop callback). The upstream GAIA new-profile path
++  // (SwitchToSignIn below) is unreachable in this product: it isn't that GAIA
++  // new-profile creation CHECK-fails, it's that it would load
++  // accounts.google.com, which the enrollment gate's OIDC capture throttle
++  // blocks outright (see the no-GAIA iron rule) — so it would just hang/error
++  // rather than let the user sign in with a Google account.
++  if (teleport::RequireEnrollmentGateEnabled()) {
++    ProfileManager::CreateMultiProfileAsync(
++        g_browser_process->profile_manager()
++            ->GetProfileAttributesStorage()
++            .ChooseNameForNewProfile(),
++        profiles::GetPlaceholderAvatarIndex(), /*is_hidden=*/true,
++        base::BindOnce(&ProfilePickerHandler::OnNewProfileForEnrollmentCreated,
++                       weak_factory_.GetWeakPtr()));
 +    return;
    }
 +  std::optional<SkColor> profile_color = args[0].GetIfInt();
    std::vector<StepSwitchFinishedCallback> callbacks;
    callbacks.emplace_back(base::BindOnce(
        &ProfilePickerHandler::OnLoadSigninFinished, weak_factory_.GetWeakPtr()));
+@@ -846,6 +895,16 @@ void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
+           .value());
+ }
+ 
++void ProfilePickerHandler::OnNewProfileForEnrollmentCreated(Profile* profile) {
++  if (!profile) {
++    OnResetPickerButtons(false);
++    return;
++  }
++  ProfilePicker::SwitchToEnrollment(
++      profile, base::BindOnce(&ProfilePickerHandler::OnResetPickerButtons,
++                              weak_factory_.GetWeakPtr()));
++}
++
+ void ProfilePickerHandler::OnLoadSigninFinished(bool success) {
+   AllowJavascript();
+   FireWebUIListener("load-signin-finished", base::Value(success));

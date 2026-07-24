@@ -1,0 +1,18 @@
+diff --git a/chrome/browser/signin/account_consistency_mode_manager.cc b/chrome/browser/signin/account_consistency_mode_manager.cc
+index f11db47c92ff8..5061a82ceadac 100644
+--- a/chrome/browser/signin/account_consistency_mode_manager.cc
++++ b/chrome/browser/signin/account_consistency_mode_manager.cc
+@@ -64,6 +64,13 @@ bool IsBrowserSigninAllowedByCommandLine() {
+ // Returns true if Desktop Identity Consistency can be enabled for this build
+ // (i.e. if OAuth client ID and client secret are configured).
+ bool CanEnableDiceForBuild() {
++  // teleport: this product ships no Google OAuth client and has no GAIA sign-in.
++  // Pin DICE off structurally so the GAIA suppression across menu/settings/
++  // picker/FRE never depends on the accidental "no key baked" fact.
++  if (!g_ignore_missing_oauth_client_for_testing) {
++    return false;
++  }
++
+   if (g_ignore_missing_oauth_client_for_testing ||
+       google_apis::HasOAuthClientConfigured()) {
+     return true;

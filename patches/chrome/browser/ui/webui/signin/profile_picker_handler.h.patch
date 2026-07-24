@@ -1,8 +1,24 @@
 diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.h b/chrome/browser/ui/webui/signin/profile_picker_handler.h
-index 996963b50df66..3e97fdd97dc4d 100644
+index 996963b50df66..7e39d9443f60e 100644
 --- a/chrome/browser/ui/webui/signin/profile_picker_handler.h
 +++ b/chrome/browser/ui/webui/signin/profile_picker_handler.h
-@@ -183,6 +183,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
+@@ -141,6 +141,15 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
+   void HandleRecordSignInPromoImpression(const base::ListValue& args);
+ 
+   void OnLoadSigninFinished(bool success);
++  // teleport: callback with the newly-created hidden profile (gate-ON
++  // HandleSelectNewAccount's "Add profile" path) to start the GAIA-free
++  // enterprise OIDC enrollment flow. Distinct from
++  // OnProfileLoadedForSwitchToEnrollment below, which loads an existing
++  // not-yet-enrolled profile: this one is the initialized_callback for
++  // ProfileManager::CreateMultiProfileAsync's brand-new hidden profile, and
++  // resets the picker buttons on creation failure (`profile == nullptr`)
++  // rather than silently no-oping.
++  void OnNewProfileForEnrollmentCreated(Profile* profile);
+   void OnResetPickerButtons(bool success);
+   void GatherProfileStatistics(Profile* profile);
+   void OnProfileStatisticsReceived(const base::FilePath& profile_path,
+@@ -183,6 +192,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
    void TryLaunchLockedProfile(ProfileAttributesEntry& entry);
    // Callback with the loaded profile to start the reauth flow.
    void OnProfileLoadedForSwitchToReauth(Profile* profile);
