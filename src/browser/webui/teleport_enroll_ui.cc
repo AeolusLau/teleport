@@ -89,7 +89,20 @@ class EnrollPageHandler : public enroll::mojom::PageHandler {
       : receiver_(this, std::move(receiver)), web_ui_(web_ui) {}
   EnrollPageHandler(const EnrollPageHandler&) = delete;
   EnrollPageHandler& operator=(const EnrollPageHandler&) = delete;
-  ~EnrollPageHandler() override = default;
+  ~EnrollPageHandler() override {
+    // A stored Verify() response callback MUST be run (or the receiver closed)
+    // before it is destroyed, or Mojo DCHECK-aborts ("callback was destroyed
+    // without first either being run or its associated binding being closed").
+    // This happens when the enroll tab is closed while the server-identity fetch
+    // is still in flight: ~EnrollPageHandler tears down loader_ (cancelling the
+    // fetch, so OnFetched never runs) and would drop pending_verify_callback_
+    // un-run. Run it with a connection-failure result so teardown is clean; the
+    // reply is delivered if the pipe is still up, or silently dropped if not.
+    if (pending_verify_callback_) {
+      std::move(pending_verify_callback_)
+          .Run(MakeResult(EnrollStatus::kCannotConnect, pending_domain_));
+    }
+  }
 
   // enroll::mojom::PageHandler:
   void GetState(GetStateCallback callback) override {
