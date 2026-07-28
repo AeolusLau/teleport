@@ -21,3 +21,6 @@ __pycache__/
 
 # Playwright MCP browser-automation output (console logs + a11y snapshots)
 .playwright-mcp/
+
+# Git worktrees (session convention: all new worktrees live here)
+/.worktrees/
