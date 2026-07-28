@@ -263,6 +263,17 @@ std::string TeleportHostFor(std::string_view d) {
   return "teleport." + std::string(d);
 }
 
+std::string EdgeHostFor(std::string_view d) {
+  // Mirrors TeleportHostFor: straight prefix concat, so a ":port" already at
+  // D's tail stays at the tail of the result. No proxy port is baked in here
+  // (see the header comment) — this is host-only, like TeleportHostFor.
+  return "edge." + std::string(d);
+}
+
+std::string EdgeHost() {
+  return EdgeHostFor(DeploymentDomain());
+}
+
 std::string AccountsHostFor(std::string_view d) {
   return "accounts." + std::string(d);
 }

@@ -107,6 +107,16 @@ bool IsMachineConfigFileTrusted(const base::FilePath& path);
 // helpers read the process-cached DeploymentDomain(), which has no port in tests).
 std::string TeleportHostFor(std::string_view d);
 
+// Build "edge.<d>" (same port handling as TeleportHostFor: a ":port" already
+// at D's tail stays at the tail of the result). This is the tunnel service's
+// edge proxy HOST only — the edge proxy PORT (443 prod / dev per Piece 0) is
+// deliberately not baked in here; the caller supplies it separately when
+// constructing the net::ProxyServer (see TeleportTunnelService).
+std::string EdgeHostFor(std::string_view d);
+
+// Convenience: EdgeHostFor(DeploymentDomain()).
+std::string EdgeHost();
+
 // Build "accounts.<d>" (same port handling as TeleportHostFor). This is the
 // fixed universal login/account-plane host of the current fairyland topology
 // (tenant chosen via select_tenant on the shared host, not a per-tenant OP

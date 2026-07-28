@@ -84,6 +84,8 @@ python scripts/sync.py                       # gclient sync 到 CHROMIUM_VERSION
 python scripts/apply_patches.py              # 应用 overlay(幂等)
 
 # 构建(首次数小时;Siso、本地无 RBE)
+uv run python scripts/package.py             # dev 一键:args.gn 缺失时自动 gn gen,再 autoninja + 烘焙版本校验
+# 等价手动路径(gn gen 仅首次需要,out 目录建好后 ninja 会自动 re-gen):
 cd "$TELEPORT_CHROMIUM_DIR/src"
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome    # 产物 Teleport.app(亦在 <repo>/build/mac/arm64/dev/)
@@ -107,7 +109,7 @@ python scripts/fetch_sparkle.py                  # 钉版本拉 Sparkle.framewor
 # PGO profile(release 已开 chrome_pgo_phase=2,Chrome + V8 builtins 均硬依赖)由 gclient sync
 # 拉取:bootstrap.py 已把 checkout_pgo_profiles=True 写进 .gclient;改了开关后重跑一次 sync:
 python scripts/sync.py                           # 触发 chromium DEPS 的两个 PGO hook(幂等)
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'
+gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'   # 可省:package.py 在 args.gn 缺失时自动执行
 printf '0.1.13.0\n' > TELEPORT_VERSION           # 每次发版 bump(四段 MAJOR.MINOR.BUILD.PATCH,单调递增;或用 scripts/bump_version.py)并提交
 uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
 uv run python scripts/package.py --channel canary        # 本地渠道包:构建+签名+公证+样式dmg,不发布

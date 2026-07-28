@@ -4,8 +4,8 @@
 Default builds a local dev app (build only). --channel selects a channel;
 --distribute publishes a distributable channel package (main branch only, with
 a v<semver> git tag pushed to the remote). Run from the repo root with
-TELEPORT_CHROMIUM_DIR set; for distributable channels, `gn gen` the channel's
-out dir first.
+TELEPORT_CHROMIUM_DIR set. `gn gen` runs automatically when the channel's out
+dir has no args.gn (release channels still need PGO profiles synced first).
 """
 from __future__ import annotations
 

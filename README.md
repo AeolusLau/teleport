@@ -60,6 +60,8 @@ python scripts/sync.py                        # gclient sync 到 CHROMIUM_VERSIO
 python scripts/apply_patches.py
 
 # 3) 构建(首次数小时;Siso,本地无 RBE)
+uv run python scripts/package.py             # dev 一键:args.gn 缺失时自动 gn gen,再 autoninja + 烘焙版本校验
+# 等价手动路径(gn gen 仅首次需要,out 目录建好后 ninja 会自动 re-gen):
 cd "$TELEPORT_CHROMIUM_DIR/src"
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome        # 产物 Teleport.app,亦在 <repo>/build/mac/arm64/dev/

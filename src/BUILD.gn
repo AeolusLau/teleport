@@ -74,6 +74,29 @@ source_set("teleport_deployment_config") {
   }
 }
 
+# Pure routing/config logic split out of teleport_tunnel_service.{h,cc} so it is
+# unit-testable outside the monolithic chrome/browser (TD-TUNNEL-UNITTEST-WIRING).
+# The tunnel service .cc is compiled INTO chrome/browser via the patch and calls
+# these free functions; :teleport re-exports this target (public_deps below), and
+# chrome/browser — which already deps //teleport — links it transitively, so no
+# chrome/browser BUILD.gn.patch change is needed. Deps are deliberately light
+# (//base + //net + //services/network mojom + //url); no //content, no
+# //chrome/browser — which is exactly what keeps it linkable by teleport_unittests.
+source_set("teleport_tunnel_logic") {
+  sources = [
+    "browser/enterprise/teleport_tunnel_logic.cc",
+    "browser/enterprise/teleport_tunnel_logic.h",
+  ]
+  public_deps = [
+    "//base",
+    "//services/network/public/mojom",
+  ]
+  deps = [
+    "//net",
+    "//url",
+  ]
+}
+
 source_set("teleport") {
   sources = [
     "browser/enterprise/teleport_inplace_enrollment_sequence.cc",
@@ -105,7 +128,13 @@ source_set("teleport") {
     "common/teleport_version.cc",
     "common/teleport_version.h",
   ]
-  public_deps = [ "//components/version_info" ]
+  # teleport_tunnel_logic is re-exported so chrome/browser (which deps //teleport
+  # and compiles teleport_tunnel_service.cc via the patch) links the tunnel free
+  # functions transitively — no chrome/browser BUILD.gn.patch change needed.
+  public_deps = [
+    ":teleport_tunnel_logic",
+    "//components/version_info",
+  ]
   deps = [
     ":teleport_deployment_config",
     ":teleport_server_identity",
@@ -145,6 +174,7 @@ source_set("teleport") {
 test("teleport_unittests") {
   sources = [
     "browser/enterprise/teleport_inplace_enrollment_sequence_unittest.cc",
+    "browser/enterprise/teleport_tunnel_logic_unittest.cc",
     "browser/teleport_startup_unittest.cc",
     "common/teleport_channel_unittest.cc",
     "common/teleport_enroll_logic_unittest.cc",
@@ -170,8 +200,13 @@ test("teleport_unittests") {
     ":teleport_policy_buildflags",
     ":server_identity_proto",
     ":teleport_server_identity",
+    # teleport_tunnel_logic_unittest.cc tests the pure routing/config free
+    # functions; //net for the net::ProxyServer/ProxyConfig/HttpRequestHeaders
+    # types it inspects (network mojom comes transitively via the logic target).
+    ":teleport_tunnel_logic",
     "//base/test:run_all_unittests",
     "//crypto",
+    "//net",
     "//testing/gtest",
     "//url",
   ]

@@ -241,6 +241,22 @@ TEST(TeleportDeploymentDeriveTest, TeleportHostForPreservesPort) {
   EXPECT_EQ(TeleportHostFor("acme.internal"), "teleport.acme.internal");
 }
 
+// EdgeHostFor mirrors TeleportHostFor's port-handling exactly (same straight
+// prefix-concat implementation, different label).
+TEST(TeleportDeploymentDeriveTest, EdgeHostForBasic) {
+  EXPECT_EQ(EdgeHostFor("acme.internal"), "edge.acme.internal");
+}
+
+TEST(TeleportDeploymentDeriveTest, EdgeHostForPreservesPort) {
+  EXPECT_EQ(EdgeHostFor("acme.internal:8443"), "edge.acme.internal:8443");
+  EXPECT_EQ(EdgeHostFor("acme.internal"), "edge.acme.internal");
+}
+
+// EdgeHost() is the zero-arg convenience wrapper: EdgeHostFor(DeploymentDomain()).
+TEST(TeleportDeploymentDeriveTest, EdgeHostUsesDeploymentDomain) {
+  EXPECT_EQ(EdgeHost(), "edge." + DeploymentDomain());
+}
+
 TEST(TeleportDeploymentDeriveTest, DomainHostOnlyForStripsPort) {
   EXPECT_EQ(DomainHostOnlyFor("acme.internal:8443"), "acme.internal");
   EXPECT_EQ(DomainHostOnlyFor("acme.internal"), "acme.internal");

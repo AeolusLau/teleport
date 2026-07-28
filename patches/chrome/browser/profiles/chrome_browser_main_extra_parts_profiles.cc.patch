@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
+index 1569acc6c6d9a..93ea028ff3f41 100644
+--- a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
++++ b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
+@@ -474,6 +474,7 @@
+ #include "chrome/browser/enterprise/signin/oidc_authentication_signin_interceptor_factory.h"
+ #include "chrome/browser/enterprise/signin/profile_token_web_signin_interceptor_factory.h"
+ #include "chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.h"
++#include "teleport/browser/enterprise/teleport_tunnel_service_factory.h"  // teleport overlay
+ #include "chrome/browser/policy/cloud/profile_token_policy_web_signin_service_factory.h"
+ #include "chrome/browser/search_integrity/search_integrity_factory.h"  // nogncheck
+ #include "chrome/browser/signin/accounts_policy_manager_factory.h"
+@@ -1256,6 +1257,7 @@ void ChromeBrowserMainExtraPartsProfiles::
+ #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+   policy::UserPolicyOidcSigninServiceFactory::GetInstance();
+ #endif
++  teleport::TeleportTunnelServiceFactory::GetInstance();  // teleport overlay
+   PredictionModelHandlerProviderFactory::GetInstance();
+   PredictionServiceFactory::GetInstance();
+   predictors::AutocompleteActionPredictorFactory::GetInstance();

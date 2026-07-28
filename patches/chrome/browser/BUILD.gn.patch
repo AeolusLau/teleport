@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index 97b17f850c30d..a1cd52ccfb41b 100644
+index 97b17f850c30d..80a9d3c32ab13 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
-@@ -330,6 +330,18 @@ static_library("browser") {
+@@ -330,6 +330,22 @@ static_library("browser") {
      "component_updater/wasm_tts_engine_component_installer.h",
      "defaults.cc",
      "defaults.h",
@@ -18,10 +18,14 @@ index 97b17f850c30d..a1cd52ccfb41b 100644
 +    "//teleport/browser/enterprise/teleport_enrollment_gate_throttle.h",
 +    "//teleport/browser/enterprise/teleport_oidc_inplace_registrar.cc",
 +    "//teleport/browser/enterprise/teleport_oidc_inplace_registrar.h",
++    "//teleport/browser/enterprise/teleport_tunnel_service.cc",
++    "//teleport/browser/enterprise/teleport_tunnel_service.h",
++    "//teleport/browser/enterprise/teleport_tunnel_service_factory.cc",
++    "//teleport/browser/enterprise/teleport_tunnel_service_factory.h",
      "enterprise/browser_management/browser_management_service.cc",
      "enterprise/browser_management/browser_management_service.h",
      "enterprise/browser_management/browser_management_status_provider.cc",
-@@ -1386,6 +1398,9 @@ static_library("browser") {
+@@ -1386,6 +1402,9 @@ static_library("browser") {
    ]
  
    deps = [
@@ -31,7 +35,7 @@ index 97b17f850c30d..a1cd52ccfb41b 100644
      ":active_use_util",
      ":browser_features",
      ":browser_process",
-@@ -6078,6 +6093,8 @@ static_library("browser") {
+@@ -6078,6 +6097,8 @@ static_library("browser") {
        "accessibility/caption_settings_dialog_mac.cc",
        "app_controller_mac.h",
        "app_controller_mac.mm",
@@ -40,7 +44,7 @@ index 97b17f850c30d..a1cd52ccfb41b 100644
        "browser_process_platform_part_mac.h",
        "browser_process_platform_part_mac.mm",
        "chrome_browser_application_mac.h",
-@@ -7901,6 +7918,8 @@ group("browser_generated_files") {
+@@ -7901,6 +7922,8 @@ group("browser_generated_files") {
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:attestation_ca_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:google_key_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:interface_proto",

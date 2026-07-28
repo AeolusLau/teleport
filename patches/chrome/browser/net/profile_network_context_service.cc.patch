@@ -1,0 +1,38 @@
+diff --git a/chrome/browser/net/profile_network_context_service.cc b/chrome/browser/net/profile_network_context_service.cc
+index 7fed54f2fd078..6ca0ae481fab1 100644
+--- a/chrome/browser/net/profile_network_context_service.cc
++++ b/chrome/browser/net/profile_network_context_service.cc
+@@ -98,6 +98,8 @@
+ #include "services/network/public/mojom/first_party_sets_access_delegate.mojom.h"
+ #include "services/network/public/mojom/network_context.mojom.h"
+ #include "services/network/public/mojom/network_service.mojom.h"
++#include "teleport/browser/enterprise/teleport_tunnel_service_factory.h"  // teleport overlay
++#include "teleport/browser/enterprise/teleport_tunnel_service.h"  // teleport overlay: complete type for BindProxyConfigClient
+ #include "third_party/blink/public/common/features.h"
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+@@ -1636,6 +1638,24 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
+     }
+   }
+ #endif  // BUILDFLAG(IS_CHROMEOS)
++
++  // Teleport overlay: let the per-Profile TeleportTunnelService stamp its
++  // CustomProxyConfigClient receiver so it can hot-push the tunnel routing +
++  // cnf-token injection to THIS profile's NetworkContext (the mojom has no
++  // runtime setter — stamping the receiver here is the only channel). On a
++  // network-service restart this runs again with a fresh receiver: the service
++  // re-binds and re-pushes its last config (see
++  // TeleportTunnelService::BindProxyConfigClient). GetForProfile is null for
++  // profile types the factory does not select (guest/system), so the wiring is
++  // simply skipped there. The factory has no dependency on this service. The
++  // service's constructor stores the Profile*, registers a managed-AutoSelect
++  // pref observer, and DEFERS its restart auto-start check via a PostTask
++  // (never calling Start() synchronously off the ctor) — so this lazy-create
++  // stays non-reentrant and safe from inside NetworkContext configuration.
++  if (auto* tunnel_service =
++          teleport::TeleportTunnelServiceFactory::GetForProfile(profile_)) {
++    tunnel_service->BindProxyConfigClient(network_context_params);
++  }
+ }
+ 
+ base::FilePath ProfileNetworkContextService::GetPartitionPath(

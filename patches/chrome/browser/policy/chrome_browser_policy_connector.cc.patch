@@ -1,0 +1,23 @@
+diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
+index e8799e94462e5..3692c2cf3065b 100644
+--- a/chrome/browser/policy/chrome_browser_policy_connector.cc
++++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
+@@ -103,9 +103,16 @@ void ChromeBrowserPolicyConnector::Init(
+     PrefService* local_state,
+     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+   PolicyLogger::GetInstance()->EnableLogDeletion();
++  // Teleport: pass empty URLs so DeviceManagementServiceConfiguration resolves
++  // them LAZILY at request time (its getters fall back to the deployment-domain-
++  // derived teleport::Deployment*Url()). Resolving GetDeviceManagementUrl() here
++  // — at connector init, before local_state has loaded the user-accepted
++  // deployment domain — would resolve teleport::DeploymentDomain() to the baked
++  // default and freeze the wrong endpoint for the whole process lifetime, so DM
++  // registration silently targets the default domain instead of the configured
++  // one. See chrome/browser/policy/device_management_service_configuration.cc.
+   auto configuration = std::make_unique<DeviceManagementServiceConfiguration>(
+-      GetDeviceManagementUrl(), GetRealtimeReportingUrl(),
+-      GetEncryptedReportingUrl());
++      std::string(), std::string(), std::string());
+   auto device_management_service =
+       std::make_unique<DeviceManagementService>(std::move(configuration));
+   device_management_service->ScheduleInitialization(

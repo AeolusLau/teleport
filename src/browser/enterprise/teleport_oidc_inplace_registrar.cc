@@ -37,6 +37,8 @@
 #include "content/public/browser/storage_partition.h"
 #include "teleport/browser/enterprise/teleport_enrollment_gate.h"
 #include "teleport/browser/enterprise/teleport_inplace_enrollment_sequence.h"
+#include "teleport/browser/enterprise/teleport_tunnel_service.h"
+#include "teleport/browser/enterprise/teleport_tunnel_service_factory.h"
 #include "teleport/common/teleport_enterprise_enrollment.h"
 
 namespace teleport {
@@ -338,6 +340,11 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
       // Record the deployment domain we enrolled against so a later admin-
       // channel domain change is detected as a migration (§4.5).
       PersistEnrolledDomain();
+      // Trigger orchestration (Task T5): the profile is now a signed-in managed
+      // profile with a provisioned device certificate and a fetched managed
+      // policy — exactly the precondition TeleportTunnelService::Start()
+      // documents. Establish the access tunnel before reporting success.
+      MaybeStartTunnelService();
       RunDoneAndDelete(EnrollmentResult::kSuccess);
       return;
     }
@@ -355,6 +362,25 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
     LOG(WARNING) << "[teleport-enroll] enrollment timed out; profile stays "
                     "locked, surfacing failure to the enroll step";
     RunDoneAndDelete(EnrollmentResult::kTimeout);
+  }
+
+  // Task T5 trigger: start the bind -> push-CustomProxyConfig flow for the
+  // just-enrolled profile. Called from the enrollment-success path
+  // (surviving, non-deleting profile). Single-hop collapse (T8): the tunnel
+  // no longer needs the tenant console origin (no session cookie, no bind
+  // ticket) — Start() alone is the whole seam. A LATER browser restart
+  // re-triggers Start() itself via TeleportTunnelService::
+  // MaybeAutoStartFromPrefs (observes the managed AutoSelect pref + this
+  // profile's persisted DM token), so nothing needs to be persisted here.
+  void MaybeStartTunnelService() {
+    TeleportTunnelService* tunnel =
+        TeleportTunnelServiceFactory::GetForProfile(profile_);
+    if (!tunnel) {
+      return;
+    }
+    tunnel->Start();
+    VLOG(1) << "[teleport-tunnel] access tunnel start triggered for enrolled "
+               "profile";
   }
 
   raw_ptr<Profile> profile_;

@@ -1,16 +1,31 @@
 diff --git a/chrome/browser/policy/device_management_service_configuration.cc b/chrome/browser/policy/device_management_service_configuration.cc
-index d07d1ebc44682..5f8ed74011363 100644
+index d07d1ebc44682..08b644420b323 100644
 --- a/chrome/browser/policy/device_management_service_configuration.cc
 +++ b/chrome/browser/policy/device_management_service_configuration.cc
-@@ -15,6 +15,7 @@
+@@ -15,6 +15,8 @@
  #include "build/build_config.h"
  #include "components/policy/core/browser/browser_policy_connector.h"
  #include "components/version_info/version_info.h"
 +#include "components/version_info/teleport_engine_version.h"
++#include "teleport/common/teleport_deployment_config.h"
  
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chromeos/ash/components/system/statistics_provider.h"
-@@ -45,8 +46,12 @@ std::string DeviceManagementServiceConfiguration::GetDMServerUrl() const {
+@@ -41,12 +43,25 @@ DeviceManagementServiceConfiguration::~DeviceManagementServiceConfiguration() =
+     default;
+ 
+ std::string DeviceManagementServiceConfiguration::GetDMServerUrl() const {
+-  return dm_server_url_;
++  // Teleport: resolve the deployment-domain-derived endpoint LAZILY. The value
++  // passed at construction is captured during ChromeBrowserPolicyConnector init,
++  // which runs before local_state finishes loading the user-accepted deployment
++  // domain — so teleport::DeploymentDomain() resolves to the baked default there
++  // and the wrong URL gets frozen for the process lifetime. An empty ctor value
++  // (see chrome_browser_policy_connector.cc) defers resolution to request time,
++  // when the user-accepted domain is available. A non-empty ctor value (tests /
++  // other callers) still wins.
++  return dm_server_url_.empty() ? teleport::DeploymentDeviceManagementServerUrl()
++                                : dm_server_url_;
  }
  
  std::string DeviceManagementServiceConfiguration::GetAgentParameter() const {
@@ -24,3 +39,24 @@ index d07d1ebc44682..5f8ed74011363 100644
                         version_info::GetLastChange(), ")"});
  }
  
+@@ -87,12 +102,18 @@ std::string DeviceManagementServiceConfiguration::GetPlatformParameter() const {
+ 
+ std::string
+ DeviceManagementServiceConfiguration::GetRealtimeReportingServerUrl() const {
+-  return realtime_reporting_server_url_;
++  // Teleport: lazy — see GetDMServerUrl above.
++  return realtime_reporting_server_url_.empty()
++             ? teleport::DeploymentRealtimeReportingUrl()
++             : realtime_reporting_server_url_;
+ }
+ 
+ std::string
+ DeviceManagementServiceConfiguration::GetEncryptedReportingServerUrl() const {
+-  return encrypted_reporting_server_url_;
++  // Teleport: lazy — see GetDMServerUrl above.
++  return encrypted_reporting_server_url_.empty()
++             ? teleport::DeploymentEncryptedReportingUrl()
++             : encrypted_reporting_server_url_;
+ }
+ 
+ }  // namespace policy
