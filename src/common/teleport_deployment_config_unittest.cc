@@ -210,6 +210,62 @@ TEST(TeleportDeploymentConfigJsonTest, RejectsNonDictJson) {
   EXPECT_EQ(ParseDeploymentConfigJson("42"), std::nullopt);            // top-level number
 }
 
+TEST(TeleportDeploymentConfigFileTest, RestrictOnlyNoDomain) {
+  DeploymentConfigFields f =
+      ParseDeploymentConfigFile(R"({"restrict_domain_change":true})");
+  EXPECT_TRUE(f.restrict_domain_change);
+  EXPECT_FALSE(f.domain.has_value());
+  EXPECT_FALSE(f.domain_key_present);
+}
+
+TEST(TeleportDeploymentConfigFileTest, RestrictFalseAndMissingAreFalse) {
+  EXPECT_FALSE(ParseDeploymentConfigFile(R"({"restrict_domain_change":false})")
+                   .restrict_domain_change);
+  EXPECT_FALSE(ParseDeploymentConfigFile(R"({})").restrict_domain_change);
+}
+
+TEST(TeleportDeploymentConfigFileTest, RestrictNonBoolIsFalse) {
+  EXPECT_FALSE(ParseDeploymentConfigFile(R"({"restrict_domain_change":"true"})")
+                   .restrict_domain_change);
+}
+
+TEST(TeleportDeploymentConfigFileTest, DomainPresentValid) {
+  DeploymentConfigFields f = ParseDeploymentConfigFile(R"({"domain":"acme.io"})");
+  EXPECT_EQ(f.domain, "acme.io");
+  EXPECT_TRUE(f.domain_key_present);
+  EXPECT_FALSE(f.restrict_domain_change);
+}
+
+TEST(TeleportDeploymentConfigFileTest, DomainPresentButInvalidFlagsPresence) {
+  DeploymentConfigFields f =
+      ParseDeploymentConfigFile(R"({"domain":"https://bad/x"})");
+  EXPECT_FALSE(f.domain.has_value());
+  EXPECT_TRUE(f.domain_key_present);  // drives the invalid-domain error log
+}
+
+TEST(TeleportDeploymentConfigFileTest, DomainNonStringFlagsPresence) {
+  DeploymentConfigFields f = ParseDeploymentConfigFile(R"({"domain":42})");
+  EXPECT_FALSE(f.domain.has_value());
+  EXPECT_TRUE(f.domain_key_present);  // key exists (wrong type) -> still an error
+}
+
+TEST(TeleportDeploymentConfigFileTest, DomainAndRestrictTogether) {
+  DeploymentConfigFields f = ParseDeploymentConfigFile(
+      R"({"domain":"acme.io","restrict_domain_change":true})");
+  EXPECT_EQ(f.domain, "acme.io");
+  EXPECT_TRUE(f.domain_key_present);
+  EXPECT_TRUE(f.restrict_domain_change);
+}
+
+TEST(TeleportDeploymentConfigFileTest, MalformedAndNonDictAreAllDefault) {
+  DeploymentConfigFields f1 = ParseDeploymentConfigFile("{not json");
+  EXPECT_FALSE(f1.domain_key_present);
+  EXPECT_FALSE(f1.restrict_domain_change);
+  DeploymentConfigFields f2 = ParseDeploymentConfigFile("[1,2,3]");
+  EXPECT_FALSE(f2.domain_key_present);
+  EXPECT_FALSE(f2.restrict_domain_change);
+}
+
 TEST(TeleportDeploymentDeriveTest, DerivesTeleportHostUrls) {
   // Uses the baked default (no source override in this test process).
   const std::string d = DeploymentDomain();

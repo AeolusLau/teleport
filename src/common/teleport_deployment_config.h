@@ -57,6 +57,12 @@ bool IsDomainChangeLocked(DeploymentDomainSource source,
 // rotation. False on non-mac / when unset.
 bool ReadRestrictDomainChangeForced();
 
+// True iff an admin has restricted domain change via EITHER channel: the forced
+// managed pref (ReadRestrictDomainChangeForced) OR a trusted machine config file
+// carrying "restrict_domain_change": true. Only ever locks (OR of two opt-ins);
+// there is no unlock path. Consumed by the enroll page (§4.6).
+bool IsDomainChangeRestrictedByAdmin();
+
 // Level 4 (user-accepted, from the teleport://enroll page) is read via an
 // injected callback so this //base+//url leaf never depends on //crypto, the
 // server-identity proto, or Local State (all of which live in heavier targets /
@@ -89,8 +95,32 @@ DeploymentResolution SelectDeploymentDomain(
     std::optional<std::string> user_accepted,
     std::string baked_default);
 
+// Parsed fields of the level-3 machine config file. `domain` is the normalized
+// value (nullopt when the "domain" key is absent OR present-but-invalid);
+// `domain_key_present` distinguishes those two so a restrict-only file does not
+// trip the invalid-domain error log. `restrict_domain_change` is the §4.6 lock
+// opt-in (false when the key is absent or non-boolean).
+struct DeploymentConfigFields {
+  DeploymentConfigFields();
+  DeploymentConfigFields(const DeploymentConfigFields&);
+  DeploymentConfigFields(DeploymentConfigFields&&);
+  DeploymentConfigFields& operator=(const DeploymentConfigFields&);
+  DeploymentConfigFields& operator=(DeploymentConfigFields&&);
+  ~DeploymentConfigFields();
+
+  std::optional<std::string> domain;
+  bool domain_key_present = false;
+  bool restrict_domain_change = false;
+};
+
+// Pure parser for the machine config file JSON. Does no file IO. All parsing
+// logic lives here (fully unit-testable); the readers are thin trust-gated
+// wrappers. Non-dict / malformed JSON yields all-default fields.
+DeploymentConfigFields ParseDeploymentConfigFile(std::string_view contents);
+
 // Parse the machine config file JSON, returning the normalized "domain" value or
 // nullopt (missing/non-string/invalid domain, or malformed JSON). Does no file IO.
+// Thin shim over ParseDeploymentConfigFile (kept for existing callers/tests).
 std::optional<std::string> ParseDeploymentConfigJson(std::string_view contents);
 
 // Absolute path of the machine-level deployment config file (level 3).

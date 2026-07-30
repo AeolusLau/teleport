@@ -51,23 +51,54 @@ constexpr char kBakedDefaultDomain[] = "douan.cn";
 constexpr char kBakedDefaultDomain[] = "fairyland.io";
 #endif
 
-// Level 3 (cross-platform): read + trust-gate + parse the machine config file.
+// Level 3 (cross-platform): read + trust-gate + parse the machine config file
+// ONCE, cached for the process lifetime. The blocking file IO happens on the
+// FIRST call only — which is the startup deployment-domain resolution (an
+// allow-blocking context: DeploymentDomain() -> Cached() -> ResolveUncached()
+// -> ReadMachineFileDomain()), never a UI-thread lock check. This mirrors the
+// domain cache in Cached() below and is REQUIRED: IsDomainChangeRestrictedByAdmin
+// consults the restrict field from the enroll page's Mojo GetState handler on the
+// UI thread, where blocking file IO would DCHECK-abort. Reading both fields from
+// one cached parse also avoids reading the file twice (domain + restrict). Logs
+// fire once, at the startup read.
+const DeploymentConfigFields& CachedMachineFile() {
+  static const base::NoDestructor<DeploymentConfigFields> cached([] {
+    DeploymentConfigFields fields;
+    base::FilePath path(kDeploymentConfigFilePath);
+    if (!IsMachineConfigFileTrusted(path)) {
+      return fields;
+    }
+    std::string contents;
+    if (!base::ReadFileToString(path, &contents)) {
+      LOG(ERROR) << "[teleport-deployment] machine config file unreadable";
+      return fields;
+    }
+    fields = ParseDeploymentConfigFile(contents);
+    // A "domain" key present but not yielding a valid domain is a real admin
+    // mistake; a restrict-only file (no "domain" key) is a legitimate state.
+    if (fields.domain_key_present && !fields.domain) {
+      LOG(ERROR) << "[teleport-deployment] machine config file has an invalid "
+                    "domain value";
+    }
+    if (fields.restrict_domain_change && !fields.domain) {
+      LOG(WARNING) << "[teleport-deployment] restrict_domain_change honored but "
+                      "no valid deployment domain in machine config file; the "
+                      "device stays on the resolved (likely default) domain";
+    }
+    return fields;
+  }());
+  return *cached;
+}
+
 std::optional<std::string> ReadMachineFileDomain() {
-  base::FilePath path(kDeploymentConfigFilePath);
-  if (!IsMachineConfigFileTrusted(path)) {
-    return std::nullopt;
-  }
-  std::string contents;
-  if (!base::ReadFileToString(path, &contents)) {
-    LOG(ERROR) << "[teleport-deployment] machine config file unreadable";
-    return std::nullopt;
-  }
-  std::optional<std::string> domain = ParseDeploymentConfigJson(contents);
-  if (!domain) {
-    LOG(ERROR)
-        << "[teleport-deployment] machine config file has no valid domain";
-  }
-  return domain;
+  return CachedMachineFile().domain;
+}
+
+// §4.6 corp-managed lock, machine-file channel: the trusted file's
+// "restrict_domain_change" boolean (absent / untrusted / unreadable -> false).
+// Reads the process-cached parse, so it is safe to call from the UI thread.
+bool ReadMachineFileRestrict() {
+  return CachedMachineFile().restrict_domain_change;
 }
 
 // Resolve the deployment domain by descending the source precedence: level 1
@@ -141,6 +172,10 @@ bool IsDomainChangeLocked(DeploymentDomainSource source,
   }
   // Level 4/5: locked only by the explicit dedicated restrict policy.
   return restrict_change_forced;
+}
+
+bool IsDomainChangeRestrictedByAdmin() {
+  return ReadRestrictDomainChangeForced() || ReadMachineFileRestrict();
 }
 
 std::optional<std::string> NormalizeDeploymentDomain(std::string_view input) {
@@ -226,17 +261,41 @@ DeploymentResolution SelectDeploymentDomain(
   return {std::move(baked_default), DeploymentDomainSource::kBakedDefault};
 }
 
-std::optional<std::string> ParseDeploymentConfigJson(std::string_view contents) {
+DeploymentConfigFields::DeploymentConfigFields() = default;
+DeploymentConfigFields::DeploymentConfigFields(const DeploymentConfigFields&) =
+    default;
+DeploymentConfigFields::DeploymentConfigFields(DeploymentConfigFields&&) =
+    default;
+DeploymentConfigFields& DeploymentConfigFields::operator=(
+    const DeploymentConfigFields&) = default;
+DeploymentConfigFields& DeploymentConfigFields::operator=(
+    DeploymentConfigFields&&) = default;
+DeploymentConfigFields::~DeploymentConfigFields() = default;
+
+DeploymentConfigFields ParseDeploymentConfigFile(std::string_view contents) {
+  DeploymentConfigFields fields;
   std::optional<base::Value> value =
       base::JSONReader::Read(contents, base::JSON_PARSE_RFC);
   if (!value || !value->is_dict()) {
-    return std::nullopt;
+    return fields;  // all defaults
   }
-  const std::string* domain = value->GetDict().FindString("domain");
-  if (!domain) {
-    return std::nullopt;
+  const auto& dict = value->GetDict();
+  // A "domain" key of ANY type marks presence (so a wrong-typed value still
+  // logs as an admin error, matching the pre-refactor behavior); only a string
+  // value is normalized into an actual domain.
+  if (const base::Value* domain_val = dict.Find("domain")) {
+    fields.domain_key_present = true;
+    if (const std::string* domain_str = domain_val->GetIfString()) {
+      fields.domain = NormalizeDeploymentDomain(*domain_str);
+    }
   }
-  return NormalizeDeploymentDomain(*domain);
+  fields.restrict_domain_change =
+      dict.FindBool("restrict_domain_change").value_or(false);
+  return fields;
+}
+
+std::optional<std::string> ParseDeploymentConfigJson(std::string_view contents) {
+  return ParseDeploymentConfigFile(contents).domain;
 }
 
 bool IsMachineConfigFileTrusted(const base::FilePath& path) {

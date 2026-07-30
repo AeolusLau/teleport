@@ -70,11 +70,12 @@ const char* StatusToString(EnrollStatus status) {
   }
 }
 
-// The §4.6 corp-managed lock: reads the explicit signals (source level + forced
-// restrict pref) and folds them through the pure predicate.
+// The §4.6 corp-managed lock: source level + the admin restrict signal (forced
+// managed pref OR trusted machine config file), folded through the pure
+// predicate.
 bool IsEnrollPageLocked() {
   return IsDomainChangeLocked(DeploymentDomainSourceLevel(),
-                              ReadRestrictDomainChangeForced());
+                              IsDomainChangeRestrictedByAdmin());
 }
 
 }  // namespace

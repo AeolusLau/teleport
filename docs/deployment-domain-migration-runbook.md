@@ -90,7 +90,8 @@ enroll 页的「自助换域/解绑」仅对 **BYOD** 开放。**公司设备禁
 | 设备形态 | 锁定信号 | IT 配置 |
 |---|---|---|
 | 私有化/气隙受管 | D 经管控偏好 / 机器文件下发(第 2/3 级) | 下发 D 即自动锁,无需额外配置 |
-| SaaS 受管(D=官方默认) | 强制 managed pref `RestrictDeploymentDomainChange=true` | MDM 下发该布尔键(见下) |
+| SaaS 受管(D=官方默认,有 MDM) | 强制 managed pref `RestrictDeploymentDomainChange=true` | MDM 下发该布尔键(见下) |
+| SaaS 受管(D=官方默认,无 MDM) | 机器文件 `restrict_domain_change:true` | 写 `/Library/Teleport/DeploymentConfig.json`(root 属主 + 644),与 forced managed pref 同为 level 4/5 加锁通道,OR 生效(见下) |
 | 纯 BYOD | 以上皆无 | 可自助换域 / 解绑 |
 
 > 锁定按**管理员显式声明**判定。**机器级 CBCM 纳管不作自动锁信号**(评估后否决,§4.6):故 CBCM 管理的 SaaS-默认域设备**必须**显式配 `RestrictDeploymentDomainChange`(或域名策略),否则用户可经 enroll 页改域(改后 §4.5 迁移会重纳管,不僵尸态,但等于脱管)。交付时务必对受管客户强调此项。
@@ -98,6 +99,16 @@ enroll 页的「自助换域/解绑」仅对 **BYOD** 开放。**公司设备禁
 **`RestrictDeploymentDomainChange`(macOS managed pref)**:
 - bundle id `cn.douan.Teleport`,键 `RestrictDeploymentDomainChange`,布尔,**必须 forced**(经 MDM / 配置描述文件下发;普通用户可写偏好不生效,与 `DeploymentDomain` 同一信任门)。
 - 适用:使用 SaaS 官方默认域、但通过 MDM 管理设备、且不希望用户改域的租户。**与域名值解耦**——D 仍走烘焙默认,官方域名轮换自动跟随,无需在策略里钉死域名(优于「用域名策略钉官方域」)。
+
+**`restrict_domain_change`(机器文件,无 MDM 的轻量通道)**:
+- 与 `domain` 键同一文件 `/Library/Teleport/DeploymentConfig.json`、**同一信任门**(root 属主 + 非组/全局可写);解析走纯函数 `ParseDeploymentConfigFile`。机器文件在**启动期读取一次并进程级缓存**(与 `domain` 同一次 `CachedMachineFile()` 读,避免在 enroll 页的 UI 线程做阻塞文件 IO——那会 DCHECK abort),故**改动机器文件需重启浏览器生效**(与 `domain` 一致;forced managed pref 通道仍 live 生效)。`IsDomainChangeRestrictedByAdmin` 把机器文件 restrict 与 forced pref **OR**。
+- 可独立于 `domain` 存在:`{"restrict_domain_change": true}`(不带 domain)让域名留在内置默认(level 5)、但锁定 enroll 页——正是无 MDM 的 SaaS-默认域受管设备所需。
+- 设置(需 root,`sudo defaults write` 写不进该目录,直接落文件):
+  ```bash
+  printf '{"restrict_domain_change": true}\n' | sudo tee /Library/Teleport/DeploymentConfig.json >/dev/null
+  sudo chown root:wheel /Library/Teleport/DeploymentConfig.json && sudo chmod 644 /Library/Teleport/DeploymentConfig.json
+  ```
+- ⚠️ 若同时写了**无效**的 `domain` 值(如带 scheme/path):设备静默落内置默认域并仍被锁(fail-closed),日志有 `WARNING: restrict_domain_change honored but no valid deployment domain`。交付时提示管理员核对 `domain` 为规范 `host[:port]` 形态。
 
 ## 5. 待补(后续)
 
