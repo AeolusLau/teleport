@@ -183,9 +183,9 @@
 - **登记日期**:2026-07-24 · **优先级**:P2(功能自洽——BYOD-first 默认对当前发布阶段正确;企业客户要求强制纳管前必须补)
 - **背景**:强制纳管唯一开关 `kRequireEnrollmentToBrowse`(`teleport_pref_names.h`)是纯 local_state 布尔 pref,注册于 `RegisterEnrollmentGateLocalStatePrefs`(默认 false)。本特性**没有**提供任何企业下发该开关的通道——既非 MDM forced pref(macOS managed preferences),也非机器配置文件字段(`/Library/Teleport/DeploymentConfig.json` 目前只承载 `DeploymentDomain`,不含 gate 开关),也未映射为 CBCM 云策略。
 - **影响**:企业客户今天**没有任何生产可用的方式**把浏览器切到强制纳管模式;唯一验证手段是手改 local_state 或测试钩子(`ResetRequireEnrollmentGateForTesting`),不可用于真实设备下发。
-- **当前处置**:无(spec §2 非目标,dev-only 验证)。
-- **将来方向**:比照 `DeploymentDomain` 已有的三级下发模式(命令行 / MDM forced pref / 机器配置文件)新增一个 gate 布尔键,读取时机与 `RequireEnrollmentGateEnabled()` 的会话冻结语义对齐(§4.1);CBCM 云策略映射需与 fairyland 策略协议同步设计。
-- **关键引用**:`src/browser/enterprise/teleport_enrollment_gate.{h,cc}`、`src/browser/enterprise/teleport_force_signin.{h,cc}`、spec §2「非目标」。
+- **当前处置**:**已关闭(2026-07-30,分支 worktree-force-signin-policy-gate)**——不新增专有键,改为把上游平台策略接回 gate:`BrowserSignin=2 (Force)` 与遗留 `ForceBrowserSignin`(`BrowserSignin` 未设时生效)的 policy handler 均改写为设置 `kRequireEnrollmentToBrowse`(patch `browser_signin_policy_handler.cc` + `configuration_policy_handler_list_factory.cc`)。由此 MDM managed pref(macOS)/ GPO(Windows)/ policy JSON(Linux)全平台通道自动可用;CBCM 云策略下发同一策略名也走同一 handler(首次生效可能晚一个重启,云策略缓存异步加载)。策略 `dynamic_refresh:false` 与会话冻结谓词语义一致。活体验证:dev 构建下 `BrowserSignin=2` / `ForceBrowserSignin=true`(recommended 层即生效)均锁 picker,撤策略恢复。
+- **残余注意**:语义与 Chrome 公开文档不同(Chrome=强制 Google 登录,本产品=强制纳管),交付文档须注明;机器配置文件(`/Library/Teleport/DeploymentConfig.json`)仍不承载 gate 开关(无 MDM 的私有化场景如需,另行评估)。
+- **关键引用**:`patches/chrome/browser/policy/browser_signin_policy_handler.cc.patch`、`patches/chrome/browser/policy/configuration_policy_handler_list_factory.cc.patch`、`src/browser/enterprise/teleport_force_signin.{h,cc}`。
 
 ### TD-018 `chrome://settings` guest 开关回显与动态禁用 desync
 

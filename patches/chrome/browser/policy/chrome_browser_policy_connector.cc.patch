@@ -1,8 +1,16 @@
 diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
-index e8799e94462e5..3692c2cf3065b 100644
+index e8799e94462e5..be4fe6198afa2 100644
 --- a/chrome/browser/policy/chrome_browser_policy_connector.cc
 +++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
-@@ -103,9 +103,16 @@ void ChromeBrowserPolicyConnector::Init(
+@@ -54,6 +54,7 @@
+ #include "base/strings/sys_string_conversions.h"
+ #include "components/policy/core/common/policy_loader_mac.h"
+ #include "components/policy/core/common/preferences_mac.h"
++#include "teleport/common/teleport_enterprise_enrollment.h"
+ #elif BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/policy/chrome_browser_cloud_management_controller_android.h"
+ #include "components/policy/core/common/android/android_combined_policy_provider.h"
+@@ -103,9 +104,16 @@ void ChromeBrowserPolicyConnector::Init(
      PrefService* local_state,
      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
    PolicyLogger::GetInstance()->EnableLogDeletion();
@@ -21,3 +29,21 @@ index e8799e94462e5..3692c2cf3065b 100644
    auto device_management_service =
        std::make_unique<DeviceManagementService>(std::move(configuration));
    device_management_service->ScheduleInitialization(
+@@ -331,8 +339,16 @@ ChromeBrowserPolicyConnector::CreatePlatformProvider() {
+ #elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+   CFStringRef bundle_id = CFSTR("com.google.ChromeForTesting");
+ #else
++  // teleport: mirror the GOOGLE_CHROME_BRANDING behavior above — read
++  // platform policies from the FIXED base bundle id, no matter which channel
++  // (.canary/.beta) this app actually is. One MDM payload configures every
++  // channel, and upstream policy keys share the same preference domain as
++  // the Teleport-owned keys (DeploymentDomain, enrollment token — see
++  // teleport::kManagedPrefsBundleId). Without this, BaseBundleID() resolves
++  // to the channel-suffixed id (SetUpBundleOverrides copies the outer
++  // bundle's identifier verbatim), splitting the policy domain per channel.
+   base::apple::ScopedCFTypeRef<CFStringRef> bundle_id_scoper =
+-      base::SysUTF8ToCFStringRef(base::apple::BaseBundleID());
++      base::SysUTF8ToCFStringRef(teleport::kManagedPrefsBundleId);
+   CFStringRef bundle_id = bundle_id_scoper.get();
+ #endif
+   auto loader = std::make_unique<PolicyLoaderMac>(
