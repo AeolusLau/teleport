@@ -1,0 +1,41 @@
+diff --git a/net/http/http_network_transaction.cc b/net/http/http_network_transaction.cc
+index 9a8e75c7a4622..d8c7c130ec1b4 100644
+--- a/net/http/http_network_transaction.cc
++++ b/net/http/http_network_transaction.cc
+@@ -41,6 +41,7 @@
+ #include "net/base/load_timing_internal_info.h"
+ #include "net/base/net_errors.h"
+ #include "net/base/proxy_chain.h"
++#include "net/base/proxy_delegate.h"
+ #include "net/base/proxy_server.h"
+ #include "net/base/transport_info.h"
+ #include "net/base/upload_data_stream.h"
+@@ -1409,6 +1410,28 @@ int HttpNetworkTransaction::BuildRequestHeaders(
+     modify_headers_callbacks_.Run(&request_headers_);
+   }
+ 
++  // For non-tunneled (http://) forward-proxy requests, give the proxy
++  // delegate a chance to inject headers destined for the proxy. This mirrors
++  // OnBeforeTunnelRequest, which only runs on the CONNECT/tunnel path; without
++  // this hook a plain http:// forward-proxy request reaches the proxy with no
++  // proxy-destined headers (e.g. Teleport's cnf Proxy-Authorization token).
++  //
++  // Merge into a FRESH buffer first, then MergeFrom (which uses SetHeader, a
++  // true overwrite) onto request_headers_. Passing &request_headers_ directly
++  // would be wrong: the delegate's MergeRequestHeaders comma-appends onto an
++  // existing header, so if proxy auth already put a Proxy-Authorization here
++  // (the AddAuthorizationHeader block above) the result would be a malformed
++  // "<cached>, Bearer <cnf>". The fresh-buffer + MergeFrom path makes the
++  // delegate's value win cleanly, matching the CONNECT-tunnel precedent.
++  if (using_http_proxy_without_tunnel) {
++    if (ProxyDelegate* proxy_delegate = session_->context().proxy_delegate) {
++      HttpRequestHeaders forward_proxy_headers;
++      proxy_delegate->OnBeforeForwardProxyRequest(proxy_info_.proxy_chain(),
++                                                  &forward_proxy_headers);
++      request_headers_.MergeFrom(forward_proxy_headers);
++    }
++  }
++
+   response_.did_use_server_http_auth =
+       request_headers_.HasHeader(HttpRequestHeaders::kAuthorization);
+   return OK;

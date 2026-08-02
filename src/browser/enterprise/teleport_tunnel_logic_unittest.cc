@@ -89,6 +89,13 @@ TEST(TeleportTunnelProxyConfigTest, BuildsReverseBypassRoutingWithTokenHeader) {
       config->connect_tunnel_headers.GetHeader("Proxy-Authorization");
   ASSERT_TRUE(header);
   EXPECT_EQ(*header, "Bearer CNFTOKEN");
+
+  // The same cnf token also rides non-tunneled forward-proxy (http://) requests
+  // so plaintext HTTP backends reach the edge authenticated.
+  std::optional<std::string> forward_header =
+      config->forward_proxy_headers.GetHeader("Proxy-Authorization");
+  ASSERT_TRUE(forward_header);
+  EXPECT_EQ(*forward_header, "Bearer CNFTOKEN");
 }
 
 }  // namespace

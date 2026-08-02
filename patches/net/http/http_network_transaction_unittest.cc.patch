@@ -1,0 +1,237 @@
+diff --git a/net/http/http_network_transaction_unittest.cc b/net/http/http_network_transaction_unittest.cc
+index b62e83957cef6..b2192b5760af7 100644
+--- a/net/http/http_network_transaction_unittest.cc
++++ b/net/http/http_network_transaction_unittest.cc
+@@ -19979,6 +19979,232 @@ TEST_P(HttpNetworkTransactionTest, ProxyTunnelGet) {
+                                  CONNECT_TIMING_HAS_SSL_TIMES);
+ }
+ 
++// Teleport HTTP-backend support: a non-tunneled (http://) forward-proxy
++// request must run the ProxyDelegate::OnBeforeForwardProxyRequest hook exactly
++// once and carry the injected header on the request sent to the proxy.
++// Counterpart of the CONNECT-only OnBeforeTunnelRequest path.
++TEST_P(HttpNetworkTransactionTest,
++       ForwardProxyRequestInjectsProxyDelegateHeaders) {
++  session_deps_.proxy_resolution_service =
++      ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
++          "PROXY myproxy:70", TRAFFIC_ANNOTATION_FOR_TESTS);
++  session_deps_.proxy_delegate = std::make_unique<TestProxyDelegate>();
++  auto* proxy_delegate =
++      static_cast<TestProxyDelegate*>(session_deps_.proxy_delegate.get());
++  proxy_delegate->set_extra_header_name("X-Teleport-Forward");
++  session_deps_.proxy_resolution_service->SetProxyDelegate(proxy_delegate);
++  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
++
++  HttpRequestInfo request;
++  request.method = "GET";
++  request.url = GURL("http://www.example.org/");
++  request.traffic_annotation =
++      MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
++
++  const std::string header_value = TestProxyDelegate::GetExtraHeaderValue(
++      ProxyServer(ProxyServer::SCHEME_HTTP, HostPortPair("myproxy", 70)));
++  // The injected header is appended (MergeFrom) after the standard
++  // forward-proxy headers.
++  const std::string expected_write = base::StringPrintf(
++      "GET http://www.example.org/ HTTP/1.1\r\n"
++      "Host: www.example.org\r\n"
++      "Proxy-Connection: keep-alive\r\n"
++      "X-Teleport-Forward: %s\r\n\r\n",
++      header_value.c_str());
++  MockWrite data_writes1[] = {MockWrite(expected_write)};
++
++  MockRead data_reads1[] = {
++      MockRead("HTTP/1.1 200 OK\r\n"),
++      MockRead("Content-Length: 0\r\n\r\n"),
++      MockRead(SYNCHRONOUS, OK),
++  };
++
++  StaticSocketDataProvider data1(data_reads1, data_writes1);
++  session_deps_.socket_factory->AddSocketDataProvider(&data1);
++
++  TestCompletionCallback callback1;
++  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
++  int rv = trans.Start(&request, callback1.callback(),
++                       NetLogWithSource::Make(NetLogSourceType::NONE));
++  EXPECT_THAT(callback1.GetResult(rv), IsOk());
++
++  EXPECT_EQ(proxy_delegate->on_before_forward_proxy_request_call_count(), 1u);
++  // The tunnel hook must NOT run on a plain http:// forward-proxy request.
++  EXPECT_EQ(proxy_delegate->on_before_tunnel_request_call_count(), 0u);
++}
++
++// The forward-proxy hook must NOT fire for a tunneled (https://) request
++// through the same proxy — that path uses the CONNECT tunnel
++// (OnBeforeTunnelRequest).
++TEST_P(HttpNetworkTransactionTest,
++       ForwardProxyHookNotCalledForTunneledRequest) {
++  session_deps_.proxy_resolution_service =
++      ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
++          "PROXY myproxy:70", TRAFFIC_ANNOTATION_FOR_TESTS);
++  session_deps_.proxy_delegate = std::make_unique<TestProxyDelegate>();
++  auto* proxy_delegate =
++      static_cast<TestProxyDelegate*>(session_deps_.proxy_delegate.get());
++  session_deps_.proxy_resolution_service->SetProxyDelegate(proxy_delegate);
++  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
++
++  HttpRequestInfo request;
++  request.method = "GET";
++  request.url = GURL("https://www.example.org/");
++  request.traffic_annotation =
++      MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
++
++  MockWrite data_writes1[] = {
++      MockWrite("CONNECT www.example.org:443 HTTP/1.1\r\n"
++                "Host: www.example.org:443\r\n"
++                "Proxy-Connection: keep-alive\r\n"
++                "User-Agent: test-ua\r\n\r\n"),
++      MockWrite("GET / HTTP/1.1\r\n"
++                "Host: www.example.org\r\n"
++                "Connection: keep-alive\r\n\r\n"),
++  };
++  MockRead data_reads1[] = {
++      MockRead("HTTP/1.1 200 Connection Established\r\n\r\n"),
++      MockRead("HTTP/1.1 200 OK\r\n"),
++      MockRead("Content-Length: 0\r\n\r\n"),
++      MockRead(SYNCHRONOUS, OK),
++  };
++
++  StaticSocketDataProvider data1(data_reads1, data_writes1);
++  session_deps_.socket_factory->AddSocketDataProvider(&data1);
++  SSLSocketDataProvider ssl(ASYNC, OK);
++  session_deps_.socket_factory->AddSSLSocketDataProvider(&ssl);
++
++  TestCompletionCallback callback1;
++  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
++  int rv = trans.Start(&request, callback1.callback(),
++                       NetLogWithSource::Make(NetLogSourceType::NONE));
++  EXPECT_THAT(callback1.GetResult(rv), IsOk());
++
++  EXPECT_EQ(proxy_delegate->on_before_tunnel_request_call_count(), 1u);
++  EXPECT_EQ(proxy_delegate->on_before_forward_proxy_request_call_count(), 0u);
++}
++
++// A null proxy delegate on the forward-proxy path must be a safe no-op, not a
++// crash (the call site guards on session_->context().proxy_delegate).
++TEST_P(HttpNetworkTransactionTest,
++       ForwardProxyRequestWithoutProxyDelegateSucceeds) {
++  session_deps_.proxy_resolution_service =
++      ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
++          "PROXY myproxy:70", TRAFFIC_ANNOTATION_FOR_TESTS);
++  // No proxy delegate is set on the session.
++  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
++
++  HttpRequestInfo request;
++  request.method = "GET";
++  request.url = GURL("http://www.example.org/");
++  request.traffic_annotation =
++      MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
++
++  MockWrite data_writes1[] = {
++      MockWrite("GET http://www.example.org/ HTTP/1.1\r\n"
++                "Host: www.example.org\r\n"
++                "Proxy-Connection: keep-alive\r\n\r\n"),
++  };
++  MockRead data_reads1[] = {
++      MockRead("HTTP/1.1 200 OK\r\n"),
++      MockRead("Content-Length: 0\r\n\r\n"),
++      MockRead(SYNCHRONOUS, OK),
++  };
++
++  StaticSocketDataProvider data1(data_reads1, data_writes1);
++  session_deps_.socket_factory->AddSocketDataProvider(&data1);
++
++  TestCompletionCallback callback1;
++  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
++  int rv = trans.Start(&request, callback1.callback(),
++                       NetLogWithSource::Make(NetLogSourceType::NONE));
++  EXPECT_THAT(callback1.GetResult(rv), IsOk());
++}
++
++// Regression guard for the fresh-buffer overwrite-merge at the call site: if
++// proxy auth already placed a Proxy-Authorization header on the request, the
++// delegate's forward-proxy header must OVERWRITE it cleanly — not comma-append
++// (which MergeRequestHeaders would do if passed request_headers_ directly),
++// yielding a malformed "Basic ..., <delegate>" value.
++TEST_P(HttpNetworkTransactionTest,
++       ForwardProxyHeaderOverwritesCachedProxyAuth) {
++  session_deps_.proxy_resolution_service =
++      ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
++          "PROXY myproxy:70", TRAFFIC_ANNOTATION_FOR_TESTS);
++  session_deps_.proxy_delegate = std::make_unique<TestProxyDelegate>();
++  auto* proxy_delegate =
++      static_cast<TestProxyDelegate*>(session_deps_.proxy_delegate.get());
++  // The delegate injects the SAME header proxy auth uses, forcing a collision.
++  proxy_delegate->set_extra_header_name(
++      HttpRequestHeaders::kProxyAuthorization);
++  session_deps_.proxy_resolution_service->SetProxyDelegate(proxy_delegate);
++  std::unique_ptr<HttpNetworkSession> session(CreateSession(&session_deps_));
++
++  HttpRequestInfo request;
++  request.method = "GET";
++  request.url = GURL("http://www.example.org/");
++  request.traffic_annotation =
++      MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS);
++
++  const std::string header_value = TestProxyDelegate::GetExtraHeaderValue(
++      ProxyServer(ProxyServer::SCHEME_HTTP, HostPortPair("myproxy", 70)));
++  // Both attempts must carry exactly this clean, overwritten value. With the
++  // comma-append bug the retry would be "Basic Zm9vOmJhcg==, <header_value>".
++  const std::string expected_write = base::StringPrintf(
++      "GET http://www.example.org/ HTTP/1.1\r\n"
++      "Host: www.example.org\r\n"
++      "Proxy-Connection: keep-alive\r\n"
++      "Proxy-Authorization: %s\r\n\r\n",
++      header_value.c_str());
++
++  // First attempt: no cached auth yet, so the delegate injects
++  // Proxy-Authorization.
++  MockWrite data_writes1[] = {MockWrite(expected_write)};
++  MockRead data_reads1[] = {
++      MockRead("HTTP/1.1 407 Proxy Authentication Required\r\n"),
++      MockRead("Proxy-Authenticate: Basic realm=\"MyRealm1\"\r\n"),
++      MockRead("Content-Length: 0\r\n"),
++      MockRead("Proxy-Connection: close\r\n\r\n"),
++  };
++  // Retry after RestartWithAuth: AddAuthorizationHeader sets Basic credentials,
++  // then the delegate overwrites Proxy-Authorization back to the clean value.
++  MockWrite data_writes2[] = {MockWrite(expected_write)};
++  MockRead data_reads2[] = {
++      MockRead("HTTP/1.1 200 OK\r\n"),
++      MockRead("Content-Length: 0\r\n\r\n"),
++      MockRead(SYNCHRONOUS, OK),
++  };
++
++  StaticSocketDataProvider data1(data_reads1, data_writes1);
++  StaticSocketDataProvider data2(data_reads2, data_writes2);
++  session_deps_.socket_factory->AddSocketDataProvider(&data1);
++  session_deps_.socket_factory->AddSocketDataProvider(&data2);
++
++  TestCompletionCallback callback1;
++  HttpNetworkTransaction trans(DEFAULT_PRIORITY, session.get());
++  int rv = trans.Start(&request, callback1.callback(),
++                       NetLogWithSource::Make(NetLogSourceType::NONE));
++  EXPECT_THAT(callback1.GetResult(rv), IsOk());
++
++  const HttpResponseInfo* response = trans.GetResponseInfo();
++  ASSERT_TRUE(response);
++  ASSERT_TRUE(response->headers);
++  EXPECT_EQ(407, response->headers->response_code());
++  ASSERT_TRUE(response->auth_challenge.has_value());
++
++  rv = trans.RestartWithAuth(AuthCredentials(u"foo", u"bar"),
++                             callback1.callback());
++  EXPECT_THAT(callback1.GetResult(rv), IsOk());
++
++  response = trans.GetResponseInfo();
++  ASSERT_TRUE(response);
++  ASSERT_TRUE(response->headers);
++  EXPECT_EQ(200, response->headers->response_code());
++
++  // Fired on the initial attempt and the authed retry.
++  EXPECT_EQ(proxy_delegate->on_before_forward_proxy_request_call_count(), 2u);
++}
++
+ // Test a basic HTTPS GET request through a proxy, connecting to an IPv6
+ // literal host.
+ TEST_P(HttpNetworkTransactionTest, ProxyTunnelGetIPv6) {

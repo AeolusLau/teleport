@@ -1,0 +1,22 @@
+diff --git a/services/network/network_service_proxy_delegate.cc b/services/network/network_service_proxy_delegate.cc
+index 8075625c0c111..41625f5ad3951 100644
+--- a/services/network/network_service_proxy_delegate.cc
++++ b/services/network/network_service_proxy_delegate.cc
+@@ -157,6 +157,17 @@ void NetworkServiceProxyDelegate::OnFallback(const net::ProxyChain& bad_chain,
+   }
+ }
+ 
++void NetworkServiceProxyDelegate::OnBeforeForwardProxyRequest(
++    const net::ProxyChain& proxy_chain,
++    net::HttpRequestHeaders* extra_headers) {
++  // Mirror of OnBeforeTunnelRequest for the non-tunneled forward-proxy
++  // (http://) path: only inject the config's forward-proxy headers when the
++  // request is actually routed to a proxy in this config.
++  if (IsInProxyConfig(proxy_chain)) {
++    MergeRequestHeaders(extra_headers, proxy_config_->forward_proxy_headers);
++  }
++}
++
+ base::expected<net::HttpRequestHeaders, net::Error>
+ NetworkServiceProxyDelegate::OnBeforeTunnelRequest(
+     const net::ProxyChain& proxy_chain,

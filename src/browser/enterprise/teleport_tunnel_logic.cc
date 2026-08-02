@@ -82,6 +82,11 @@ network::mojom::CustomProxyConfigPtr BuildTunnelProxyConfig(
   // plain Authorization header — same mechanism, different name/value).
   config->connect_tunnel_headers.SetHeader(
       "Proxy-Authorization", base::StrCat({"Bearer ", cnf_token}));
+  // Mirror the cnf token onto forward-proxy (http://) requests —
+  // connect_tunnel_headers covers only CONNECT, so http backends would
+  // otherwise reach the edge without it.
+  config->forward_proxy_headers.SetHeader(
+      "Proxy-Authorization", base::StrCat({"Bearer ", cnf_token}));
   config->should_override_existing_config = true;
   // Route non-idempotent methods (POST/PUT/…) through the tunnel too: the edge
   // is a blind L4 splice that handles any method, and a managed origin must be

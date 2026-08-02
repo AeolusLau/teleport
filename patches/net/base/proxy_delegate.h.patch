@@ -1,0 +1,21 @@
+diff --git a/net/base/proxy_delegate.h b/net/base/proxy_delegate.h
+index ff614802f7bb1..f4c3fcd7ac707 100644
+--- a/net/base/proxy_delegate.h
++++ b/net/base/proxy_delegate.h
+@@ -74,6 +74,16 @@ class NET_EXPORT ProxyDelegate {
+   using OnBeforeTunnelRequestCallback =
+       base::OnceCallback<void(base::expected<HttpRequestHeaders, Error>)>;
+ 
++  // Called immediately before a non-tunneled forward-proxy (http://) request is
++  // sent to the proxy. Provides the embedder an opportunity to add extra
++  // headers destined for the proxy directly onto `extra_headers`. This is the
++  // forward-proxy counterpart of OnBeforeTunnelRequest, which only runs on the
++  // CONNECT/tunnel path. `proxy_chain` identifies the proxy the request is
++  // being sent to. Default is a no-op so existing ProxyDelegate subclasses are
++  // unaffected.
++  virtual void OnBeforeForwardProxyRequest(const ProxyChain& proxy_chain,
++                                           HttpRequestHeaders* extra_headers) {}
++
+   // Called immediately before a proxy tunnel request is sent. Provides the
+   // embedder an opportunity to add extra request headers to the request.
+   // Returns:

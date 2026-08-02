@@ -1,0 +1,14 @@
+diff --git a/services/network/network_service_proxy_delegate.h b/services/network/network_service_proxy_delegate.h
+index 3e0dcc4e99474..da4c4a83ce158 100644
+--- a/services/network/network_service_proxy_delegate.h
++++ b/services/network/network_service_proxy_delegate.h
+@@ -53,6 +53,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkServiceProxyDelegate
+   void OnSuccessfulRequestAfterFailures(
+       const net::ProxyRetryInfoMap& proxy_retry_info) override;
+   void OnFallback(const net::ProxyChain& bad_chain, int net_error) override;
++  void OnBeforeForwardProxyRequest(
++      const net::ProxyChain& proxy_chain,
++      net::HttpRequestHeaders* extra_headers) override;
+   base::expected<net::HttpRequestHeaders, net::Error> OnBeforeTunnelRequest(
+       const net::ProxyChain& proxy_chain,
+       size_t chain_index,

@@ -1,0 +1,34 @@
+diff --git a/net/base/test_proxy_delegate.h b/net/base/test_proxy_delegate.h
+index 6916e11f8eefd..6b904fc117643 100644
+--- a/net/base/test_proxy_delegate.h
++++ b/net/base/test_proxy_delegate.h
+@@ -64,6 +64,11 @@ class TestProxyDelegate : public ProxyDelegate {
+     return on_before_tunnel_request_call_count_;
+   }
+ 
++  // Returns the number of times `OnBeforeForwardProxyRequest()` was called.
++  size_t on_before_forward_proxy_request_call_count() const {
++    return on_before_forward_proxy_request_call_count_;
++  }
++
+   // Returns the number of times `OnTunnelHeadersReceived()` was called.
+   size_t on_tunnel_headers_received_call_count() {
+     return on_tunnel_headers_received_headers_.size();
+@@ -120,6 +125,8 @@ class TestProxyDelegate : public ProxyDelegate {
+       const net::ProxyChain& proxy_chain,
+       int net_error) override;
+   void OnFallback(const ProxyChain& bad_chain, int net_error) override;
++  void OnBeforeForwardProxyRequest(const ProxyChain& proxy_chain,
++                                   HttpRequestHeaders* extra_headers) override;
+   base::expected<HttpRequestHeaders, Error> OnBeforeTunnelRequest(
+       const ProxyChain& proxy_chain,
+       size_t proxy_index,
+@@ -156,6 +163,8 @@ class TestProxyDelegate : public ProxyDelegate {
+ 
+   size_t on_before_tunnel_request_call_count_ = 0;
+ 
++  size_t on_before_forward_proxy_request_call_count_ = 0;
++
+   Error on_tunnel_headers_received_result_ = OK;
+   std::vector<ProxyChain> on_tunnel_headers_received_proxy_chains_;
+   std::vector<size_t> on_tunnel_headers_received_chain_indices_;

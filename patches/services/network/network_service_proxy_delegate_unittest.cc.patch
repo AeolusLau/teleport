@@ -1,0 +1,39 @@
+diff --git a/services/network/network_service_proxy_delegate_unittest.cc b/services/network/network_service_proxy_delegate_unittest.cc
+index 6f533552a44c9..a1ee57c10369a 100644
+--- a/services/network/network_service_proxy_delegate_unittest.cc
++++ b/services/network/network_service_proxy_delegate_unittest.cc
+@@ -165,6 +165,34 @@ TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToTunnelRequest) {
+   EXPECT_THAT(result.value(), Contain("connect", "baz"));
+ }
+ 
++TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToForwardProxyRequest) {
++  auto config = mojom::CustomProxyConfig::New();
++  config->rules.ParseFromString("https://proxy");
++  config->forward_proxy_headers.SetHeader("Proxy-Authorization", "Bearer X");
++  auto delegate = CreateDelegate(std::move(config));
++
++  auto proxy_chain =
++      net::ProxyChain(net::PacResultElementToProxyServer("HTTPS proxy"));
++  net::HttpRequestHeaders headers;
++  delegate->OnBeforeForwardProxyRequest(proxy_chain, &headers);
++  EXPECT_THAT(headers, Contain("Proxy-Authorization", "Bearer X"));
++}
++
++TEST_F(NetworkServiceProxyDelegateTest,
++       DoesNotAddForwardProxyHeadersForUnknownProxy) {
++  auto config = mojom::CustomProxyConfig::New();
++  config->rules.ParseFromString("https://proxy");
++  config->forward_proxy_headers.SetHeader("Proxy-Authorization", "Bearer X");
++  auto delegate = CreateDelegate(std::move(config));
++
++  // A proxy chain not present in the config must not receive the headers.
++  auto other_proxy_chain =
++      net::ProxyChain(net::PacResultElementToProxyServer("HTTPS other"));
++  net::HttpRequestHeaders headers;
++  delegate->OnBeforeForwardProxyRequest(other_proxy_chain, &headers);
++  EXPECT_FALSE(headers.HasHeader("Proxy-Authorization"));
++}
++
+ TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxySuccessHttpProxy) {
+   auto config = mojom::CustomProxyConfig::New();
+   config->rules.ParseFromString("http=foo");
