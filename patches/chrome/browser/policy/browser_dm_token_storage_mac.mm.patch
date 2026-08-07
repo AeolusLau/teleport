@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/policy/browser_dm_token_storage_mac.mm b/chrome/browser/policy/browser_dm_token_storage_mac.mm
-index 0c39d3482ad53..c0130d6a9c4be 100644
+index 41bb311b3399a..4cbd3e1d8efd1 100644
 --- a/chrome/browser/policy/browser_dm_token_storage_mac.mm
 +++ b/chrome/browser/policy/browser_dm_token_storage_mac.mm
 @@ -18,6 +18,7 @@
@@ -58,7 +58,7 @@ index 0c39d3482ad53..c0130d6a9c4be 100644
  
  constexpr char kEnrollmentTokenMetricsName[] =
      "Enterprise.CloudManagementEnrollmentTokenLocation.Mac";
-@@ -115,19 +122,19 @@ bool DeleteDMTokenFromAppDataDir(const std::string& client_id) {
+@@ -115,16 +122,16 @@ bool DeleteDMTokenFromAppDataDir(const std::string& client_id) {
    return base::DeleteFile(token_file_path);
  }
  
@@ -72,16 +72,13 @@ index 0c39d3482ad53..c0130d6a9c4be 100644
 -      CFPreferencesCopyAppValue(kEnrollmentTokenPolicyName, kBundleId));
 +      CFPreferencesCopyAppValue(kEnrollmentTokenPolicyName, ManagedPrefsBundleId()));
  
-   // Read the enrollment token from the new location. If that fails, try the old
-   // location (which will be deprecated soon). If that also fails, bail as there
-   // is no token set.
    if (!value ||
 -      !CFPreferencesAppValueIsForced(kEnrollmentTokenPolicyName, kBundleId)) {
 +      !CFPreferencesAppValueIsForced(kEnrollmentTokenPolicyName, ManagedPrefsBundleId())) {
      return false;
    }
    CFStringRef value_string = base::apple::CFCast<CFStringRef>(value.get());
-@@ -155,10 +162,10 @@ bool GetEnrollmentTokenFromFile(std::string* enrollment_token) {
+@@ -149,10 +156,10 @@ bool GetEnrollmentTokenFromFile(std::string* enrollment_token) {
  std::optional<bool> IsEnrollmentMandatoryByPolicy() {
    base::apple::ScopedCFTypeRef<CFPropertyListRef> value(
        CFPreferencesCopyAppValue(kEnrollmentMandatoryOptionPolicyName,

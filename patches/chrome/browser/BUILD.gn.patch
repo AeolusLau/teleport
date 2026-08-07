@@ -1,50 +1,58 @@
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index 97b17f850c30d..80a9d3c32ab13 100644
+index bfc8555485593..ffd67ec79e5c7 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
-@@ -330,6 +330,22 @@ static_library("browser") {
-     "component_updater/wasm_tts_engine_component_installer.h",
-     "defaults.cc",
-     "defaults.h",
-+    "//teleport/browser/enterprise/teleport_enrollment_gate.cc",
-+    "//teleport/browser/enterprise/teleport_force_signin.cc",
-+    "//teleport/browser/enterprise/teleport_force_signin.h",
-+    "//teleport/browser/teleport_deployment_level4.cc",
-+    "//teleport/browser/teleport_deployment_level4.h",
-+    "//teleport/browser/enterprise/teleport_enrollment_gate.h",
+@@ -864,6 +864,26 @@ source_set("core") {
+     "unexpire_flags.cc",
+     "unexpire_flags.h",
+     "universal_web_contents_observers.cc",
++
++    # teleport overlay: browser-side sources that must compile into
++    # //chrome/browser (they include chrome/browser headers, so keeping them in
++    # the //teleport source_set would create a GN dependency cycle).
 +    "//teleport/browser/enterprise/teleport_enrollment_done_user_data.cc",
 +    "//teleport/browser/enterprise/teleport_enrollment_done_user_data.h",
++    "//teleport/browser/enterprise/teleport_enrollment_gate.cc",
++    "//teleport/browser/enterprise/teleport_enrollment_gate.h",
 +    "//teleport/browser/enterprise/teleport_enrollment_gate_throttle.cc",
 +    "//teleport/browser/enterprise/teleport_enrollment_gate_throttle.h",
++    "//teleport/browser/enterprise/teleport_force_signin.cc",
++    "//teleport/browser/enterprise/teleport_force_signin.h",
 +    "//teleport/browser/enterprise/teleport_oidc_inplace_registrar.cc",
 +    "//teleport/browser/enterprise/teleport_oidc_inplace_registrar.h",
 +    "//teleport/browser/enterprise/teleport_tunnel_service.cc",
 +    "//teleport/browser/enterprise/teleport_tunnel_service.h",
 +    "//teleport/browser/enterprise/teleport_tunnel_service_factory.cc",
 +    "//teleport/browser/enterprise/teleport_tunnel_service_factory.h",
-     "enterprise/browser_management/browser_management_service.cc",
-     "enterprise/browser_management/browser_management_service.h",
-     "enterprise/browser_management/browser_management_status_provider.cc",
-@@ -1386,6 +1402,9 @@ static_library("browser") {
++    "//teleport/browser/teleport_deployment_level4.cc",
++    "//teleport/browser/teleport_deployment_level4.h",
    ]
+ 
+   configs += [
+@@ -877,6 +897,9 @@ source_set("core") {
+   }
  
    deps = [
 +    "//teleport",
 +    "//teleport:teleport_deployment_config",
 +    "//teleport:teleport_server_identity",
      ":active_use_util",
-     ":browser_features",
-     ":browser_process",
-@@ -6078,6 +6097,8 @@ static_library("browser") {
-       "accessibility/caption_settings_dialog_mac.cc",
-       "app_controller_mac.h",
-       "app_controller_mac.mm",
+     ":after_startup_task_utils",
+     ":bad_message",
+@@ -1492,6 +1515,12 @@ source_set("core") {
+       "platform_util_mac.mm",
+       "process_singleton_mac.mm",
+       "shell_integration_mac.mm",
++
++      # teleport overlay: bridges a Sparkle-staged update into BuildState so the
++      # toolbar app-menu upgrade indicator lights up. Includes chrome headers,
++      # hence compiled here rather than in the //teleport source_set.
 +      "//teleport/browser/mac/teleport_update_buildstate.h",
 +      "//teleport/browser/mac/teleport_update_buildstate.mm",
-       "browser_process_platform_part_mac.h",
-       "browser_process_platform_part_mac.mm",
-       "chrome_browser_application_mac.h",
-@@ -7901,6 +7922,8 @@ group("browser_generated_files") {
+     ]
+ 
+     deps += [
+@@ -4918,6 +4947,8 @@ group("browser_generated_files") {
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:attestation_ca_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:google_key_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:interface_proto",

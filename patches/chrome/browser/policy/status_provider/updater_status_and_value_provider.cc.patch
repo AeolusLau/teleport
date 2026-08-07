@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/policy/status_provider/updater_status_and_value_provider.cc b/chrome/browser/policy/status_provider/updater_status_and_value_provider.cc
+index 455252d8581c4..d31d03e0bb16b 100644
+--- a/chrome/browser/policy/status_provider/updater_status_and_value_provider.cc
++++ b/chrome/browser/policy/status_provider/updater_status_and_value_provider.cc
+@@ -30,7 +30,7 @@
+ namespace {
+ 
+ constexpr char kUpdaterPoliciesId[] = "updater";
+-constexpr char kUpdaterPoliciesName[] = "Google Update Policies";
++constexpr char kUpdaterPoliciesName[] = "Teleport Update Policies";
+ constexpr char kUpdaterPolicyStatusDescription[] = "statusUpdater";
+ 
+ }  // namespace

@@ -21,10 +21,10 @@ fairyland 用**奇幻代号**作规范标识符(`sigil`/`realm`/`warden`/`prism`
 
 ## 架构:Brave 式 Chromium overlay
 
-- **不 fork 整个 Chromium**。上游 M148 由 depot_tools/gclient 检出到**仓库外**(gitignore 的 `chromium/`,可用 `$TELEPORT_CHROMIUM_DIR` 覆盖)。
+- **不 fork 整个 Chromium**。上游由 depot_tools/gclient 检出到**仓库外**,默认按发布分支派生到 `$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`(取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`),`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖(见「关键 gotcha」);仓库内 gitignore 的 `chromium/` 是早期 M148 检出的原地位置,现由符号链接接入这套派生规则。
 - **加法为主**:`src/` 是 overlay 纯源码,构建期以符号名 **`teleport`** 链接进 `chromium/src/teleport`,成为 GN 模块 `//teleport`,经一个最小上游 patch 编进 chrome。
 - **改上游为辅**:文本改动走 `patches/`(`git apply`),整文件/二进制资源走 `branding/`(覆盖拷贝)。
-- 上游基线钉死在 `CHROMIUM_VERSION`(当前 **148.0.7778.180**);M150 非稳定,后续再升级。
+- 上游基线钉死在 `CHROMIUM_VERSION`(当前 **151.0.7922.76**);升级流程见 `docs/chromium-upgrade-runbook.md`。
 - **当前进度**:macOS overlay 基础**已构建并验证**——品牌化 `Teleport.app`、自定义 `//teleport` 启动 banner、图标、单测均通过;**macOS canary 渠道包 + Sparkle 自动升级已端到端跑通**(签名/公证/样式 dmg/OSS 分发,实测 0.1.0→0.1.1 自动升级)。Windows/Linux/国产 OS/CI 为后续 phase。
 
 ## 仓库布局
@@ -48,6 +48,9 @@ scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   bootstrap.py             建/定位 chromium 检出 + 建两个链接(可 --skip-sync)
   sync.py                  gclient sync 到 CHROMIUM_VERSION + 版本校验
   apply_patches.py         应用 patches/ + branding/(幂等、fail-fast)
+  check_upstream_release.py  查 Chrome VersionHistory API 判定「同分支有新 PATCH」/「里程碑已跃迁」/「已最新」,驱动升级走哪条路径
+  rebase_overlay.py        里程碑升级核心:在新检出上把 overlay 从旧基线 tag 三方合并(rebase --onto)到新基线 tag
+  export_patches.py        rebase 完成后从检出重新导出 patches/(三分类安全阀:patch/branding/生成物,漏分类即报错)
   generate_icons.py        brand/teleport.svg → macOS app.icns(经 uv 拉 resvg-py/icnsutil)
   branding_strings.py      rebrand chromium_strings.grd + zh .xtb 的产品/公司名(→ 闪现)
   fetch_sparkle.py         钉版本拉 Sparkle.framework(SHA256 校验,真实拷进检出)
@@ -74,9 +77,13 @@ build/                     (gitignore)→ chromium/src/out 的符号链接(产�
 
 ## 构建与测试命令(macOS,已验证)
 
-前置:depot_tools 在 PATH、Xcode、`uv`;检出在仓库外时 `export TELEPORT_CHROMIUM_DIR=/abs/path/to/chromium`。
+前置:depot_tools 在 PATH、Xcode、`uv`。检出位置默认按发布分支派生:`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`(取 `CHROMIUM_VERSION` 前三段,`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`);`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖派生结果(向后兼容 / CI)。详见「关键 gotcha」与 `docs/chromium-upgrade-runbook.md`。
 
 ```bash
+# 每个新 shell 先建立环境(见「关键 gotcha」「chromium 检出位置」):
+unset TELEPORT_CHROMIUM_DIR                                                          # 确认没有残留覆盖
+export TELEPORT_CHROMIUM_ROOT="${TELEPORT_CHROMIUM_ROOT:-$HOME/workspace/chromium}"  # 下面命令按字面展开这个变量,必须先导出
+
 # 一次性 / 同步上游(首次去掉 --skip-sync 会完整 sync,数小时)
 python scripts/bootstrap.py --skip-sync     # 建链接:src/teleport→src、build→chromium/src/out
 python scripts/sync.py                       # gclient sync 到 CHROMIUM_VERSION 并校验
@@ -86,19 +93,31 @@ python scripts/apply_patches.py              # 应用 overlay(幂等)
 # 构建(首次数小时;Siso、本地无 RBE)
 uv run python scripts/package.py             # dev 一键:args.gn 缺失时自动 gn gen,再 autoninja + 烘焙版本校验
 # 等价手动路径(gn gen 仅首次需要,out 目录建好后 ninja 会自动 re-gen):
-cd "$TELEPORT_CHROMIUM_DIR/src"
+cd "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src   # <release_branch> = CHROMIUM_VERSION 前三段,如 151.0.7922;设了 $TELEPORT_CHROMIUM_DIR 则直接 cd 到它
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome    # 产物 Teleport.app(亦在 <repo>/build/mac/arm64/dev/)
 
 # 测试
 uv run pytest                                # 工具脚本单测(仓库根运行)
-autoninja -C out/mac/arm64/dev teleport_unittests && \
-  "$TELEPORT_CHROMIUM_DIR"/src/out/mac/arm64/dev/teleport_unittests   # //teleport gtest
+autoninja -C out/mac/arm64/dev teleport_unittests && ./out/mac/arm64/dev/teleport_unittests   # //teleport gtest
 uv run python scripts/gen_policy_verification_key.py --check   # 补丁烘焙 key ↔ 公钥锚一致性(apply_patches 亦自动前置执行)
 
 python scripts/generate_icons.py             # 改了 brand/teleport.svg 后重生成图标
 # 冒烟验证清单见 scripts/smoke_check.md
 ```
+
+### 上游发布跟踪 / 基线升级(完整流程见 `docs/chromium-upgrade-runbook.md`)
+
+```bash
+uv run python scripts/check_upstream_release.py
+# 三选一结论:已最新 / 同发布分支有新 PATCH(路径 A,复用检出)/ 上游已切新发布分支(路径 B,新检出+完整 rebase)
+
+# 路径 B 专用(里程碑升级):新检出建好之后即可直接跑——不要提前手动跑 apply_patches.py
+uv run python scripts/rebase_overlay.py --from-tag <old-tag> --onto-tag <new-tag>   # 三方合并 overlay 到新基线,停在真实冲突处
+uv run python scripts/export_patches.py --tag <new-tag>                             # rebase 干净后重新导出 patches/
+```
+
+`rebase_overlay.py` 用 `git rebase --onto`(而非 `git merge`)把 overlay 从旧基线 tag 迁到新基线 tag,只让「我们的改动」× 「旧→新上游 delta」参与合并;`export_patches.py` 对导出结果做三分类安全阀(patch / branding / 生成物),分类不到的改动直接报错,防止静默漏导出。二者均要求 overlay 在**跳过品牌重写**(`apply_patches.py --skip-branding`)的树上操作,细节与踩过的坑见 runbook。**`rebase_overlay.py` 自己会 `git checkout -B` 到旧基线 tag、再以 `--skip-branding` 跑一遍 `apply_patches.py` 建立待 rebase 的 overlay 提交**——这一步是脚本内部流程,不是调用前的手动前置步骤;在旧基线 tag 上提前手动跑 `apply_patches.py` 不但多余,还会让脚本在 M151 tag 上重复应用 M151 patch 而 fail-fast,留下一棵局部应用的脏树(runbook §G1 为准)。
 
 ### 渠道包 / 自动升级(canary,已端到端验证)
 
@@ -110,7 +129,7 @@ python scripts/fetch_sparkle.py                  # 钉版本拉 Sparkle.framewor
 # 拉取:bootstrap.py 已把 checkout_pgo_profiles=True 写进 .gclient;改了开关后重跑一次 sync:
 python scripts/sync.py                           # 触发 chromium DEPS 的两个 PGO hook(幂等)
 gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'   # 可省:package.py 在 args.gn 缺失时自动执行
-printf '0.1.13.0\n' > TELEPORT_VERSION           # 每次发版 bump(四段 MAJOR.MINOR.BUILD.PATCH,单调递增;或用 scripts/bump_version.py)并提交
+printf '<new-version>\n' > TELEPORT_VERSION       # 每次发版 bump(四段 MAJOR.MINOR.BUILD.PATCH,严格大于当前 TELEPORT_VERSION,单调递增;或用 scripts/bump_version.py)并提交
 uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
 uv run python scripts/package.py --channel canary        # 本地渠道包:构建+签名+公证+样式dmg,不发布
 uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
@@ -119,32 +138,34 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 
 ## 关键 gotcha
 
-- **chromium 检出位置**:默认 `<repo>/chromium`,可用 `$TELEPORT_CHROMIUM_DIR` 覆盖——几百 GB 检出不该绑定在每个 worktree 里。
+- **chromium 检出位置**:默认按**发布分支**派生,`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`(取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`)——几百 GB 检出不该绑定在每个 worktree 里,且换分支时路径自动跟着 `CHROMIUM_VERSION` 变化,不用手改任何变量。`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖这条派生规则(向后兼容 / CI),但**一旦设置就覆盖一切**——每次执行升级相关脚本前先 `unset TELEPORT_CHROMIUM_DIR` 确认它是空的,否则会悄悄对着上一次会话残留的旧路径操作而不报错。同一发布分支内的 PATCH 级安全补丁(如 `.76 → .132`)复用同一检出目录;里程碑跃迁(`MAJOR`/`BUILD` 变化)落到新目录,旧检出(含全部构建缓存)原地保留作回退底座,永不迁移或删除。完整流程见 `docs/chromium-upgrade-runbook.md`。
+- **上游 tag ≠ 已发布**:`chromium/src` 仓库里的 git tag 不能用来判断某版本是否真的对外发布过——上游从每条发布分支(`refs/branch-heads/<BUILD>`)再切子分支(如 `7871_48`、`7871_183`),各自独立递增 `PATCH` 号,tag 日期与编号也不单调。判断「是否真的发布」用 Chrome VersionHistory API(`scripts/check_upstream_release.py` 已封装),不要扫 tag 列表。
+- **桌面 Mac/Win 同线、Linux 取子集**:实测 M151 已发布序列 Mac 与 Win64 完全一致(`.76 .75 .72 .71 .47 .34`),Linux 是同一序列的子集(`.75 .71`)——桌面三平台共用同一条发布线,故**单一 `CHROMIUM_VERSION` pin 服务全部桌面平台是正确的**,不需要按平台分别维护;Linux 落后不构成问题(同一分支源码,只是比 Google 推给 Linux 用户的多带若干还没轮到 Linux 的修复)。`check_upstream_release.py` 若报 mac/win64 版本不一致会显式告警,届时需人工判断。
 - **out 链接方向**:`<repo>/build → chromium/src/out`(**不可反向!** autoninja 从 out 目录向上找检出根,out 必须留在检出树内;曾因 out→build 反向链接导致构建失败)。
 - **一文件一 patch**:每个 `.patch` 只改一个上游文件、文件名镜像其在 `chromium/src` 下的路径;顺序无关;同文件多处改动累加进同一 patch。
 - **Python 工具链**:系统 python 是 3.9 且无 pytest;统一用 `uv`(`pyproject.toml` 中 `requires-python>=3.13`、`[tool.uv] package=false`)。
 - **`.gitignore`**:用 `/build`(无尾斜杠)才能忽略 `build` 这个**符号链接**;`/chromium` 同理。
 - **两层品牌**:磁盘/标识符 = `Teleport`(BRANDING `PRODUCT_FULLNAME` → `Teleport.app`、`cn.douan.Teleport`);应用内显示名 = `闪现`(`chrome/app/chromium_strings.grd` 的 `IDS_PRODUCT_NAME`);macOS 菜单/Finder 名 = `闪现`(`CFBundleDisplayName` 已覆盖)。
 - **TDD 范围**:产品代码(`//teleport` C++)走 TDD(gtest);构建/工具脚本不强求 TDD,仅在有价值处务实地写 pytest。
-- **源码 symlink**:`src/` 经符号链接挂进 `chromium/src/teleport`,M148 上 GN + clang 已验证可正常解析与编译(无需退路)。
-- **M148 注入点**(实现期已确认):`chrome/browser/BUILD.gn` 的 `static_library("browser")` deps 加 `//teleport`;启动 banner 调用在 `chrome/browser/chrome_browser_main.cc` 的 `PreMainMessageLoopRun`。
+- **源码 symlink**:`src/` 经符号链接挂进 `chromium/src/teleport`,M148、M151 上 GN + clang 均已验证可正常解析与编译(无需退路)。
+- **上游注入点会随里程碑漂移,每次升级需重新核对**:M148 上 `//teleport` 的 sources/deps 挂在 `chrome/browser/BUILD.gn` 的 `static_library("browser")`;M151 把该 target 拆分,**改挂 `source_set("core")`**(`static_library("browser")` 已无自有 sources,只在文件里剩一段解释 GN 循环依赖机制的注释,提到它作为历史示例,不代表真实构造)。启动 banner 调用未受影响,仍在 `chrome/browser/chrome_browser_main.cc` 的 `PreMainMessageLoopRun`。下次升级前先按这个模式(`grep '"//teleport"' chrome/browser/BUILD.gn` 找当前挂载的 target 名)重新核对,不要假设名字不变。
 - **fieldtrial_testing_config 已在构建期关掉(运行不再加 `--disable-field-trial-config`)**:dev 构建(`is_official_build=false`)原本会自动套用 `testing/variations/fieldtrial_testing_config.json`,强开一批实验特性,部分未完成会崩溃(已知:`UsePersistentCacheForCodeCache` 在加载页面时,生成代码缓存经沙箱 SQLite VFS 的 WAL 路径命中 `NOTREACHED` 而 abort)。**现已由 GN arg `disable_fieldtrial_testing_config = true`(`src/gn/args/{dev,release}.mac.gn`,commit `69bac78`)在构建期把每个 `base::Feature` 钉到编译默认值,永久修掉该 abort**——故运行时**不再需要** `--disable-field-trial-config`(传了也是 no-op),也无需 `--disable-features=UsePersistentCacheForCodeCache`。**非 overlay 问题**,stable/official 构建本就不强开。
-- **从 worktree 跑发布脚本必须 `export TELEPORT_CHROMIUM_DIR=...`**:否则 `_lib` 默认到 `<worktree>/chromium` 假路径(fetch_sparkle 会把框架桥到错误位置)。
+- **~~从 worktree 跑发布脚本必须 `export TELEPORT_CHROMIUM_DIR=...`~~ 已不成立**:旧版 `_lib.chromium_dir()` 默认落到 `<worktree>/chromium` 假路径,当年必须显式覆盖才能避免 `fetch_sparkle` 把框架拷到错误位置。现在 `chromium_dir()` 默认按发布分支从 `CHROMIUM_VERSION` 派生(见「chromium 检出位置」gotcha),从任意 worktree 运行都会解析到同一份正确的共享检出,**不再需要**为此设置该变量。唯一仍然合法的场景是主动覆盖成一个非标准路径(CI 隔离环境、临时指向另一份检出做对比测试)——这种场景下用完必须 `unset`,否则就是「chromium 检出位置」gotcha 警告的那种残留污染,会让脚本悄悄对着错误检出操作。
 - **Sparkle 集成**:GN arg `teleport_enable_updater`(official 开/dev 关);`fetch_sparkle.py` 把框架**真实拷贝**进检出 `//third_party/teleport_sparkle`(符号链接会被 GN 原样拷进 .app → dmg 内死链);框架链接 Sparkle 必须有 LC_RPATH(`//teleport` 的 `sparkle_rpath` config,`@loader_path/../../..`),否则启动即崩溃(`no LC_RPATH's found`);`frameworks` 直接设在 source_set 上(用 `all_dependent_configs` 会把 `-framework Sparkle` 泄漏进主 exe,触发 `verify_dynamic_libraries`)。
 - **PGO(release 开,dev 关)**:`release.mac.gn` 设 `chrome_pgo_phase=2`(贴近生产性能;这是 official 无 PGO 包与正式 Chrome 的主要性能差)。`chrome_pgo_phase=2` 同时令 V8 `v8_enable_builtins_optimization` 自动开启,所以**两套 profile 都是构建硬依赖**:① Chrome 顶层 PGO(`chrome/build/pgo_profiles/`,`gn gen` 时 `update_pgo_profiles.py get_profile_path` 解析+断言,缺则 hard-assert);② V8 builtins PGO(`v8/tools/builtins-pgo/profiles/`,arm64 复用 `x64.profile`,该文件是 mksnapshot 的 build source 且带 `--abort-on-bad-builtin-profile-data`,缺则**构建步骤直接失败**,不会静默降级)。两者都**不随构建自动下载**,但都能由 `gclient sync` 拉:chromium 顶层 DEPS 有两个 hook(`update_pgo_profiles.py` + `v8/tools/builtins-pgo/download_profiles.py`),**均仅由 `checkout_pgo_profiles` 一个 var 门控**(`checkout_v8_builtins_pgo_profiles` 是 standalone V8 专用,这里用不上;且 `src/v8` 不在 chromium 的 `recursedeps` 里,V8 自己的 hook 不会跑)。`bootstrap.py` 已把 `checkout_pgo_profiles=True` 写进 `.gclient`,故 `python scripts/sync.py` 会一并拉好两套 profile(用 `src/third_party/depot_tools`)。PGO 会显著拉长 release 编译时间。
 - **签名/公证**:复用 `chrome/installer/mac/signing`,入口是**生成的「Teleport Packaging」目录里的** `sign_chrome.py`(源码树那份缺 build_props);品牌/版本从 build_props 自动取(无需 fork 配置);patch 了 `chromium_config`(`run_spctl_assess=False`,公证前 spctl 必失败)、`signing.py`(codesign 加 `--force`,重签已签的 Sparkle)、`parts.py`(把 Sparkle 框架+Autoupdate+Updater.app+XPC 用我们的 Developer ID 重签,否则公证报「no secure timestamp / not a valid Developer ID」)。通知凭据经 `--notary-arg=--keychain-profile`。
 - **dmg 样式**:用 `dmgbuild`(`scripts/dmg_settings.py` + `brand/dmg/background.tiff`)出背景/命名 Applications/卷图标,`format=ULMO`(lzma,~105MB);Chrome 自带 pkg-dmg 样式资源仅 Google 品牌有,故改走 dmgbuild。背景 CJK 字体 fallback 含 STHeiti(PingFang 不一定在,缺则 tofu)。
-- **版本**:`TELEPORT_VERSION`(四段 MAJOR.MINOR.BUILD.PATCH)单一事实来源;`apply_patches.py` 经 `generate_version.py` 把它现场生成进检出 `chrome/VERSION`(内容比较跳过写入,避免无谓全量重编;`chrome/VERSION` 在检出里是"生成物"而非 patch),同时从 `CHROMIUM_VERSION` 生成 `components/version_info/teleport_engine_version.h`(untracked)供 UA/UA-CH patch 引用——**UA 恒为引擎版本**(`Chrome/148.0.0.0`),产品版本绝不进 UA。打包**不再 stamp 版本**(`assert_baked_version` 校验烘焙版本==TELEPORT_VERSION,不符拒绝打包);`CFBundleVersion` 经 `tweak_info_plist.py` patch 为完整四段(上游 `BUILD.PATCH` 跨 minor 非单调,会断 Sparkle 升级)。dmg 名 `Teleport-<四段>.dmg`,发布打 `v<四段>` tag;appcast 只列最新版。bump 后必须重跑 `apply_patches.py` 再构建(VERSION 变更触发大范围重编,发版构建本为全量)。`MAJOR=0` 会踩上游脚本的真值判断坑——已 patch `components/policy/tools/generate_policy_source.py` 与 `tools/flags/generate_unexpire_flags.py`(`is None` 判空 + `m >= 0` 里程碑过滤),升基线若这两处冲突需按同语义重解;另有三处已知残余(扩展 minimum_chrome_version 门 / flags 过期失效 / 政策过滤超集)见 TD-015。
+- **版本**:`TELEPORT_VERSION`(四段 MAJOR.MINOR.BUILD.PATCH)单一事实来源;`apply_patches.py` 经 `generate_version.py` 把它现场生成进检出 `chrome/VERSION`(内容比较跳过写入,避免无谓全量重编;`chrome/VERSION` 在检出里是"生成物"而非 patch),同时从 `CHROMIUM_VERSION` 生成 `components/version_info/teleport_engine_version.h`(untracked)供 UA/UA-CH patch 引用——**UA 恒为引擎版本**(当前 `Chrome/151.0.0.0`,随 `CHROMIUM_VERSION` 升级同步变化),产品版本绝不进 UA。打包**不再 stamp 版本**(`assert_baked_version` 校验烘焙版本==TELEPORT_VERSION,不符拒绝打包);`CFBundleVersion` 经 `tweak_info_plist.py` patch 为完整四段(上游 `BUILD.PATCH` 跨 minor 非单调,会断 Sparkle 升级)。dmg 名 `Teleport-<四段>.dmg`,发布打 `v<四段>` tag;appcast 只列最新版。bump 后必须重跑 `apply_patches.py` 再构建(VERSION 变更触发大范围重编,发版构建本为全量)。`MAJOR=0` 会踩上游脚本的真值判断坑——已 patch `components/policy/tools/generate_policy_source.py` 与 `tools/flags/generate_unexpire_flags.py`(`is None` 判空 + `m >= 0` 里程碑过滤),升基线若这两处冲突需按同语义重解;另有三处已知残余(扩展 minimum_chrome_version 门 / flags 过期失效 / 政策过滤超集)见 TD-015。
 - **EdDSA 私钥**仅在 login keychain + 离线备份(`generate_keys -x`),**绝不入库**;丢失靠 Developer-ID 兜底的密钥轮换(仅 dmg、一次只换一个锚,绝不同时换 Developer ID 和 EdDSA)。Sparkle 用 Ed25519,Secure Enclave 只支持 P-256,故密钥不走 SEP。
 - **OSS 直连(无 CDN,无自有域名)**:阿里云 OSS 关「阻止公共访问」+ 桶策略授匿名 `oss:GetObject` 于难猜路径前缀;上传用受限 RAM 用户的 ossutil(2.x 用 `--cache-control`,非 `--meta`);appcast 不缓存、dmg 长缓存 immutable。详见 `docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`。
 
 - **渠道并排共存(per-channel 身份)**:各渠道身份由上游 `channel_customize` 引擎一键派生——bundle id 后缀(`cn.douan.Teleport` 裸=stable;`.canary`/`.beta`=其余)、app 改名(`Teleport Canary` / 显示名 `闪现 Canary`)、数据目录(Info.plist `CrProductDirName`,如 `Teleport Canary`)、图标。打包期 `_package.py:sign_app` 经环境变量 `TELEPORT_SIGN_CHANNEL` 驱动 `chromium_config.py` 的 `distributions` 覆盖;同一 channel 名同时驱动 bundle id 后缀与运行时 `TeleportChannel` 键(单一事实源)。**我们无 Keystone**:`modification.py.patch` 以 `if _KS_PRODUCT_ID in app_plist:` gate 掉 `KSProductID`/`KSChannelID` 写入(否则前者 KeyError、后者凭空植入脏键)。图标走最低复用:`stage_channel_icons` 把 `app.icns`/`Assets.car` 复制成 `app_<channel>.icns`/`Assets_<channel>.car` 喂给引擎硬依赖的 `_replace_icons`。签名产物落 `<output>/sxs-<channel>-…/Teleport <Fragment>.app`,`build_styled_dmg` 经 `_find_signed_app` 放宽 glob 定位。**bundle id 变更 → Sparkle 不跨 id 自动升级**:旧裸 id 的 canary 需手动重分发到新 `.canary` 包。**平台策略读取域跨渠道恒为基础 id `cn.douan.Teleport`**(patch `chrome_browser_policy_connector.cc`,镜像上游 Chrome 品牌构建恒读 `com.google.Chrome` 的行为):上游策略键(BrowserSignin 等)与 Teleport 自有键(DeploymentDomain / 纳管 token)同一偏好域,一份 MDM payload 配置全部渠道;`.canary`/`.beta` 后缀域**不再**被策略加载器读取。
 
-- **About 页 / 升级指示集成(跨 target 编译)**:`teleport_update_buildstate.{h,mm}`(启动时 `InstallUpdateReadyBuildStateBridge()`,须在 `StartMacUpdater()` 前调用)与 `teleport_version_updater.mm`(`VersionUpdater::Create()` 的 macOS 实现)虽物理在 `src/` 下,但经 `chrome/browser/BUILD.gn` 与 `chrome/browser/ui/BUILD.gn` 的 patch **编进 chrome target、不在 `//teleport` source_set**——它们要 include chrome 头(BuildState / VersionUpdater),放进 source_set 会造成 GN 依赖环。故这两个文件**不出现在 `src/BUILD.gn`**;改它们要动对应 patch,别往 `src/BUILD.gn` 加。About 页面板本身的改动在 `patches/chrome/browser/resources/settings/about_page/*`(版本展示、Sparkle check-for-updates、页脚链接)。
+- **About 页 / 升级指示集成(跨 target 编译)**:`teleport_update_buildstate.{h,mm}`(启动时 `InstallUpdateReadyBuildStateBridge()`,须在 `StartMacUpdater()` 前调用)与 `teleport_version_updater.mm`(`VersionUpdater::Create()` 的 macOS 实现)虽物理在 `src/` 下,但经 `chrome/browser/BUILD.gn` 与 `chrome/browser/ui/webui/help/BUILD.gn`(**M151 起**;上游把 `version_updater_mac.mm` 从 `chrome/browser/ui` 顶层迁到 `chrome/browser/ui/webui/help:help` 子 target 后,落点随之搬到这个新 patch 文件,不再是 `chrome/browser/ui/BUILD.gn`)的 patch **编进 chrome target、不在 `//teleport` source_set**——它们要 include chrome 头(BuildState / VersionUpdater),放进 source_set 会造成 GN 依赖环。故这两个文件**不出现在 `src/BUILD.gn`**;改它们要动对应 patch,别往 `src/BUILD.gn` 加。About 页面板本身的改动在 `patches/chrome/browser/resources/settings/about_page/*`(版本展示、Sparkle check-for-updates、页脚链接)。
 
 - **工具栏主菜单升级角标依赖 `enable_update_notifications`**:点亮「⋮ 菜单的重启更新角标」的唯一通道是 `BuildState::SetUpdate` → `UpgradeDetectorImpl` → `AppMenuIconController`。但 `UpgradeDetectorImpl::Init()` 里 `build_state->AddObserver(this)` 与 `InstalledVersionPoller` 整段包在 `#if BUILDFLAG(ENABLE_UPDATE_NOTIFICATIONS)`,而该 flag 上游默认 `= is_chrome_branded`(`//chrome/browser/buildflags.gni`)——非品牌构建恒为 0,detector **根本不订阅 BuildState**,我们 bridge 的 `SetUpdate()` 全程无效,角标永不亮(About 页却仍显示 Relaunch,因为它走另一条 VersionUpdater 通道)。我们有 Sparkle,故在 `gn/args/{release,dev}.mac.gn` 显式 `enable_update_notifications = true`。验证可纯本地、不发版:dev 构建用 `--simulate-critical-update`(经 InstalledVersionPoller 合成 BuildState 更新)即可秒亮角标(critical 红;普通更新走 1h 的 VERY_LOW 阈值后转绿)。副作用:同时编入 outdated-build 检测器(满 8 周对非受管/organic 构建提示;受管安装 `IsManaged()` 下不触发)。
 
-- **修改已有 patch 的工作流**:先 `apply_patches.py` 确保全部已应用 → 直接编辑 `chromium/src/<file>` → `git -C chromium/src diff -- <path> > patches/<path>.patch` 重生成 → 再跑 `apply_patches.py` 验证幂等。禁止手改 hunk。
+- **修改已有 patch 的工作流**:先 `apply_patches.py` 确保全部已应用 → 直接编辑 `chromium/src/<file>` → `git -C chromium/src diff -- <path> > patches/<path>.patch` 重生成 → 再跑 `apply_patches.py` 验证幂等。禁止手改 hunk。**三个例外路径**(同时是手写 patch 目标 **和** `branding_strings.py` 重写目标):`chrome/app/generated_resources.grd`、`chrome/app/resources/generated_resources_zh-CN.xtb`、`chrome/app/settings_strings.grdp`——对这三个文件重生成 patch 前,树必须是用 `apply_patches.py --skip-branding` 建的(而不是普通 `apply_patches.py`)。原因:普通 `apply_patches.py` 会先应用手写 patch 再跑品牌重写,`git diff` 出来的内容会把品牌重写也一起烤进 patch;下一次正常 `apply_patches.py` 对着一个已经改过名的 grd 再跑品牌重写,`transform_en_grd` 的幂等性使 id 重映射算出空结果,对应的 zh-CN/zh-TW `.xtb` 会静默失去重键、退回英文——参见 `export_patches.py` 的 `branding_pass_has_run()` 安全阀(同一坑,`rebase_overlay.py`/`export_patches.py` 走脚本化路径时由它兜底;这里是手工路径,没有安全阀,只能靠遵守这条规则)。
 - **dev 策略验签根**:私钥有意提交在 fairyland 仓库(`products/teleport/device-manager/keys/dev-policy-root.pem`,dev-only 信任锚);本仓库只 vendor 公钥 `keys/dev-policy-root.pub.pem`。轮换走 fairyland `scripts/mint-dev-policy-root.sh` 的清单;release 根永不入库(KMS + 离线仪式,`teleport_release_policy_key_is_real` assert fail-closed)。
 - **`InstalledVersionPoller` 与 Sparkle「暂存-重启才替换」冲突(patch `upgrade_detector_impl.cc`)**:`enable_update_notifications=true` 在 `UpgradeDetectorImpl::Init()` 里除了订阅 BuildState,还顺带 `installed_version_poller_.emplace()`。该 poller 每 2h(+ 启动首轮 + bundle 监听)读**磁盘 .app 版本**比对运行版:`installed==running` → `SetUpdate(kNone)`。但 Sparkle 把更新暂存到自己缓存、**重启才换主 bundle**,故重启前磁盘版恒等于运行版 → poller 不停 `SetUpdate(kNone)`,与我们 bridge 的 `SetUpdate(kNormalUpdate)` **抢同一 BuildState**。致命点:`UpgradeDetected(NONE)` 把 `upgrade_notification_stage_` 重置为 NONE 但**不调 `NotifyUpgrade()`**(`set_upgrade_notification_stage` 是纯 setter)→ 观察者不被通知 → **chip 缓存的 `kUpgradeNotification` 成 stale(蓝底 Update 一直在),而菜单 `Build()` live 查 `GetTypeAndSeverity()` 因 `stage==NONE`→`severity==kNone` 落空,upgrade 块整段跳过 → 「Relaunch to update」菜单项消失、默认浏览器项浮顶**。chip 与菜单项 desync,即此因。**为何 `--simulate-*` 复现不出**:simulate 走 `SimulateGetInstalledVersion` 伪造 `components[3]+=2` 的高版本,poller 自己就报 update、单写入者、不打架。修复:patch 把 poller 创建**门控在 `if (is_testing_)`**——生产路径(无 simulate)不建 poller,bridge 成 BuildState 唯一写入者;保留 `--simulate-upgrade/--simulate-critical-update` 的本地调试能力(它俩本就依赖 poller 跑 `SimulateGetInstalledVersion`)。
 
@@ -167,11 +188,11 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 - Windows / Linux 构建(注入从 symlink 换 junction 或受管检出)、国产 OS 适配。
 - ~~代码签名、打包、分发、自动更新~~ → **macOS canary 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
 - CI(构建缓存与产物策略)。
-- patch 的创建/刷新/冲突处理工具链(当前只做「应用」)。
 - 完整 rebrand(各平台图标/安装包等)。
 
 ## 参考材料
 
 - 本仓库:`docs/superpowers/specs/2026-05-25-overlay-build-foundation-design.md`、`docs/superpowers/plans/2026-05-25-overlay-build-foundation.md`、`scripts/smoke_check.md`。
 - 渠道包/自动升级:`docs/superpowers/specs/2026-05-26-macos-canary-channel-design.md`、`docs/superpowers/plans/2026-05-26-macos-canary-channel.md`、`docs/canary-install.md`。
+- Chromium 基线升级:`docs/superpowers/specs/2026-08-06-chromium-milestone-upgrade-design.md`、`docs/superpowers/plans/2026-08-06-chromium-milestone-upgrade.md`、`docs/chromium-upgrade-runbook.md`(操作手册,新升级从这里开始读)。
 - 同级:`../fairyland/CLAUDE.md`、`../fairyland/README.md`(服务端工程约定基线)。

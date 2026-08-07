@@ -1,8 +1,8 @@
 diff --git a/components/policy/tools/generate_policy_source.py b/components/policy/tools/generate_policy_source.py
-index 775a99a25a9dc..25eb70e0ab9fb 100755
+index 3817a1e54f940..e80ae8037ad4a 100755
 --- a/components/policy/tools/generate_policy_source.py
 +++ b/components/policy/tools/generate_policy_source.py
-@@ -312,7 +312,9 @@ def main():
+@@ -313,7 +313,9 @@ def main():
            ' --policy-templates-file=<path to policy_templates.json>')
      has_arg_error = True
  

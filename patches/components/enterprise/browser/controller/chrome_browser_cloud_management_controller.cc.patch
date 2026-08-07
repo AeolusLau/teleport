@@ -1,8 +1,8 @@
 diff --git a/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc b/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
-index a27e93ef8f02d..48fc608d79440 100644
+index 9339c2c6a9980..000d53a75ef63 100644
 --- a/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
 +++ b/components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc
-@@ -100,8 +100,15 @@ bool ChromeBrowserCloudManagementController::IsEnabled() {
+@@ -103,8 +103,15 @@ bool ChromeBrowserCloudManagementController::IsEnabled() {
  #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
    return true;
  #else

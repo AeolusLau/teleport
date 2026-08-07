@@ -1,8 +1,8 @@
 diff --git a/net/http/http_network_transaction_unittest.cc b/net/http/http_network_transaction_unittest.cc
-index b62e83957cef6..b2192b5760af7 100644
+index 0ee6912df2590..115d9e4c1ca15 100644
 --- a/net/http/http_network_transaction_unittest.cc
 +++ b/net/http/http_network_transaction_unittest.cc
-@@ -19979,6 +19979,232 @@ TEST_P(HttpNetworkTransactionTest, ProxyTunnelGet) {
+@@ -19998,6 +19998,232 @@ TEST_P(HttpNetworkTransactionTest, ProxyTunnelGet) {
                                   CONNECT_TIMING_HAS_SSL_TIMES);
  }
  

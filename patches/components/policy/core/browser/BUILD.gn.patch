@@ -1,8 +1,8 @@
 diff --git a/components/policy/core/browser/BUILD.gn b/components/policy/core/browser/BUILD.gn
-index ce126b2380681..76e24d186d8d8 100644
+index 2f4c0e097fa51..c3f2de28837bd 100644
 --- a/components/policy/core/browser/BUILD.gn
 +++ b/components/policy/core/browser/BUILD.gn
-@@ -101,6 +101,7 @@ source_set("internal") {
+@@ -104,6 +104,7 @@ source_set("internal") {
      "//net",
      "//services/network/public/cpp",
      "//third_party/re2",

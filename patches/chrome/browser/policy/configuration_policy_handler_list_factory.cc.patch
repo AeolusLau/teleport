@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/policy/configuration_policy_handler_list_factory.cc b/chrome/browser/policy/configuration_policy_handler_list_factory.cc
-index f6cbaf1038ada..8909e51f1ccae 100644
+index 1de30b0c4bf3d..f5bbb8eb558e8 100644
 --- a/chrome/browser/policy/configuration_policy_handler_list_factory.cc
 +++ b/chrome/browser/policy/configuration_policy_handler_list_factory.cc
-@@ -146,6 +146,7 @@
+@@ -152,6 +152,7 @@
  #include "media/media_buildflags.h"
  #include "pdf/buildflags.h"
  #include "printing/buildflags/buildflags.h"
@@ -10,7 +10,7 @@ index f6cbaf1038ada..8909e51f1ccae 100644
  
  #if BUILDFLAG(IS_ANDROID)
  #include "chrome/browser/first_run/android/first_run_prefs.h"
-@@ -3027,7 +3028,12 @@ std::unique_ptr<ConfigurationPolicyHandlerList> BuildHandlerList(
+@@ -3119,7 +3120,12 @@ std::unique_ptr<ConfigurationPolicyHandlerList> BuildHandlerList(
  #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || \
      BUILDFLAG(IS_LINUX)
    signin_legacy_policies.push_back(std::make_unique<SimplePolicyHandler>(

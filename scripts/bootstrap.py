@@ -8,7 +8,15 @@ Steps:
   4. Ensure <repo>/build exists.
   5. Create links: <chromium>/src/teleport -> <repo>/src, <chromium>/src/out -> <repo>/build.
 
-The chromium checkout location honors $TELEPORT_CHROMIUM_DIR (see _lib.chromium_dir).
+The chromium checkout location is derived from CHROMIUM_VERSION under
+$TELEPORT_CHROMIUM_ROOT (defaulting to ~/workspace/chromium); $TELEPORT_CHROMIUM_DIR
+still overrides the whole path when set (see _lib.chromium_dir).
+
+Link semantics differ by direction: <chromium>/src/teleport -> <repo>/src is strict
+(create_dir_link) — pointing elsewhere means cross-worktree contamination and must
+raise. <repo>/build -> <chromium>/src/out is a pure access convenience and gets
+repointed (repoint_dir_link) when a baseline switch leaves it aimed at the previous
+checkout.
 """
 from __future__ import annotations
 
@@ -18,7 +26,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _lib import chromium_dir, chromium_src, create_dir_link, repo_root
+from _lib import chromium_dir, chromium_src, create_dir_link, repo_root, repoint_dir_link
+
+# Name of the symlink this script creates at <chromium>/src/teleport, pointing
+# at <repo>/src. Exported as a named constant (not just a literal below) so
+# export_patches.py can recognize it as an injection artifact rather than an
+# unclassified change -- it is untracked in every bootstrapped checkout, and
+# without that recognition it trips the safety valve unconditionally.
+SRC_LINK_NAME = "teleport"
 
 # checkout_pgo_profiles=True makes `gclient sync` run chromium's own DEPS hooks
 # that download BOTH PGO profile sets the release build needs:
@@ -60,9 +75,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Set up chromium checkout + overlay links")
     parser.add_argument("--skip-sync", action="store_true",
                         help="skip gclient sync (checkout already synced to the pinned version)")
+    parser.add_argument("--root", type=Path, default=None,
+                        help="teleport repo root (default: auto-detected; for tests)")
     args = parser.parse_args(argv)
 
-    root = repo_root()
+    root = args.root if args.root is not None else repo_root()
     if shutil.which("gclient") is None:
         print("error: depot_tools not found on PATH. Install depot_tools and add it to PATH:\n"
               "  https://chromium.googlesource.com/chromium/tools/depot_tools.git", file=sys.stderr)
@@ -89,9 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     # Expose them at the repo root via a build/ -> src/out link (not the reverse).
     out = src / "out"
     out.mkdir(parents=True, exist_ok=True)
-    create_dir_link(src / "teleport", root / "src")
-    create_dir_link(root / "build", out)
-    print(f"bootstrap complete: {src}/teleport -> {root}/src, {root}/build -> {out}")
+    create_dir_link(src / SRC_LINK_NAME, root / "src")
+    repoint_dir_link(root / "build", out)
+    print(f"bootstrap complete: {src}/{SRC_LINK_NAME} -> {root}/src, {root}/build -> {out}")
     return 0
 
 

@@ -1,0 +1,35 @@
+diff --git a/chrome/browser/ui/webui/help/BUILD.gn b/chrome/browser/ui/webui/help/BUILD.gn
+index 17d8d3e2832c4..bab50b93c111c 100644
+--- a/chrome/browser/ui/webui/help/BUILD.gn
++++ b/chrome/browser/ui/webui/help/BUILD.gn
+@@ -3,6 +3,7 @@
+ # found in the LICENSE file.
+ 
+ import("//chrome/common/features.gni")
++import("//teleport/teleport.gni")
+ 
+ source_set("help") {
+   public = [ "version_updater.h" ]
+@@ -36,13 +37,21 @@ source_set("help") {
+   }
+ 
+   if (is_mac) {
+-    sources = [ "version_updater_mac.mm" ]
++    if (teleport_enable_updater) {
++      # The teleport Sparkle-backed VersionUpdater replaces the upstream mac
++      # (Omaha-based) one; compiled here so it can see chrome headers without a
++      # GN dependency cycle on //teleport.
++      sources = [ "//teleport/browser/mac/teleport_version_updater.mm" ]
++    } else {
++      sources = [ "version_updater_mac.mm" ]
++    }
+     deps += [
+       "//base:i18n",
+       "//chrome/app:branded_strings",
+       "//chrome/app:generated_resources_grit",
+       "//chrome/browser/updater",
+       "//chrome/updater:browser_sources",
++      "//teleport",
+       "//ui/base",
+     ]
+     frameworks = [ "Foundation.framework" ]

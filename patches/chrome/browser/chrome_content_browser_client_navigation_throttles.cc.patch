@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
-index d1615d67d2b9a..d81510202efec 100644
+index ce2651e9aa235..660c00aa59c45 100644
 --- a/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
 +++ b/chrome/browser/chrome_content_browser_client_navigation_throttles.cc
-@@ -145,6 +145,7 @@
+@@ -147,6 +147,7 @@
  #include "chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.h"
  #include "chrome/browser/enterprise/profile_management/profile_management_navigation_throttle.h"
  #include "chrome/browser/enterprise/signin/managed_profile_required_navigation_throttle.h"

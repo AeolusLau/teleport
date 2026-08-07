@@ -1,19 +1,20 @@
 diff --git a/chrome/chrome_paks.gni b/chrome/chrome_paks.gni
-index ffc4930414158..d682651fbae86 100644
+index 2bd694fc07dfd..69e67a48ecc23 100644
 --- a/chrome/chrome_paks.gni
 +++ b/chrome/chrome_paks.gni
-@@ -503,9 +503,13 @@ template("chrome_extra_paks") {
-     if (is_win || is_mac || is_linux) {
-       sources += [
+@@ -577,6 +577,7 @@ template("chrome_extra_paks") {
+         "$root_gen_dir/chrome/app_home_resources.pak",
          "$root_gen_dir/chrome/app_settings_resources.pak",
+         "$root_gen_dir/chrome/browser_switch_resources.pak",
 +        "$root_gen_dir/chrome/enroll_resources.pak",
          "$root_gen_dir/chrome/on_device_translation_internals_resources.pak",
-       ]
--      deps += [ "//chrome/browser/resources/app_settings:resources" ]
-+      deps += [
-+        "//chrome/browser/resources/app_settings:resources",
+         "$root_gen_dir/chrome/signin_history_sync_optin_resources.pak",
+         "$root_gen_dir/chrome/updater_resources.pak",
+@@ -587,6 +588,7 @@ template("chrome_extra_paks") {
+         "//chrome/browser/resources/browser_switch:resources",
+         "//chrome/browser/resources/signin/history_sync_optin:resources",
+         "//chrome/browser/resources/updater:resources",
 +        "//teleport/browser/resources/enroll:resources",
-+      ]
+       ]
      }
  
-     if (is_win || is_mac || is_linux || is_chromeos || is_desktop_android) {

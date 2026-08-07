@@ -72,6 +72,18 @@ def download_and_extract() -> None:
 def install_framework(root: Path | None = None) -> None:
     """Place a REAL copy (not a symlink) of the cached framework in the
     checkout, preserving the framework's internal version symlinks."""
+    src = chromium_src(root)
+    if not (src / ".git").exists():
+        raise RuntimeError(
+            f"{src} is not a chromium git checkout -- refusing to install "
+            f"Sparkle.framework into it. Run this after the checkout exists "
+            f"(bootstrap.py, or the runbook's §B0 `git clone --local`), "
+            f"not before: without this guard, install_framework() would "
+            f"`mkdir -p` a phantom {src}/{LINK_RELPATH}/ tree under a "
+            f"checkout that does not exist yet, which then breaks a later "
+            f"`git clone --local` into the same path with a confusing "
+            f"'destination path already exists' error instead of the real "
+            f"cause.")
     dest = link_path(root)
     if dest.is_symlink():
         dest.unlink()  # replace a legacy symlink from an older fetch_sparkle
@@ -84,6 +96,12 @@ def install_framework(root: Path | None = None) -> None:
 def main(argv: list[str] | None = None) -> int:
     argparse.ArgumentParser(
         description="Fetch + install the pinned Sparkle.framework").parse_args(argv)
+    src = chromium_src()
+    if not (src / ".git").exists():
+        print(f"error: {src} is not a chromium git checkout -- run this after "
+              f"the checkout exists (bootstrap.py / the runbook's §B0 "
+              f"`git clone --local`), not before", file=sys.stderr)
+        return 1
     download_and_extract()
     fw = cache_framework_path()
     if not fw.exists():

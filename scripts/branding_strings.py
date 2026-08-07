@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _AUTHORS = re.compile(r"(?:The )?Chromium Authors")
 # The English company name ends with an abbreviation period ("Ltd."). Where the
@@ -259,6 +259,7 @@ _GRIT_DEFINES = {
     "enable_printing": True,
     "enable_screen_ai_service": True,
     "enable_vr": False,
+    "enable_webui_ntp": True,  # target_os=="mac" default (ui/webui/webui_features.gni)
     "enable_webui_tab_strip": False,
     "is_android": False,
     "is_cfm": False,
@@ -309,6 +310,48 @@ def message_name_to_id(
                 # MessageNode has no GetId(); the id lives on its clique's
                 # source message (= GenerateMessageId(presentable, meaning)).
                 out[node.attrs["name"]] = cliques[0].GetId()
+    return out
+
+
+def active_message_sources(
+    chromium_src: Path, grd_path: Path, grd_dir: Path | None = None
+) -> dict[str, str | None]:
+    """Map ``{message name -> nearest enclosing <part file=...> value}`` for
+    every ACTIVE message in a grd, as grit resolves it for our target platform
+    + defines (so ``<if expr="is_android">``-only parts, etc. are correctly
+    excluded). ``None`` means the message is declared directly in the grd, not
+    inside a ``<part>``.
+
+    Lets a caller tell which physical ``.grdp`` file backs a given message
+    name without re-deriving grit's own splicing: a ``<part>`` node is a real
+    ancestor in the parsed tree (grit/node/misc.py ``PartNode``, a
+    ``SplicingNode``), so the nearest ``part`` ancestor's ``file`` attribute is
+    exactly the file grit spliced that message in from. Used to catch a
+    ``<part>`` upstream added to a tracked grd that we forgot to register in
+    that target's ``grdp`` tuple (see test_branding_strings.py).
+    """
+    grd_reader = _load_grd_reader(chromium_src)
+    grd_path = Path(grd_path)
+    base_dir = str(grd_dir) if grd_dir is not None else str(grd_path.parent)
+    grd = grd_reader.Parse(
+        str(grd_path),
+        base_dir,
+        defines=dict(_GRIT_DEFINES),
+        target_platform=_GRIT_TARGET_PLATFORM,
+        skip_validation_checks=True,
+    )
+    grd.SetOutputLanguage("en")
+    out: dict[str, str | None] = {}
+    for node in grd.ActiveDescendants():
+        if node.name == "message" and "name" in node.attrs and node.GetCliques():
+            source = None
+            ancestor = node.parent
+            while ancestor is not None:
+                if ancestor.name == "part":
+                    source = ancestor.attrs.get("file")
+                    break
+                ancestor = ancestor.parent
+            out[node.attrs["name"]] = source
     return out
 
 
@@ -426,11 +469,18 @@ _GRD_TARGETS = (
             "browsing_data_strings.grdp",
             "collaboration_strings.grdp",
             "commerce_strings.grdp",
+            "contextual_cueing_strings.grdp",
             "error_page_strings.grdp",
             "heavy_ad_intervention_strings.grdp",
             "history_strings.grdp",
             "management_strings.grdp",
             "new_or_sad_tab_strings.grdp",
+            # Nested <part> of omnibox_strings.grdp (not a direct child of the
+            # grd), but grit resolves <part file=...> relative to the grd's own
+            # base dir regardless of nesting depth, so a bare filename here
+            # still rewrites it correctly -- see
+            # test_all_active_grdp_parts_are_registered_or_product_name_free.
+            "omnibox_pedal_ui_strings.grdp",
             "omnibox_strings.grdp",
             "page_info_strings.grdp",
             "password_manager_strings.grdp",
@@ -501,6 +551,23 @@ _GRD_TARGETS = (
         "grdp": (), "inject": (), "sweep_chrome": True,
     },
 )
+
+
+def touched_paths() -> set[str]:
+    """Every chromium/src-relative path this module rewrites.
+
+    export_patches.py consumes this so the generated-file set is derived rather
+    than hand-maintained — a hand-written list would silently drift the moment a
+    target is added here.
+    """
+    paths: set[str] = set()
+    for target in _GRD_TARGETS:
+        grd = PurePosixPath(target["grd"])
+        paths.add(str(grd))
+        paths.update(target["xtb"].values())
+        for grdp in target["grdp"]:
+            paths.add(str(grd.parent / grdp))
+    return paths
 
 
 def inject_translations(xtb_text: str, ids, value: str) -> str:

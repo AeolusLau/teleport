@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/signin/signin_util.cc b/chrome/browser/signin/signin_util.cc
-index f16cf349f9297..f7cf2e65c141e 100644
+index dc230d613b038..db02cbc627555 100644
 --- a/chrome/browser/signin/signin_util.cc
 +++ b/chrome/browser/signin/signin_util.cc
-@@ -47,6 +47,7 @@
+@@ -46,6 +46,7 @@
  #include "google_apis/gaia/gaia_id.h"
  #include "net/cookies/canonical_cookie.h"
  #include "services/network/public/mojom/cookie_manager.mojom.h"
@@ -10,7 +10,7 @@ index f16cf349f9297..f7cf2e65c141e 100644
  #include "ui/base/l10n/l10n_util.h"
  
  #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-@@ -163,7 +164,8 @@ bool IsForceSigninEnabled() {
+@@ -161,7 +162,8 @@ bool IsForceSigninEnabled() {
        return false;
      }
    }

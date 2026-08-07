@@ -1,8 +1,8 @@
-diff --git a/components/policy/resources/webui/status_box.html b/components/policy/resources/webui/status_box.html
-index fbd9f22db3c09..f2c874026abea 100644
---- a/components/policy/resources/webui/status_box.html
-+++ b/components/policy/resources/webui/status_box.html
-@@ -31,6 +31,30 @@ div.status-entry:not([hidden]) {
+diff --git a/components/policy/resources/webui/status_box.css b/components/policy/resources/webui/status_box.css
+index bdb8f5102f371..1b9608a46130e 100644
+--- a/components/policy/resources/webui/status_box.css
++++ b/components/policy/resources/webui/status_box.css
+@@ -56,6 +56,30 @@ div.status-entry:last-child {
    text-align: right;
  }
  
@@ -30,6 +30,6 @@ index fbd9f22db3c09..f2c874026abea 100644
 +  white-space: nowrap;
 +}
 +
- div.status-entry:last-child {
-   margin-bottom: 0;
- }
+ hr {
+   border: 0;
+   border-top: 1px solid var(--cr-separator-color);

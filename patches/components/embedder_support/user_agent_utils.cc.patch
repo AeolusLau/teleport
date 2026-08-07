@@ -1,5 +1,5 @@
 diff --git a/components/embedder_support/user_agent_utils.cc b/components/embedder_support/user_agent_utils.cc
-index 557eadb18229e..704b6660c08b4 100644
+index 608bea5cb3864..79d846b55da8d 100644
 --- a/components/embedder_support/user_agent_utils.cc
 +++ b/components/embedder_support/user_agent_utils.cc
 @@ -31,6 +31,7 @@
@@ -34,7 +34,7 @@ index 557eadb18229e..704b6660c08b4 100644
                                 blink::UserAgentBrandVersionType::kFullVersion,
                                 additional_brand_version);
  }
-@@ -664,7 +667,8 @@ blink::UserAgentMetadata GetUserAgentMetadata(bool only_low_entropy_ch) {
+@@ -663,7 +666,8 @@ blink::UserAgentMetadata GetUserAgentMetadata(bool only_low_entropy_ch) {
    // High entropy client hints.
    metadata.brand_full_version_list =
        GetUserAgentBrandFullVersionListInternal(std::nullopt);

@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_menu_view.cc b/chrome/browser/ui/views/profiles/profile_menu_view.cc
-index 684e24c211901..8926d438fa1b4 100644
+index d0f61863c6dae..74e9e1ad1f611 100644
 --- a/chrome/browser/ui/views/profiles/profile_menu_view.cc
 +++ b/chrome/browser/ui/views/profiles/profile_menu_view.cc
 @@ -23,6 +23,7 @@
@@ -10,7 +10,7 @@ index 684e24c211901..8926d438fa1b4 100644
  #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
  #include "chrome/browser/enterprise/util/managed_browser_utils.h"
  #include "chrome/browser/feature_engagement/tracker_factory.h"
-@@ -82,6 +83,7 @@
+@@ -83,6 +84,7 @@
  #include "components/autofill/core/browser/metrics/autofill_settings_metrics.h"
  #include "components/autofill/core/common/autofill_features.h"
  #include "components/feature_engagement/public/feature_constants.h"
@@ -18,7 +18,7 @@ index 684e24c211901..8926d438fa1b4 100644
  #include "components/signin/core/browser/signin_error_controller.h"
  #include "components/signin/public/base/consent_level.h"
  #include "components/signin/public/base/signin_metrics.h"
-@@ -96,6 +98,10 @@
+@@ -99,6 +101,10 @@
  #include "components/vector_icons/vector_icons.h"
  #include "device/fido/public/features.h"
  #include "net/base/url_util.h"
@@ -29,7 +29,7 @@ index 684e24c211901..8926d438fa1b4 100644
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/l10n/l10n_util.h"
  #include "ui/base/models/image_model.h"
-@@ -422,6 +428,25 @@ void ProfileMenuView::OnSigninButtonClicked(
+@@ -429,6 +435,25 @@ void ProfileMenuView::OnSigninButtonClicked(
                                                     access_point);
  }
  
@@ -55,7 +55,7 @@ index 684e24c211901..8926d438fa1b4 100644
  void ProfileMenuView::OnSignoutButtonClicked() {
    DCHECK(ChromeSigninClientFactory::GetForProfile(&profile())
               ->IsClearPrimaryAccountAllowed())
-@@ -684,10 +709,69 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
+@@ -692,10 +717,69 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
      }
    }
  
@@ -128,7 +128,7 @@ index 684e24c211901..8926d438fa1b4 100644
      return params;
    }
  
-@@ -1012,6 +1096,13 @@ void ProfileMenuView::MaybeBuildChromeAccountSettingsButton() {
+@@ -1038,6 +1122,13 @@ void ProfileMenuView::MaybeBuildChromeAccountSettingsButton() {
  void ProfileMenuView::MaybeBuildChromeAccountSettingsButtonWithSync() {
    CHECK(!profile().IsGuestSession());
  

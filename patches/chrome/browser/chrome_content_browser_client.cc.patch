@@ -1,17 +1,17 @@
 diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
-index f823433796c5c..b94b8260afabb 100644
+index cbac8ed6171b7..679b881bb2c10 100644
 --- a/chrome/browser/chrome_content_browser_client.cc
 +++ b/chrome/browser/chrome_content_browser_client.cc
-@@ -753,6 +753,8 @@
- #include "chrome/common/request_header_integrity/request_header_integrity_url_loader_throttle.h"  // nogncheck crbug.com/1125897
- #endif
+@@ -779,6 +779,8 @@
+ #include "chrome/browser/printing/print_preview_dialog_controller.h"
+ #endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
  
 +#include "teleport/common/teleport_url_scheme.h"
 +
  #include "base/win/windows_h_disallowed.h"
  
  using blink::mojom::EffectiveConnectionType;
-@@ -5064,6 +5066,12 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
+@@ -5160,6 +5162,12 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
      part->BrowserURLHandlerCreated(handler);
    }
  

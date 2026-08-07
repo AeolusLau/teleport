@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
-index a8ebab6e15ac1..b58ebc8a36e87 100644
+index a32949ed044f1..4ec30be5f165f 100644
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
 @@ -3,6 +3,8 @@
@@ -11,7 +11,7 @@ index a8ebab6e15ac1..b58ebc8a36e87 100644
  
  #include <memory>
  #include <string>
-@@ -1440,6 +1442,8 @@ void ChromeBrowserMainParts::PostCreateThreads() {
+@@ -1456,6 +1458,8 @@ void ChromeBrowserMainParts::PostCreateThreads() {
  int ChromeBrowserMainParts::PreMainMessageLoopRun() {
    TRACE_EVENT0("startup", "ChromeBrowserMainParts::PreMainMessageLoopRun");
  
@@ -20,7 +20,7 @@ index a8ebab6e15ac1..b58ebc8a36e87 100644
    result_code_ = PreMainMessageLoopRunImpl();
  
    for (auto& chrome_extra_part : chrome_extra_parts_) {
-@@ -1545,6 +1549,14 @@ void ChromeBrowserMainParts::PostProfileInit(Profile* profile,
+@@ -1561,6 +1565,14 @@ void ChromeBrowserMainParts::PostProfileInit(Profile* profile,
      chrome_extra_part->PostProfileInit(profile, is_initial_profile);
    }
  

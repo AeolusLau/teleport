@@ -1,0 +1,16 @@
+diff --git a/components/policy/resources/webui/policy_table.html.ts b/components/policy/resources/webui/policy_table.html.ts
+index 2d28afe02dfbe..4d682c2c4dada 100644
+--- a/components/policy/resources/webui/policy_table.html.ts
++++ b/components/policy/resources/webui/policy_table.html.ts
+@@ -13,9 +13,9 @@ export function getHtml(this: PolicyTableElement) {
+   <h2 class="header" id="policy-header">
+     ${this.dataModel?.name}
+     ${this.dataModel?.id === 'updater' ? html`
+-      <a href="chrome://updater" class="updater-link" target="_blank"
++      <a href="teleport://updater" class="updater-link" target="_blank"
+           rel="noopener noreferrer">
+-        (chrome://updater)
++        (teleport://updater)
+       </a>
+     ` : ''}
+   </h2>

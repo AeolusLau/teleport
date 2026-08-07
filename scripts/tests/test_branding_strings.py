@@ -1,10 +1,10 @@
-import os
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
 import pytest
 
+import _lib
 import branding_strings as bs
 
 
@@ -77,12 +77,14 @@ def test_rebrand_preserves_os_reference():
 # --- Task 4: grit-based id remap + zh xtb rewrite -------------------------
 
 def _chromium_src() -> Path:
-    env = os.environ.get("TELEPORT_CHROMIUM_DIR")
-    if not env:
-        pytest.skip("TELEPORT_CHROMIUM_DIR not set; needs in-tree grit")
-    src = Path(env) / "src"
+    # Resolve via _lib.chromium_src() (same derivation the production scripts
+    # use: $TELEPORT_CHROMIUM_DIR override, else <TELEPORT_CHROMIUM_ROOT>/
+    # <release branch> from CHROMIUM_VERSION) rather than reading the env var
+    # directly — these tests need real, up-to-date checkout content and must
+    # not go stale (silently skip) just because the derivation changed.
+    src = _lib.chromium_src()
     if not (src / "tools" / "grit").is_dir():
-        pytest.skip("in-tree grit not found under $TELEPORT_CHROMIUM_DIR/src")
+        pytest.skip(f"no chromium checkout with in-tree grit found at {src}")
     return src
 
 
@@ -507,3 +509,100 @@ def test_standalone_grd_renamed_set_is_frozen(grd_rel, fixture_name, pristine):
         f"rebranded message set for {grd_rel} drifted from frozen fixture — "
         "review the diff and update the fixture only after confirming new entries are correct"
     )
+
+
+# --- unregistered <part> drift detection ------------------------------------
+#
+# Each _GRD_TARGETS entry's "grdp" tuple is a manually curated allowlist: only
+# the <part> includes known (when last reviewed) to carry displayed
+# product-name strings are listed, and _rebrand_target / renamed_message_names
+# / surviving_chrome_phrases only ever look at the grd + those listed parts.
+# Upstream can add a brand-new <part> to a tracked grd at any milestone; if it
+# carries "Chrome"/"Chromium" text and nobody notices it needs registering,
+# its messages ship un-rebranded in a product branded 闪现, and their zh xtb
+# entries are never re-keyed -- silently, because the fixture-snapshot tests
+# above are blind to files they were never told to look at (M151 case in
+# point: components_strings.grd started splicing in
+# contextual_cueing_strings.grdp, whose "Chrome processes page titles..."
+# strings shipped unbranded until this test was added).
+#
+# This walks every <part> grit actually resolves as ACTIVE for our target
+# platform + defines (so is_android/is_chromeos-only parts are correctly
+# excluded, same as a real build would exclude them) and flags any that are
+# (a) not in the target's "grdp" tuple and (b) contain messages whose text
+# rebrand_en_text would change -- i.e. would need the same rewrite a listed
+# part already gets. "Would change" reuses rebrand_en_text, the same
+# product-name detector renamed_message_names/surviving_chrome_phrases are
+# themselves built on, rather than a second hand-rolled notion of "Chrome
+# text".
+
+def _unregistered_offending_parts(mirror: Path, target: dict) -> dict[str, list[str]]:
+    """{unregistered grdp filename -> sorted offending message names} for one
+    _GRD_TARGETS entry, computed against files already materialized in
+    ``mirror`` (see the ``pristine`` fixture, which recursively materializes
+    *every* <part> a grd references, listed or not). Mutates then restores
+    the unregistered part files it inspects, like renamed_message_names does
+    for listed ones."""
+    grd_rel = target["grd"]
+    grd_path = mirror / grd_rel
+    grd_dir = grd_path.parent
+    sweep_chrome = target.get("sweep_chrome", False)
+
+    before_ids = bs.message_name_to_id(mirror, grd_path)
+    sources = bs.active_message_sources(mirror, grd_path)
+    listed = set(target["grdp"])
+    unregistered = sorted({f for f in sources.values() if f and f not in listed})
+    if not unregistered:
+        return {}
+
+    originals = {grd_dir / f: (grd_dir / f).read_text(encoding="utf-8")
+                for f in unregistered}
+    try:
+        for path, text in originals.items():
+            path.write_text(bs.rebrand_en_text(text, sweep_chrome), encoding="utf-8")
+        after_ids = bs.message_name_to_id(mirror, grd_path)
+    finally:
+        for path, text in originals.items():
+            path.write_text(text, encoding="utf-8")
+
+    offenders: dict[str, list[str]] = {}
+    for f in unregistered:
+        changed = sorted(
+            name for name, source in sources.items()
+            if source == f and name in before_ids and name in after_ids
+            and before_ids[name] != after_ids[name]
+        )
+        if changed:
+            offenders[f] = changed
+    return offenders
+
+
+@pytest.mark.parametrize("target", bs._GRD_TARGETS, ids=lambda t: t["grd"])
+def test_all_active_grdp_parts_are_registered_or_product_name_free(target, pristine):
+    """Every <part> grit actively splices into a tracked grd must be either
+    listed in that target's "grdp" tuple, or free of text rebrand_en_text
+    would touch -- otherwise a future milestone upgrade can silently ship an
+    un-rebranded, un-re-keyed <part> the same way M151's
+    contextual_cueing_strings.grdp did."""
+    mirror = pristine(target["grd"])
+    offenders = _unregistered_offending_parts(mirror, target)
+    assert not offenders, (
+        f"{target['grd']}: unregistered <part> file(s) carry product-name "
+        "strings that would ship un-rebranded -- add them to this target's "
+        "'grdp' tuple in _GRD_TARGETS:\n" +
+        "\n".join(f"  {grdp}: {', '.join(names)}"
+                  for grdp, names in sorted(offenders.items()))
+    )
+
+
+def test_touched_paths_covers_every_target():
+    paths = bs.touched_paths()
+    # Every grd and every xtb must be present.
+    assert "chrome/app/chromium_strings.grd" in paths
+    assert "chrome/app/resources/chromium_strings_zh-CN.xtb" in paths
+    assert "components/strings/components_strings_zh-TW.xtb" in paths
+    # grdp entries resolve relative to their grd's directory.
+    assert "chrome/app/settings_chromium_strings.grdp" in paths
+    assert "components/autofill_strings.grdp" in paths
+    # No path may be absolute or contain a backslash.
+    assert all(not p.startswith("/") and "\\" not in p for p in paths)

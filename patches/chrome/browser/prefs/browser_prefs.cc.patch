@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
-index 4c7ad0aaa2347..d2dd2b98ac39b 100644
+index 48394ef7d6093..605ab627042e3 100644
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
-@@ -29,6 +29,8 @@
+@@ -31,6 +31,8 @@
  #include "chrome/browser/engagement/important_sites_util.h"
  #include "chrome/browser/enterprise/reporting/prefs.h"
  #include "chrome/browser/enterprise/util/managed_browser_utils.h"
@@ -11,7 +11,7 @@ index 4c7ad0aaa2347..d2dd2b98ac39b 100644
  #include "chrome/browser/external_protocol/external_protocol_handler.h"
  #include "chrome/browser/finds/core/finds_service.h"
  #include "chrome/browser/first_run/first_run.h"
-@@ -1374,6 +1376,8 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+@@ -1411,6 +1413,8 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
    domain_reliability::RegisterPrefs(registry);
    embedder_support::OriginTrialPrefs::RegisterPrefs(registry);
    enterprise_reporting::RegisterLocalStatePrefs(registry);

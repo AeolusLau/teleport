@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
-index ef58d81592120..2cd7f981c5900 100644
+index fbfd3835bae18..fdf84838981cf 100644
 --- a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
 +++ b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
 @@ -31,6 +31,12 @@
@@ -15,42 +15,24 @@ index ef58d81592120..2cd7f981c5900 100644
  #include "url/gurl.h"
  
  using ThrottleCheckResult = content::NavigationThrottle::ThrottleCheckResult;
-@@ -38,20 +44,10 @@ using url_matcher::URLMatcher;
+@@ -38,11 +44,11 @@ using url_matcher::URLMatcher;
  
  namespace {
  
--constexpr char kEnrollmentFallbackUrl[] =
--    "https://chromeenterprise.google/enroll";
--
--// We consider this common host for Microsoft authentication to be valid
--// redirection source.
--constexpr char kEntraLoginHost[] = "https://login.microsoftonline.com";
--// Valid redirection from MSFT Cloud App Security portal.
--constexpr char kEntraMcasHost[] = "https://mcas.ms";
--
 -// Chrome Enterprise page that handles OIDC authentication redirection, this
 -// page should receive the proper payload in its auth header to start OIDC
 -// profile creation/registration.
 -constexpr char kEnterpriseOidcRegisterUrl[] =
 -    "https://chromeenterprise.google/profile-enrollment/register-handler";
-+// teleport: the enroll-landing, register-handler, and trusted redirect-source
-+// hosts are branded and live in //teleport (teleport::Enterprise*Url /
-+// EnterpriseTrustedRedirectHosts), replacing the upstream hardcoded
-+// chromeenterprise.google + Entra constants.
++// teleport: the register-handler host is branded and lives in //teleport
++// (teleport::EnterpriseRegisterHandlerUrl()), replacing the upstream hardcoded
++// chromeenterprise.google constant. M151 deleted the URL-fragment capture path
++// upstream, so the enroll-landing and Entra trusted-redirect constants (which
++// this overlay also used to replace) no longer exist here at all.
  
  constexpr char kRegistrationHeaderField[] = "X-Profile-Registration-Payload";
  
-@@ -85,7 +81,8 @@ base::flat_map<std::string, std::string> SplitUrl(const std::string& url) {
- std::unique_ptr<URLMatcher> CreateEnrollmentRedirectUrlMatcher() {
-   auto matcher = std::make_unique<URLMatcher>();
-   url_matcher::util::AddAllowFiltersWithLimit(
--      matcher.get(), std::vector<std::string>({kEnrollmentFallbackUrl}));
-+      matcher.get(),
-+      std::vector<std::string>({teleport::EnterpriseEnrollUrl()}));
-   return matcher;
- }
- 
-@@ -102,7 +99,8 @@ bool IsEnrollmentUrl(GURL& url) {
+@@ -53,7 +59,8 @@ constexpr char kPayloadCodeFieldName[] = "encrypted_user_information";
  std::unique_ptr<URLMatcher> CreateEnrollmentHeaderUrlMatcher() {
    auto matcher = std::make_unique<URLMatcher>();
  
@@ -60,64 +42,7 @@ index ef58d81592120..2cd7f981c5900 100644
  
    // Inserting more supported URLs should be only available on Canary and Dev
    // for security.
-@@ -140,7 +138,8 @@ bool IsEnrollmentHeaderUrl(GURL& url) {
- std::unique_ptr<URLMatcher> CreateOidcEnrollmentUrlMatcher() {
-   auto matcher = std::make_unique<URLMatcher>();
- 
--  std::vector<std::string> allowed_hosts({kEntraLoginHost, kEntraMcasHost});
-+  std::vector<std::string> allowed_hosts =
-+      teleport::EnterpriseTrustedRedirectHosts();
-   if (base::FeatureList::IsEnabled(
-           profile_management::features::kOidcEnrollmentAuthSource)) {
-     const std::vector<std::string>& hosts = base::SplitString(
-@@ -391,9 +390,8 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
-     return Resume();
-   }
- 
--  auto* interceptor = OidcAuthenticationSigninInterceptorFactory::GetForProfile(
--      Profile::FromBrowserContext(
--          navigation_handle()->GetWebContents()->GetBrowserContext()));
-+  auto* profile = Profile::FromBrowserContext(
-+      navigation_handle()->GetWebContents()->GetBrowserContext());
- 
-   VLOG_POLICY(2, OIDC_ENROLLMENT)
-       << "OIDC redirection meets all requirements, starting enrollment "
-@@ -401,6 +399,34 @@ void OidcAuthResponseCaptureNavigationThrottle::RegisterWithOidcTokens(
-   RecordOidcInterceptionFunnelStep(
-       OidcInterceptionFunnelStep::kSuccessfulInfoParsed);
- 
-+  // teleport build: same reroute as the header path below — this build
-+  // reroutes ALL captured D-domain register-handler OIDC to in-place
-+  // enrollment, bypassing the Browser-anchored interceptor dialog and its
-+  // NEW-profile flow entirely; the upstream new-profile interceptor is
-+  // unreachable in this product. This navigation is DEFERRED
-+  // (AttemptToTriggerUrlInterception returned DEFER), so resume it.
-+  if (!teleport::IsEnrolled(profile)) {
-+    VLOG(1) << "[teleport-enroll] (url path) rerouting captured OIDC tokens "
-+               "to in-place registrar";
-+    content::WebContents* wc = navigation_handle()->GetWebContents();
-+    if (teleport::EnrollmentDoneUserData::HasCallback(wc)) {
-+      // The ProfilePicker enrollment step attaches its own done-callback.
-+      teleport::EnrollCurrentProfileInPlace(
-+          profile, tokens, *issuer_id, *subject_id, std::string(),
-+          teleport::EnrollmentDoneUserData::Take(wc));
-+    } else {
-+      // Voluntary (menu-tab) flow: disclose management via the upstream
-+      // managed-disclosure dialog before enrolling in place (§4.7); falls
-+      // back to navigating the tab to the enrollment error page on failure.
-+      teleport::MaybeShowDisclosureThenEnroll(wc, profile, tokens, *issuer_id,
-+                                               *subject_id, std::string());
-+    }
-+    Resume();
-+    return;
-+  }
-+
-+  auto* interceptor =
-+      OidcAuthenticationSigninInterceptorFactory::GetForProfile(profile);
-   interceptor->MaybeInterceptOidcAuthentication(
-       navigation_handle()->GetWebContents(), tokens, *issuer_id, *subject_id,
-       std::string(),
-@@ -494,9 +520,48 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
+@@ -225,9 +232,48 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
      RecordOidcInterceptionFunnelStep(
          OidcInterceptionFunnelStep::kSuccessfulInfoParsed);
  

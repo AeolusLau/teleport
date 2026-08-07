@@ -34,18 +34,24 @@ def test_engine_header_content_macros():
 
 
 def _fake_root(tmp_path, monkeypatch, teleport="0.1.12.0\n", chromium="148.0.7778.180\n"):
-    # chromium_src() prefers $TELEPORT_CHROMIUM_DIR; neutralize it for hermetic tests.
+    # chromium_src() prefers $TELEPORT_CHROMIUM_DIR; neutralize it. Without also
+    # pinning $TELEPORT_CHROMIUM_ROOT, the now-derived checkout path would fall
+    # through to the real default (~/workspace/chromium/<branch>) — writing into
+    # the developer's actual checkout instead of tmp_path. Pin both so the test
+    # stays hermetic.
     monkeypatch.delenv("TELEPORT_CHROMIUM_DIR", raising=False)
+    monkeypatch.setenv("TELEPORT_CHROMIUM_ROOT", str(tmp_path / "roots"))
     (tmp_path / "TELEPORT_VERSION").write_text(teleport)
     (tmp_path / "CHROMIUM_VERSION").write_text(chromium)
-    (tmp_path / "chromium" / "src" / "chrome").mkdir(parents=True)
-    (tmp_path / "chromium" / "src" / "components" / "version_info").mkdir(parents=True)
+    src = gv.chromium_src(tmp_path)
+    (src / "chrome").mkdir(parents=True)
+    (src / "components" / "version_info").mkdir(parents=True)
     return tmp_path
 
 
 def test_write_chrome_version_writes_then_skips(tmp_path, monkeypatch):
     root = _fake_root(tmp_path, monkeypatch)
-    target = root / "chromium" / "src" / "chrome" / "VERSION"
+    target = gv.chromium_src(root) / "chrome" / "VERSION"
     assert gv.write_chrome_version(root) is True
     assert target.read_text() == "MAJOR=0\nMINOR=1\nBUILD=12\nPATCH=0\n"
     mtime = target.stat().st_mtime_ns
@@ -55,7 +61,7 @@ def test_write_chrome_version_writes_then_skips(tmp_path, monkeypatch):
 
 def test_write_engine_header_writes_then_skips(tmp_path, monkeypatch):
     root = _fake_root(tmp_path, monkeypatch)
-    target = (root / "chromium" / "src" / "components" / "version_info"
+    target = (gv.chromium_src(root) / "components" / "version_info"
               / "teleport_engine_version.h")
     assert gv.write_engine_header(root) is True
     assert 'TELEPORT_ENGINE_VERSION_STRING "148.0.7778.180"' in target.read_text()

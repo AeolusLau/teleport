@@ -13,9 +13,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/web_signin_interceptor.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/browser_navigator.h"
-#include "chrome/browser/ui/browser_navigator_params.h"
+#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+#include "chrome/browser/ui/navigator/browser_navigator.h"
+#include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/signin/dice_web_signin_interceptor_delegate.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -167,7 +167,7 @@ void MaybeShowDisclosureThenEnroll(content::WebContents* wc,
                                    std::string issuer_id,
                                    std::string subject_id,
                                    std::string email) {
-  if (!wc || !chrome::FindBrowserWithTab(wc)) {
+  if (!wc || !GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(wc)) {
     // No Browser to anchor the dialog to. Not the normal picker case (this
     // function is only called from the voluntary/menu-tab branch); a narrow
     // race (e.g. the browser window closing mid-flow) would otherwise

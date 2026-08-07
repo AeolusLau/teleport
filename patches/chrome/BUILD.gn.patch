@@ -1,5 +1,5 @@
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index cc98a1463c539..e58054949023a 100644
+index 973a46b2a34bb..cb00f25ffa3d2 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
 @@ -31,6 +31,7 @@ import("//tools/resources/generate_resource_allowlist.gni")
@@ -10,7 +10,7 @@ index cc98a1463c539..e58054949023a 100644
  
  assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
  
-@@ -489,7 +490,7 @@ if (is_win) {
+@@ -498,7 +499,7 @@ if (is_win) {
      info_plist = "app/app-Info.plist"
      args = [
        "--breakpad=0",
@@ -19,7 +19,7 @@ index cc98a1463c539..e58054949023a 100644
        "--bundle_id=$chrome_mac_bundle_id",
      ]
      if (enable_updater) {
-@@ -535,6 +536,11 @@ if (is_win) {
+@@ -544,6 +545,11 @@ if (is_win) {
        deps += [ ":chromium_updater_privileged_helper" ]
      }
  
@@ -31,7 +31,7 @@ index cc98a1463c539..e58054949023a 100644
      if (enable_stripping) {
        # At link time, preserve the global symbols specified in the .exports
        # file. All other global symbols will be marked as private. The default
-@@ -689,6 +695,15 @@ if (is_win) {
+@@ -698,6 +704,15 @@ if (is_win) {
      }
    }
  
@@ -47,7 +47,7 @@ index cc98a1463c539..e58054949023a 100644
    action("clean_up_old_versions") {
      script = "//chrome/tools/build/mac/clean_up_old_versions.py"
  
-@@ -843,6 +858,7 @@ if (is_win) {
+@@ -854,6 +869,7 @@ if (is_win) {
      deps = [ ":chrome_helper_plist" ]
      info_plists = get_target_outputs(":chrome_helper_plist") +
                    [ "app/helper-alerts-Info.plist" ]
@@ -55,7 +55,7 @@ index cc98a1463c539..e58054949023a 100644
    }
  
    # Create and bundle an InfoPlist.strings for the alert helper app.
-@@ -1070,7 +1086,7 @@ if (is_win) {
+@@ -1087,7 +1103,7 @@ if (is_win) {
      args = [
        "--breakpad=0",
        "--keystone=0",

@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
-index e1d9a884d558b..548690f5ff2eb 100644
+index b59c0b7ad1804..a9e3e5a7e1f07 100644
 --- a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
 +++ b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.cc
 @@ -41,7 +41,9 @@
@@ -12,7 +12,7 @@ index e1d9a884d558b..548690f5ff2eb 100644
  #include "content/public/browser/browser_task_traits.h"
  #include "content/public/browser/browser_thread.h"
  #include "content/public/browser/network_service_instance.h"
-@@ -103,6 +105,63 @@ std::set<int64_t> GetAllInvalidationProjectNumbers() {
+@@ -104,6 +106,63 @@ std::set<int64_t> GetAllInvalidationProjectNumbers() {
  
  }  // namespace
  
@@ -76,7 +76,7 @@ index e1d9a884d558b..548690f5ff2eb 100644
  ChromeBrowserCloudManagementControllerDesktop::
      ChromeBrowserCloudManagementControllerDesktop()
      : invalidations_initializer_(this) {}
-@@ -209,6 +268,10 @@ void ChromeBrowserCloudManagementControllerDesktop::OnServiceAccountSet(
+@@ -210,6 +269,10 @@ void ChromeBrowserCloudManagementControllerDesktop::OnServiceAccountSet(
  }
  
  void ChromeBrowserCloudManagementControllerDesktop::ShutDown() {
@@ -84,10 +84,10 @@ index e1d9a884d558b..548690f5ff2eb 100644
 +  // infrastructure; its destructor calls RemoveClientObserver on the manager.
 +  policy_fetch_observer_.reset();
 +
-   if (policy_invalidator_) {
-     policy_invalidator_->Shutdown();
-     policy_invalidator_.reset();
-@@ -374,6 +437,20 @@ void ChromeBrowserCloudManagementControllerDesktop::StartInvalidations() {
+   policy_invalidator_.reset();
+   extension_install_invalidator_.reset();
+   commands_invalidator_.reset();
+@@ -376,6 +439,20 @@ void ChromeBrowserCloudManagementControllerDesktop::StartInvalidations() {
        std::make_unique<enterprise_commands::CBCMRemoteCommandsFactory>(),
        PolicyInvalidationScope::kCBCM);
  

@@ -5,8 +5,8 @@
 - **代号**:`teleport`(闪现,取「瞬移 / 传送」之意)
 - **磁盘 / 标识名**:`Teleport`(`Teleport.app`、bundle id 前缀 `cn.douan.Teleport`)
 - **应用内显示名**:`闪现`
-- **当前版本**:`0.1.12`(见 `TELEPORT_VERSION`)
-- **上游基线**:Chromium `148.0.7778.180`(见 `CHROMIUM_VERSION`)
+- **当前版本**:`0.2.0.0`(见 `TELEPORT_VERSION`)
+- **上游基线**:Chromium `151.0.7922.76`(见 `CHROMIUM_VERSION`)
 - **构建状态**:仅 **macOS(Apple Silicon)** 已跑通;Windows / Linux / 国产 OS 为后续 phase。
 
 ---
@@ -19,7 +19,7 @@ Teleport 是一款面向企业的受管浏览器。它不 fork 整个 Chromium,�
 
 ## 架构:Chromium overlay
 
-- **不 fork Chromium**:上游 M148 由 depot_tools / gclient 检出到**仓库外**(gitignore 的 `chromium/`,可用 `$TELEPORT_CHROMIUM_DIR` 覆盖)。几百 GB 的检出不绑定在每个 worktree 里。
+- **不 fork Chromium**:上游由 depot_tools / gclient 检出到**仓库外**,默认按发布分支自动派生到 `$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`(取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`),`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖(见根 `CLAUDE.md`「关键 gotcha」)。几百 GB 的检出不绑定在每个 worktree 里。
 - **加法为主**:`src/` 是纯 overlay 源码,构建期以符号名 `teleport` 链接进 `chromium/src/teleport`,成为 GN 模块 `//teleport`,经一个最小上游 patch 编进 chrome。
 - **改上游为辅**:
   - 文本改动走 `patches/`(`git apply`,一文件一 patch,文件名镜像其在 `chromium/src` 下的路径)。
@@ -42,16 +42,18 @@ branding/       资源覆盖(整文件),镜像 chromium/src 路径
 brand/          品牌源资产(手改 teleport.svg;派生物由脚本产出)+ dmg 素材
 docs/           设计 spec / 实现 plan / 研究 / 安装说明
 CHROMIUM_VERSION  钉死的上游版本
-TELEPORT_VERSION  产品版本(semver,单一事实来源)
+TELEPORT_VERSION  产品版本(四段 MAJOR.MINOR.BUILD.PATCH,单一事实来源)
 chromium/       (gitignore)外部 chromium 检出
 build/          (gitignore)→ chromium/src/out 的符号链接(产物访问入口)
 ```
 
 ## 快速开始(macOS / Apple Silicon)
 
-前置:`depot_tools` 在 `PATH`、Xcode、`uv`;检出在仓库外时先 `export TELEPORT_CHROMIUM_DIR=/abs/path/to/chromium`。
+前置:`depot_tools` 在 `PATH`、Xcode、`uv`;检出位置默认按发布分支自动派生(`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`,默认 `$TELEPORT_CHROMIUM_ROOT=~/workspace/chromium`),一般不需要手动设置任何变量;只在需要覆盖到非默认路径时才设 `$TELEPORT_CHROMIUM_DIR`(设置后每个新 shell 用完要 `unset`,否则会悄悄覆盖派生规则——见根 `CLAUDE.md`「关键 gotcha」)。
 
 ```bash
+export TELEPORT_CHROMIUM_ROOT="${TELEPORT_CHROMIUM_ROOT:-$HOME/workspace/chromium}"  # 显式建立,下面命令按字面展开
+
 # 1) 建立检出与符号链接(首次去掉 --skip-sync 会完整 sync,数小时)
 python scripts/bootstrap.py --skip-sync     # src/teleport→src、build→chromium/src/out
 python scripts/sync.py                        # gclient sync 到 CHROMIUM_VERSION 并校验
@@ -62,7 +64,7 @@ python scripts/apply_patches.py
 # 3) 构建(首次数小时;Siso,本地无 RBE)
 uv run python scripts/package.py             # dev 一键:args.gn 缺失时自动 gn gen,再 autoninja + 烘焙版本校验
 # 等价手动路径(gn gen 仅首次需要,out 目录建好后 ninja 会自动 re-gen):
-cd "$TELEPORT_CHROMIUM_DIR/src"
+cd "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src   # <release_branch> = CHROMIUM_VERSION 前三段,如 151.0.7922
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome        # 产物 Teleport.app,亦在 <repo>/build/mac/arm64/dev/
 ```
@@ -73,7 +75,7 @@ autoninja -C out/mac/arm64/dev chrome        # 产物 Teleport.app,亦在 <repo>
 uv run pytest                                  # 工具脚本单测(仓库根运行)
 
 autoninja -C out/mac/arm64/dev teleport_unittests && \
-  "$TELEPORT_CHROMIUM_DIR"/src/out/mac/arm64/dev/teleport_unittests   # //teleport gtest
+  "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src/out/mac/arm64/dev/teleport_unittests   # //teleport gtest
 ```
 
 - 产品代码(`//teleport` C++)走 **TDD**(gtest,Red → Green → Refactor)。
@@ -86,10 +88,10 @@ official 构建 + Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + �
 
 ```bash
 python scripts/fetch_sparkle.py                                # 钉版本拉 Sparkle.framework(SHA256 校验)
-printf '0.1.13\n' > TELEPORT_VERSION                          # 每次发版 bump(semver 单调递增)并提交
+printf '0.1.13.0\n' > TELEPORT_VERSION                        # 每次发版 bump(四段 MAJOR.MINOR.BUILD.PATCH,单调递增;或用 scripts/bump_version.py)并提交
 uv run python scripts/package.py                              # 默认:本地打 dev 包(仅构建)
 uv run python scripts/package.py --channel canary            # 渠道包:构建 + 签名 + 公证 + 样式 dmg(不发布)
-uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+ appcast + 上传 OSS + 打 v<semver> tag
+uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+ appcast + 上传 OSS + 打 v<四段> tag
 ```
 
 - 发布依赖本地凭据:Developer ID 证书、`notarytool` profile、EdDSA 密钥、`scripts/release_config.local.toml`(见 `.example`,gitignored)。
@@ -127,7 +129,7 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 - 后端服务代号与浏览器 ↔ 后端策略下发协议(传输 / 格式 / 鉴权)。
 - Windows / Linux 构建(注入从 symlink 换 junction 或受管检出)、国产 OS 适配。
 - 多通道(beta / stable)、全静默后台升级、未来企业版 Omaha 4;Windows / Linux 签名与分发。
-- CI(本仓库尚未建立)、patch 的创建 / 刷新 / 冲突处理工具链、完整 rebrand。
+- CI(本仓库尚未建立)、完整 rebrand(各平台图标 / 安装包等)。
 
 ## 参考
 

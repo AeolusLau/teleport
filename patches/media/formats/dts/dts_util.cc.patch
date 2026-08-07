@@ -1,0 +1,12 @@
+diff --git a/media/formats/dts/dts_util.cc b/media/formats/dts/dts_util.cc
+index cce7ac2746773..27f6791783f83 100644
+--- a/media/formats/dts/dts_util.cc
++++ b/media/formats/dts/dts_util.cc
+@@ -5,6 +5,7 @@
+ #include "media/formats/dts/dts_util.h"
+ 
+ #include <algorithm>
++#include <array>
+ #include <optional>
+ 
+ #include "base/logging.h"

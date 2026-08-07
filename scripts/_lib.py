@@ -31,14 +31,51 @@ def sha256_of(path: Path) -> str:
     return h.hexdigest()
 
 
+# Default parent of all upstream checkouts. One subdirectory per upstream
+# release branch (MAJOR.MINOR.BUILD), so a security-patch bump reuses the same
+# checkout while a milestone jump gets a fresh one.
+_DEFAULT_CHROMIUM_ROOT = Path.home() / "workspace" / "chromium"
+
+
+def parse_four_segment(text: str) -> str:
+    """Validate a 4-segment dotted version; return it stripped."""
+    parts = text.strip().split(".")
+    if len(parts) != 4 or not all(p.isdigit() for p in parts):
+        raise ValueError(f"expected 4-segment numeric version, got {text!r}")
+    return ".".join(parts)
+
+
+def pinned_chromium_version(root: Path | None = None) -> str:
+    """The upstream version pinned in CHROMIUM_VERSION."""
+    text = ((root or repo_root()) / "CHROMIUM_VERSION").read_text()
+    return parse_four_segment(text)
+
+
+def release_branch(version: str) -> str:
+    """MAJOR.MINOR.BUILD — identifies exactly one upstream release branch
+    (refs/branch-heads/<BUILD>). PATCH moves stay inside this branch, so the
+    checkout directory is keyed on this rather than the full version."""
+    return ".".join(parse_four_segment(version).split(".")[:3])
+
+
+def chromium_root() -> Path:
+    """Parent dir holding one checkout per upstream release branch.
+    Honors $TELEPORT_CHROMIUM_ROOT."""
+    env = os.environ.get("TELEPORT_CHROMIUM_ROOT")
+    return Path(env) if env else _DEFAULT_CHROMIUM_ROOT
+
+
 def chromium_dir(root: Path | None = None) -> Path:
-    """Chromium checkout dir. Honors $TELEPORT_CHROMIUM_DIR so a large external
-    checkout is not tied to the per-worktree repo path; defaults to <repo>/chromium.
+    """Chromium checkout for the pinned baseline: <root>/<MAJOR.MINOR.BUILD>.
+
+    Deriving from CHROMIUM_VERSION means switching branches automatically
+    points at the matching checkout — no environment variable to forget.
+    $TELEPORT_CHROMIUM_DIR still overrides the whole path (CI / ad-hoc).
     """
     env = os.environ.get("TELEPORT_CHROMIUM_DIR")
     if env:
         return Path(env)
-    return (root or repo_root()) / "chromium"
+    return chromium_root() / release_branch(pinned_chromium_version(root))
 
 
 def chromium_src(root: Path | None = None) -> Path:
@@ -77,6 +114,20 @@ def create_dir_link(link: Path, target: Path) -> None:
         )
     else:
         os.symlink(target, link, target_is_directory=True)
+
+
+def repoint_dir_link(link: Path, target: Path) -> None:
+    """Like create_dir_link, but an existing *link* pointing elsewhere is
+    replaced instead of raising. Only for links that are pure access
+    conveniences (e.g. <repo>/build). A real non-empty directory is still
+    refused — we never delete data.
+    """
+    link = Path(link)
+    if link.is_symlink() or (is_windows() and link.exists() and _points_somewhere(link)):
+        if Path(os.path.realpath(link)) == Path(target).resolve():
+            return
+        link.unlink() if link.is_symlink() else link.rmdir()
+    create_dir_link(link, target)
 
 
 def _points_somewhere(path: Path) -> bool:

@@ -1,16 +1,16 @@
 diff --git a/chrome/test/BUILD.gn b/chrome/test/BUILD.gn
-index 5870101f9e55d..6c45279a228b7 100644
+index 9e2dc913343f7..df67c2ffb3ef5 100644
 --- a/chrome/test/BUILD.gn
 +++ b/chrome/test/BUILD.gn
-@@ -6623,6 +6623,7 @@ test("unit_tests") {
+@@ -5586,6 +5586,7 @@ test("unit_tests") {
      "../browser/enterprise/reporting/report_request_queue_generator_unittest.cc",
      "../browser/enterprise/reporting/report_scheduler_unittest.cc",
      "../browser/enterprise/signin/interstitials/managed_profile_required_page_unittest.cc",
 +    "//teleport/browser/enterprise/teleport_tunnel_service_unittest.cc",
      "../browser/enterprise/util/managed_browser_utils_unittest.cc",
-     "../browser/external_protocol/external_protocol_handler_unittest.cc",
      "../browser/file_select_helper_unittest.cc",
-@@ -7002,6 +7003,7 @@ test("unit_tests") {
+     "../browser/font_family_cache_unittest.cc",
+@@ -5822,6 +5823,7 @@ test("unit_tests") {
      ":test_support",
      ":test_support_unit",
      "//base:base_stack_sampling_profiler_test_util",

@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import branding_strings
+import generate_version
 from _lib import chromium_src, repo_root
 from gen_policy_verification_key import run_check
 
@@ -67,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
     run_check()
     parser = argparse.ArgumentParser(description="Apply teleport overlay onto chromium/src")
     parser.add_argument("--root", type=Path, default=repo_root())
+    parser.add_argument(
+        "--skip-branding", action="store_true",
+        help="skip branding_strings.main() (the tree is left with only the "
+             "hand-authored patches/ and branding/ applied). Used by "
+             "rebase_overlay.py to build the branding-free tree "
+             "export_patches.py requires -- the rebrand pass is derived "
+             "output and must never be captured inside a patch file.")
     args = parser.parse_args(argv)
     src = chromium_src(args.root)
     if not (src / ".git").exists():
@@ -79,9 +88,10 @@ def main(argv: list[str] | None = None) -> int:
     if branding.exists():
         print("overlay branding/")
         apply_branding(branding, src)
-    import branding_strings
-    branding_strings.main()
-    import generate_version
+    if args.skip_branding:
+        print("skip branding_strings.main() (--skip-branding)")
+    else:
+        branding_strings.main()
     if generate_version.write_engine_header(args.root):
         print("engine version header written")
     if generate_version.write_chrome_version(args.root):

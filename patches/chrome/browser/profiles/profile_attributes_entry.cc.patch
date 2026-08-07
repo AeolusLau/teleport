@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/profiles/profile_attributes_entry.cc b/chrome/browser/profiles/profile_attributes_entry.cc
-index 87f4db2aa47f3..ba1a99923a31d 100644
+index 81c9c0f7b1db8..aa7e872dde08f 100644
 --- a/chrome/browser/profiles/profile_attributes_entry.cc
 +++ b/chrome/browser/profiles/profile_attributes_entry.cc
-@@ -192,9 +192,19 @@ void ProfileAttributesEntry::Initialize(ProfileAttributesStorage* storage,
+@@ -194,9 +194,19 @@ void ProfileAttributesEntry::Initialize(ProfileAttributesStorage* storage,
    }
  
    if (signin_util::IsForceSigninEnabled()) {

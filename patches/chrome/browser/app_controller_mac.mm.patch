@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/app_controller_mac.mm b/chrome/browser/app_controller_mac.mm
-index 210308ebaa5de..63290a9a3775f 100644
+index 442f1d33080b2..a5f87a6543570 100644
 --- a/chrome/browser/app_controller_mac.mm
 +++ b/chrome/browser/app_controller_mac.mm
 @@ -3,6 +3,8 @@
@@ -11,7 +11,7 @@ index 210308ebaa5de..63290a9a3775f 100644
  
  #include <AppKit/AppKit.h>
  #include <dispatch/dispatch.h>
-@@ -1221,6 +1223,9 @@ - (void)applicationDidFinishLaunching:(NSNotification*)notify {
+@@ -1290,6 +1292,9 @@ - (void)applicationDidFinishLaunching:(NSNotification*)notify {
  
    [self setUpdateCheckInterval];
  

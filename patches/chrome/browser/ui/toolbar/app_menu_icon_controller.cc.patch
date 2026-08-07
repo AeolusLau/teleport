@@ -1,11 +1,11 @@
-diff --git a/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc b/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
-index 3f8871e197aa2..526dd12b53e0a 100644
---- a/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
-+++ b/chrome/browser/ui/views/toolbar/browser_app_menu_button.cc
-@@ -285,8 +285,12 @@ void BrowserAppMenuButton::UpdateTextAndHighlightColor() {
-   } else if (type_and_severity_.type ==
-              AppMenuIconController::IconType::kUpgradeNotification) {
-     tooltip_message_id = IDS_APPMENU_TOOLTIP_UPDATE_AVAILABLE;
+diff --git a/chrome/browser/ui/toolbar/app_menu_icon_controller.cc b/chrome/browser/ui/toolbar/app_menu_icon_controller.cc
+index aaa9903f665c3..278997d6e3006 100644
+--- a/chrome/browser/ui/toolbar/app_menu_icon_controller.cc
++++ b/chrome/browser/ui/toolbar/app_menu_icon_controller.cc
+@@ -165,8 +165,12 @@ std::u16string AppMenuIconController::GetIconLabel(IconType type,
+   if (severity == Severity::kNone) {
+     return std::u16string();
+   } else if (type == IconType::kUpgradeNotification) {
 -#if BUILDFLAG(GOOGLE_CHROME_BRANDING) && \
 -    (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX))
 +// teleport: upstream gates the randomized update-text variants behind

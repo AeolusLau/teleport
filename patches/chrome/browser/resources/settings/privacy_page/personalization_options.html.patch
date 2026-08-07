@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/resources/settings/privacy_page/personalization_options.html b/chrome/browser/resources/settings/privacy_page/personalization_options.html
-index 7adae56a25060..6ec2bd611387e 100644
+index 50a3c35672143..bf70a55970aa5 100644
 --- a/chrome/browser/resources/settings/privacy_page/personalization_options.html
 +++ b/chrome/browser/resources/settings/privacy_page/personalization_options.html
-@@ -90,12 +90,14 @@
-     </settings-toggle-button>
+@@ -94,12 +94,14 @@
+     </template>
  </if><!-- not chromeos -->
  </if><!-- _google_chrome -->
 +<if expr="_google_chrome">

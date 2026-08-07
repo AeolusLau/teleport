@@ -1,28 +1,28 @@
 diff --git a/chrome/app/settings_strings.grdp b/chrome/app/settings_strings.grdp
-index 03bd6ef6a2bde..fbf7444d410f6 100644
+index 763bba112d55b..44793b6d3e67c 100644
 --- a/chrome/app/settings_strings.grdp
 +++ b/chrome/app/settings_strings.grdp
-@@ -55,14 +55,16 @@
-       Relaunch
-     </message>
-   </if>
-+  <message name="IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE" desc="Text of the button which allows the user to report an issue with Chrome.">
-+    Report an issue
-+  </message>
-+  <message name="IDS_SETTINGS_ABOUT_PAGE_PRIVACY_POLICY" desc="Text of the button which allows the user to open the privacy policy.">
-+    Privacy policy
-+  </message>
-+  <message name="IDS_SETTINGS_ABOUT_PAGE_TERMS_OF_SERVICE" desc="Text of the link which opens the terms of service page.">
-+    Terms of Service
-+  </message>
-   <if expr="_google_chrome">
--    <message name="IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE" desc="Text of the button which allows the user to report an issue with Chrome.">
--      Report an issue
--    </message>
--    <message name="IDS_SETTINGS_ABOUT_PAGE_PRIVACY_POLICY" desc="Text of the button which allows the user to open the privacy policy.">
--      Privacy policy
--    </message>
+@@ -54,14 +54,16 @@
+         Relaunch
+       </message>
+     </if>
++    <message name="IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE" desc="Text of the button which allows the user to report an issue with Chrome.">
++      Report an issue
++    </message>
++    <message name="IDS_SETTINGS_ABOUT_PAGE_PRIVACY_POLICY" desc="Text of the button which allows the user to open the privacy policy.">
++      Privacy policy
++    </message>
++    <message name="IDS_SETTINGS_ABOUT_PAGE_TERMS_OF_SERVICE" desc="Text of the link which opens the terms of service page.">
++      Terms of Service
++    </message>
+     <if expr="_google_chrome">
+-      <message name="IDS_SETTINGS_ABOUT_PAGE_REPORT_AN_ISSUE" desc="Text of the button which allows the user to report an issue with Chrome.">
+-        Report an issue
+-      </message>
+-      <message name="IDS_SETTINGS_ABOUT_PAGE_PRIVACY_POLICY" desc="Text of the button which allows the user to open the privacy policy.">
+-        Privacy policy
+-      </message>
 -
-     <message name="IDS_SETTINGS_ABOUT_PAGE_SEND_FEEDBACK" desc="Text of the button which allows the user to send feedback with Chrome.">
-       Send feedback
-     </message>
+       <message name="IDS_SETTINGS_ABOUT_PAGE_SEND_FEEDBACK" desc="Text of the button which allows the user to send feedback with Chrome.">
+         Send feedback
+       </message>

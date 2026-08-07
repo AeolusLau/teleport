@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.h b/chrome/browser/ui/webui/signin/profile_picker_handler.h
-index 996963b50df66..7e39d9443f60e 100644
+index a2b207e7f9e93..7e2dfa0aeee38 100644
 --- a/chrome/browser/ui/webui/signin/profile_picker_handler.h
 +++ b/chrome/browser/ui/webui/signin/profile_picker_handler.h
-@@ -141,6 +141,15 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
+@@ -128,6 +128,15 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
    void HandleRecordSignInPromoImpression(const base::ListValue& args);
  
    void OnLoadSigninFinished(bool success);
@@ -18,7 +18,7 @@ index 996963b50df66..7e39d9443f60e 100644
    void OnResetPickerButtons(bool success);
    void GatherProfileStatistics(Profile* profile);
    void OnProfileStatisticsReceived(const base::FilePath& profile_path,
-@@ -183,6 +192,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
+@@ -170,6 +179,9 @@ class ProfilePickerHandler : public content::WebUIMessageHandler,
    void TryLaunchLockedProfile(ProfileAttributesEntry& entry);
    // Callback with the loaded profile to start the reauth flow.
    void OnProfileLoadedForSwitchToReauth(Profile* profile);

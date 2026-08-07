@@ -1,9 +1,9 @@
 diff --git a/tools/metrics/histograms/generate_expired_histograms_array.py b/tools/metrics/histograms/generate_expired_histograms_array.py
-index 4108e56245980..799e6fbdf42f0 100755
+index ebc421a0233bb..70a7448a2ccce 100755
 --- a/tools/metrics/histograms/generate_expired_histograms_array.py
 +++ b/tools/metrics/histograms/generate_expired_histograms_array.py
-@@ -18,7 +18,7 @@ import chromium_src.tools.metrics.histograms.merge_xml as merge_xml
- 
+@@ -33,7 +33,7 @@ _EXPIRE_GRACE_MSTONES = 3
+ _EXPIRE_GRACE_WEEKS = _EXPIRE_GRACE_MSTONES * _WEEKS_PER_MSTONE + 2
  
  _DATE_FILE_RE = re.compile(r".*MAJOR_BRANCH_DATE=(.+).*")
 -_CURRENT_MILESTONE_RE = re.compile(r"MAJOR=([0-9]{2,3})\n")

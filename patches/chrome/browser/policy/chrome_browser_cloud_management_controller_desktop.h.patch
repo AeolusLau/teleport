@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
-index 15b4c0e61a168..5148ac2133fc0 100644
+index 6400ea01a7f08..a332698a2d200 100644
 --- a/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
 +++ b/chrome/browser/policy/chrome_browser_cloud_management_controller_desktop.h
 @@ -8,12 +8,16 @@
@@ -27,7 +27,7 @@ index 15b4c0e61a168..5148ac2133fc0 100644
  class RemoteCommandsInvalidator;
  
  // Desktop implementation of the platform-specific operations of CBCMController.
-@@ -96,6 +101,32 @@ class ChromeBrowserCloudManagementControllerDesktop
+@@ -98,6 +103,32 @@ class ChromeBrowserCloudManagementControllerDesktop
    bool CanStartExtensionInstallPolicyInvalidator() const override;
  
   private:
@@ -60,7 +60,7 @@ index 15b4c0e61a168..5148ac2133fc0 100644
    std::unique_ptr<ChromeBrowserCloudManagementRegisterWatcher>
        cloud_management_register_watcher_;
  
-@@ -116,6 +147,9 @@ class ChromeBrowserCloudManagementControllerDesktop
+@@ -118,6 +149,9 @@ class ChromeBrowserCloudManagementControllerDesktop
    // This invalidator is responsible for receiving remote commands invalidations
    std::unique_ptr<RemoteCommandsInvalidator> commands_invalidator_;
  

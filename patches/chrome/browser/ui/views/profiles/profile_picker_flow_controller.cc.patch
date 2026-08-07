@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-index 9cd8efe899789..eede6c923d6bc 100644
+index 0f91aa13a5fbb..d61cfaed53117 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
 +++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.cc
-@@ -45,6 +45,21 @@
+@@ -47,6 +47,21 @@
  #include "chrome/browser/ui/views/profiles/profile_picker_sign_in_provider.h"
  #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
  #include "chrome/browser/ui/webui/signin/profile_picker_handler.h"
@@ -24,7 +24,7 @@ index 9cd8efe899789..eede6c923d6bc 100644
  #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
  #include "chrome/common/webui_url_constants.h"
  #include "chrome/grit/branded_strings.h"
-@@ -322,6 +337,118 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
+@@ -326,6 +341,121 @@ std::unique_ptr<ProfileManagementStepController> CreateReauthtep(
        profile);
  }
  
@@ -61,8 +61,9 @@ index 9cd8efe899789..eede6c923d6bc 100644
 +                       weak_factory_.GetWeakPtr()));
 +    host_->ShowScreen(
 +        contents_.get(), GURL(teleport::EnterpriseEnrollUrl()),
-+        base::BindOnce(&ProfilePickerWebContentsHost::SetNativeToolbarVisible,
-+                       base::Unretained(host_), /*visible=*/true)
++        base::BindOnce(
++            &ProfilePickerWebContentsHost::SetNativeToolbarSigninButtonsVisible,
++            base::Unretained(host_), /*visible=*/true)
 +            .Then(base::BindOnce(std::move(step_shown_callback.value()),
 +                                 /*success=*/true)));
 +  }
@@ -121,7 +122,9 @@ index 9cd8efe899789..eede6c923d6bc 100644
 +    enrollment_provider_->Show(std::move(step_shown_callback));
 +  }
 +
-+  void OnHidden() override { host()->SetNativeToolbarVisible(false); }
++  void OnHidden() override {
++    host()->SetNativeToolbarSigninButtonsVisible(false);
++  }
 +
 +  void OnNavigateBackRequested() override {
 +    NavigateBackInternal(enrollment_provider_->contents());
@@ -143,7 +146,7 @@ index 9cd8efe899789..eede6c923d6bc 100644
  void RecordProfilingFinishReason(
      metrics::StartupProfilingFinishReason finish_reason) {
    base::UmaHistogramEnumeration(
-@@ -578,6 +705,97 @@ void ProfilePickerFlowController::OnReauthCompleted(
+@@ -595,6 +725,97 @@ void ProfilePickerFlowController::OnReauthCompleted(
    FinishFlowAndRunInBrowser(profile, PostHostClearedCallback());
  }
  

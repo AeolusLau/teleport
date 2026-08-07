@@ -1,8 +1,8 @@
 diff --git a/components/omnibox/browser/location_bar_model_impl.cc b/components/omnibox/browser/location_bar_model_impl.cc
-index 7f1d9a3a7dcd9..36f728347cac6 100644
+index 884e042c5a3df..29c6d913613df 100644
 --- a/components/omnibox/browser/location_bar_model_impl.cc
 +++ b/components/omnibox/browser/location_bar_model_impl.cc
-@@ -120,6 +120,22 @@ std::u16string LocationBarModelImpl::GetFormattedURL(
+@@ -108,6 +108,22 @@ std::u16string LocationBarModelImpl::GetFormattedURL(
  
    GURL url(GetURL());
  

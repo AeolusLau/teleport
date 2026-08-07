@@ -1,18 +1,18 @@
 diff --git a/chrome/browser/resources/settings/about_page/about_page.ts b/chrome/browser/resources/settings/about_page/about_page.ts
-index aa3f435d831b0..7db7cc168ed65 100644
+index dd9d93e518b36..7af4c0b1e404b 100644
 --- a/chrome/browser/resources/settings/about_page/about_page.ts
 +++ b/chrome/browser/resources/settings/about_page/about_page.ts
-@@ -23,9 +23,7 @@ import 'chrome://resources/cr_elements/cr_shared_style.css.js';
- import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
- import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+@@ -22,9 +22,7 @@ import {PrefServiceObserverMixinLit} from '/shared/settings/prefs2/pref_service_
+ import {I18nMixinLit} from 'chrome://resources/cr_elements/i18n_mixin_lit.js';
+ import {WebUiListenerMixinLit} from 'chrome://resources/cr_elements/web_ui_listener_mixin_lit.js';
  import {assert} from 'chrome://resources/js/assert.js';
 -// <if expr="_google_chrome">
  import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 -// </if>
  import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
- import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
- 
-@@ -42,10 +40,9 @@ import type {PromoteUpdaterStatus} from './about_page_browser_proxy.js';
+ import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+ import type {PropertyValues} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+@@ -43,10 +41,9 @@ import type {PromoteUpdaterStatus} from './about_page_browser_proxy.js';
  // </if>
  // clang-format on
  
@@ -23,21 +23,21 @@ index aa3f435d831b0..7db7cc168ed65 100644
 -// </if>
 +    'https://teleport.example.com/privacy';
  
- const SettingsAboutPageElementBase =
-     RelaunchMixin(WebUiListenerMixin(I18nMixin(PolymerElement)));
-@@ -341,7 +338,6 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase
+ export interface SettingsAboutPageElement {
+   $: {
+@@ -336,7 +333,6 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase
          });
    }
  
 -  // <if expr="_google_chrome">
-   private onReportIssueClick_() {
+   protected onReportIssueClick_() {
      this.aboutBrowserProxy_.openFeedbackDialog();
    }
-@@ -349,7 +345,6 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase
-   private onPrivacyPolicyClick_() {
+@@ -344,7 +340,6 @@ export class SettingsAboutPageElement extends SettingsAboutPageElementBase
+   protected onPrivacyPolicyClick_() {
      OpenWindowProxyImpl.getInstance().openUrl(ABOUT_PAGE_PRIVACY_POLICY_URL);
    }
 -  // </if>
  
    // <if expr="not is_chromeos">
-   private shouldShowIcons_(): boolean {
+   protected shouldShowIcons_(): boolean {

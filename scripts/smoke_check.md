@@ -1,28 +1,28 @@
-# 构建与冒烟检查清单(macOS / M148)
+# 构建与冒烟检查清单(macOS / M151)
 
-本清单对应 spec §12 的 definition of done。命令以 `chromium/src` 在仓库外、由 `$TELEPORT_CHROMIUM_DIR` 指定为例。
+本清单对应 spec §12 的 definition of done。检出位置默认按发布分支自动派生(`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`,取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`);`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖(仅用于非默认路径,用完需 `unset`)。
 
 ## 准备
 
 ```bash
-export TELEPORT_CHROMIUM_DIR=/path/to/chromium      # 检出在仓库外时
+export TELEPORT_CHROMIUM_ROOT="${TELEPORT_CHROMIUM_ROOT:-$HOME/workspace/chromium}"  # 显式建立,下面命令按字面展开
 python scripts/bootstrap.py --skip-sync             # 建链接(已 sync 过)
-python scripts/apply_patches.py                     # 应用 4 个补丁 + 图标覆盖
-cd "$TELEPORT_CHROMIUM_DIR/src"
+python scripts/apply_patches.py                     # 应用 overlay 补丁 + 图标覆盖
+cd "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src   # <release_branch> = CHROMIUM_VERSION 前三段,如 151.0.7922
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome           # 首次数小时
 ```
 
 ## 冒烟检查
 
-| # | 命令 / 检查 | 期望 | 实测(148.0.7778.180) |
+| # | 命令 / 检查 | 期望 | 实测(151.0.7922.76) |
 |---|---|---|---|
 | 1 | `autoninja ... chrome` | 构建成功 | ✅ `The build has finished successfully.` |
 | 2 | `ls out/mac/arm64/dev/*.app` | `Teleport.app` + `Teleport Helper*.app`(ASCII) | ✅ |
-| 3 | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` | `org.teleport.Teleport` | ✅ |
+| 3 | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` | `cn.douan.Teleport` | ✅ |
 | 4 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` | 一致 | ✅ |
-| 5 | `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport 148.0.7778.180` | ✅ |
-| 6 | 启动并抓 banner(见下) | `[teleport] 闪现 overlay active (M148)` | ✅ |
+| 5 | `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport 0.2.0.0`(产品版本,非引擎版本) | ✅ |
+| 6 | 启动并抓 banner(见下) | `[teleport] 闪现 overlay active (M151)`(里程碑由 `TELEPORT_ENGINE_VERSION_MAJOR` 派生,非字面量) | ✅ |
 | 7 | `apply_patches.py` 重复运行 | 幂等、无报错 | ✅ |
 
 ### 抓启动 banner
@@ -35,7 +35,7 @@ BIN=out/mac/arm64/dev/Teleport.app/Contents/MacOS/Teleport
        --enable-logging --log-file=/tmp/tp.log --v=1 >/dev/null 2>&1 &
 PID=$!; sleep 12; kill "$PID"; wait "$PID" 2>/dev/null
 grep -a "\[teleport\]" /tmp/tp.log
-# 期望:...INFO:../../teleport/browser/teleport_startup.cc:12] [teleport] 闪现 overlay active (M148)
+# 期望:...INFO:../../teleport/browser/teleport_startup.cc:23] [teleport] 闪现 overlay active (M151)
 ```
 
 > dev/release 构建均已通过 GN `disable_fieldtrial_testing_config=true` 钉死字段试验,运行不再需要 `--disable-field-trial-config`(传了也是 no-op)。
@@ -64,7 +64,7 @@ dev args `is_official_build=false` 会令 `dcheck_always_on` 与 `enable_expensi
 | en 文案 | `strings .../en.lproj/locale.pak \| grep -i "Xiaodou\|Teleport"` 出现 Teleport / Xiaodou Shuan / "Make Teleport the default browser" | ✅ |
 | 运行 | `Teleport …` 启动有 banner、0 FATAL | ✅ |
 | 幂等 | `branding_strings.py` 二次运行 = 0 ids remapped | ✅ |
-| 版本不暴露 | `ls ".../Teleport Framework.framework/Versions/"` = `<TELEPORT_VERSION>`;`PlistBuddy -c 'Print :SCMRevision' …` = Does Not Exist;`python3 - <<'EOF'`(遍历 .app 全部 plist/路径名 grep `7778`)零命中;`curl :9222/json/version` 的 UA 仍 `Chrome/148.0.0.0`;UA-CH brands 经 CDP `Runtime.evaluate`(`navigator.userAgentData.brands`)验证——**仅当 `kRequireEnrollmentToBrowse` gate 显式开启时**,`--dump-dom` 对 `data:` URL 会被强制纳管门禁悬置而挂起,勿用;gate 默认**关闭**(BYOD-first),默认构建不受影响 | ✅ |
+| 版本不暴露 | `ls ".../Teleport Framework.framework/Versions/"` = `<TELEPORT_VERSION>`;`PlistBuddy -c 'Print :SCMRevision' …` = Does Not Exist;`python3 - <<'EOF'`(遍历 .app 全部 plist/路径名 grep `7922`)零命中;`curl :9222/json/version` 的 UA 仍 `Chrome/151.0.0.0`;UA-CH brands 经 CDP `Runtime.evaluate`(`navigator.userAgentData.brands`)验证——**仅当 `kRequireEnrollmentToBrowse` gate 显式开启时**,`--dump-dom` 对 `data:` URL 会被强制纳管门禁悬置而挂起,勿用;gate 默认**关闭**(BYOD-first),默认构建不受影响 | ✅ |
 
 GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现」「北京小豆数安科技有限公司」;en 显示 "Teleport"/"Beijing Xiaodou Shuan Technology Co., Ltd.";各处 product logo = 我方标记。
 
@@ -80,7 +80,7 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 | # | 检查 | 期望 |
 |---|---|---|
-| 1 | gtest `teleport_unittests --gtest_filter='TeleportUrlScheme*'` | 6 个全过 |
+| 1 | gtest `teleport_unittests --gtest_filter='TeleportUrlScheme*'` | 10 个全过 |
 | 2 | 输入 `teleport://settings`、`teleport://version`、`teleport://history` | 能打开,内容与 chrome:// 版本一致 |
 | 3 | 输入 `chrome://settings` | 能打开,地址栏显示 `teleport://settings` |
 | 4 | 点击页面内部 `chrome://` 链接 / 打开 `chrome://` 书签 | 地址栏显示 `teleport://`;复制地址栏 URL 得到 `teleport://` |
@@ -96,13 +96,13 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 | # | 命令 / 检查 | 期望 | 实测 |
 |---|---|---|---|
-| 1 | `uv run python scripts/package.py --channel canary --distribute`(`TELEPORT_CHROMIUM_DIR` 已设,main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (canary), tagged v<ver>` | ✅ |
+| 1 | `uv run python scripts/package.py --channel canary --distribute`(main 分支) | 构建→签名→公证→样式dmg→appcast→上传→打 `v<ver>` tag,末尾 `published <ver> (canary), tagged v<ver>` | ✅ |
 | 2 | `curl -fsSI <feed>/Teleport-<ver>.dmg` | HTTP 200,`Cache-Control: ...immutable`,~110MB(ULMO) | ✅ |
 | 3 | 下载后 `spctl -a -t install <dmg>` | `accepted` + `source=Notarized Developer ID` | ✅ |
 | 4 | `xcrun stapler validate <dmg>` | `The validate action worked!` | ✅ |
-| 5 | 挂载后 `defaults read .../Teleport.app/Contents/Info SUFeedURL/SUPublicEDKey/CFBundleVersion` | feed URL / 公钥 / semver 正确 | ✅ |
+| 5 | 挂载后 `defaults read .../Teleport.app/Contents/Info SUFeedURL/SUPublicEDKey/CFBundleVersion` | feed URL / 公钥 / 版本号(四段)正确 | ✅ |
 | 6 | 挂载,Finder 窗口 | 背景图(中文正常)、左 Teleport.app、右**命名的** Applications、卷图标 | ✅ |
-| 7 | 从 dmg 内 `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport 148.0.7778.180`(框架+Sparkle 加载,无崩溃) | ✅ |
+| 7 | 从 dmg 内 `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport <TELEPORT_VERSION>`(产品版本,非引擎版本;框架+Sparkle 加载,无崩溃) | ✅ |
 | 8 | `curl -fsS <feed>/appcast.xml \| grep sparkle:version` | 仅列最新版,无 `<sparkle:deltas>` | ✅ |
 
 ### 升级闭环(v1→v2,已实测 0.1.0→0.1.1)
@@ -121,11 +121,11 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 
 | # | 检查 | 期望 |
 |---|---|---|
-| 1 | dev(`uv run python scripts/package.py --channel dev` 后)`chrome://settings/help` 版本行 | `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`,不含 `148.x` |
-| 2 | dev `chrome://version` 首行值 | `<TELEPORT_VERSION>`(非 `148.x`);**UA 行仍含 `Chrome/148`**(未误伤兼容性) |
+| 1 | dev(`uv run python scripts/package.py --channel dev` 后)`chrome://settings/help` 版本行 | `版本 <TELEPORT_VERSION>(非正式版本) (arm64)`,不含 `151.x` |
+| 2 | dev `chrome://version` 首行值 | `<TELEPORT_VERSION>`(非 `151.x`);**UA 行仍含 `Chrome/151`**(未误伤兼容性) |
 | 2.1 | dev `chrome://version` "Deployment domain" 行(默认,无覆盖) | `fairyland.io (source: built-in default)` |
 | 2.2 | 同上,加 `--teleport-deployment-domain=fairyland.test` 重启 | `fairyland.test (source: command-line switch)` |
-| 3 | 裸 `autoninja chrome`(未经 package.py stamp)版本 | `0.0.0-dev`,绝不暴露 chromium 版本号 |
+| 3 | 裸 `autoninja chrome`(未经 `package.py` 打包/签名)版本 | `<TELEPORT_VERSION>`(`apply_patches.py` 已在检出期把它烘焙进 `chrome/VERSION`,未打包也已是真实产品版本,非占位值);绝不暴露 chromium 版本号 |
 | 4 | canary 打包后版本行 | 含「正式版本」+ `arm64` + 真实 Teleport 版本 |
 | 4.1 | canary 包 `chrome://version` 通道行(Channel) | 显示 `canary`(非空/`unknown`),据此升级徽标走 1 小时档 |
 | 5 | About 页「检查更新」- 无更新 | 转圈 →「已是最新版本」 |

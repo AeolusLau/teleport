@@ -1,17 +1,17 @@
 diff --git a/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc b/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc
-index 705f0bc66807d..294044ca5bd24 100644
+index 51f5cdba60e36..562f33cea86b2 100644
 --- a/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc
 +++ b/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc
-@@ -144,6 +144,8 @@
- #include "chrome/browser/ui/webui/app_home/app_home_ui.h"
- #include "chrome/browser/ui/webui/app_settings/web_app_settings_ui.h"
+@@ -156,6 +156,8 @@
+ #include "chrome/browser/ui/webui/intro/sign_in_celebration.mojom.h"  // nogncheck
+ #include "chrome/browser/ui/webui/intro/sign_in_promo.mojom.h"  // nogncheck
  #include "chrome/browser/ui/webui/on_device_translation_internals/on_device_translation_internals_ui.h"
 +#include "teleport/browser/webui/enroll.mojom.h"
 +#include "teleport/browser/webui/teleport_enroll_ui.h"
  #include "chrome/browser/ui/webui/signin/history_sync_optin/history_sync_optin.mojom.h"
  #include "chrome/browser/ui/webui/signin/history_sync_optin/history_sync_optin_ui.h"
  #include "chrome/browser/ui/webui/signin/profile_customization_ui.h"
-@@ -601,6 +603,10 @@ void PopulateChromeWebUIFrameBindersPartsDesktop(
+@@ -602,6 +604,10 @@ void PopulateChromeWebUIFrameBindersPartsDesktop(
        on_device_translation_internals::mojom::PageHandlerFactory,
        OnDeviceTranslationInternalsUI>(map);
  

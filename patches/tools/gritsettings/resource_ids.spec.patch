@@ -1,9 +1,9 @@
 diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
-index ffd47250ce5a6..9e55feebfe9e5 100644
+index e1f3030f0c0cc..7c88c251f5d37 100644
 --- a/tools/gritsettings/resource_ids.spec
 +++ b/tools/gritsettings/resource_ids.spec
-@@ -1673,6 +1673,12 @@
-     "messages": [10120],
+@@ -1802,6 +1802,12 @@
+     "includes": [10140],
    },
  
 +  # teleport overlay: chrome://enroll page resources (build_webui-generated grd).

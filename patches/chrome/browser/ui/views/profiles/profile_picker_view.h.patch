@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_view.h b/chrome/browser/ui/views/profiles/profile_picker_view.h
-index 418fb19c68c26..498e7ef1e548f 100644
+index b90296572a63e..92d70f45375fb 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_view.h
 +++ b/chrome/browser/ui/views/profiles/profile_picker_view.h
-@@ -212,6 +212,11 @@ class ProfilePickerView : public views::WidgetDelegateView,
+@@ -216,6 +216,11 @@ class ProfilePickerView : public views::WidgetDelegateView,
        StepSwitchFinishedCallback switch_finished_callback,
        base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback);
  

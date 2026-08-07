@@ -1,8 +1,8 @@
 diff --git a/services/network/public/mojom/network_context.mojom b/services/network/public/mojom/network_context.mojom
-index 152bffb4e6565..11a6e150aef6a 100644
+index 09da137f59543..a925aa0cad1af 100644
 --- a/services/network/public/mojom/network_context.mojom
 +++ b/services/network/public/mojom/network_context.mojom
-@@ -124,6 +124,14 @@ struct CustomProxyConfig {
+@@ -136,6 +136,14 @@ struct CustomProxyConfig {
    // to the CONNECT request. Headers here will overwrite matching headers on
    // the CONNECT request if a custom proxy is used.
    HttpRequestHeaders connect_tunnel_headers;

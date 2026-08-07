@@ -6,12 +6,20 @@ Default builds a local dev app (build only). --channel selects a channel;
 a v<semver> git tag pushed to the remote). Run from the repo root with
 TELEPORT_CHROMIUM_DIR set. `gn gen` runs automatically when the channel's out
 dir has no args.gn (release channels still need PGO profiles synced first).
+
+--skip-build packages an app that already exists on disk instead of building
+one, for validating signing/notarization/dmg against an out-of-band build
+(e.g. one whose out dir can no longer be gn-gen'd cleanly). It is refused
+together with --distribute: publishing must only ship an app whose build args
+were verified in THIS run. See _SKIP_BUILD_WARNING for exactly what is, and is
+not, still checked in that mode.
 """
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
+import _build
 import _config
 import _package
 import _package_state
@@ -23,6 +31,54 @@ from _release import read_teleport_version
 
 def _default_config() -> Path:
     return repo_root() / "scripts" / "release_config.local.toml"
+
+
+_SKIP_BUILD_WARNING = (
+    "\n"
+    "==================== WARNING: --skip-build UNVERIFIED BUILD ===============\n"
+    "Packaging an app that was NOT built by this invocation of package.py. Its\n"
+    "GN build args (endpoint config, PGO, updater, etc.) were NOT verified here.\n"
+    "\n"
+    "assert_baked_version (TELEPORT_VERSION) still runs below. For a\n"
+    "distributable channel, assert_release_endpoints_consistent also still\n"
+    "runs against <out>/args.gn -- since --distribute is refused whenever\n"
+    "--skip-build is set (see below), this run can never reach the publish\n"
+    "hazard that check exists to block, so a mismatch here only WARNS, it does\n"
+    "not raise. That check can also only catch an EXPLICIT\n"
+    "teleport_use_release_endpoints override still recorded as text in\n"
+    "args.gn -- if args.gn has since been regenerated back to a plain template\n"
+    "import (no override text left to compare against), this run has NO way to\n"
+    "tell what endpoint configuration the on-disk app was actually built with.\n"
+    "\n"
+    "Treat this artifact as UNVERIFIED. --distribute is refused whenever\n"
+    "--skip-build is set, precisely so this can never become a publish path.\n"
+    "=============================================================================\n"
+)
+
+
+def _prepare_skip_build(app: Path, out: str, channel) -> None:
+    """--skip-build's app-provenance guard: refuse if `app` does not exist,
+    print the loud unverified-provenance warning, then re-run the one
+    build-independent guard that skipping build() would otherwise silently
+    drop -- assert_release_endpoints_consistent is a pure text comparison
+    against <out>/args.gn, so it needs no gn gen / autoninja and can run here
+    directly without a build. Its residual blind spot (an args.gn already
+    regenerated back to the plain template import leaves no explicit override
+    text to contradict) is named in the warning, not hidden.
+
+    Called with distributing=False unconditionally: main() already refuses
+    the --skip-build + --distribute combination before this function can run
+    (see the check right after argparse below), so a --skip-build run is
+    ALWAYS a non-distributing run by construction -- there is no live case
+    where this needs to raise instead of warn.
+    """
+    if not app.exists():
+        raise SystemExit(
+            f"--skip-build: no app found at {app}. Build it first (without "
+            "--skip-build), or pass --out to point at the out dir that holds it.")
+    print(_SKIP_BUILD_WARNING)
+    if channel.distributable:
+        _build.assert_release_endpoints_consistent(out, channel, distributing=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,7 +94,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", type=Path, default=_default_config())
     p.add_argument("--out", default=None, help="override the channel's default out dir")
     p.add_argument("--updates-dir", type=Path, default=None)
+    p.add_argument("--skip-build", action="store_true",
+                   help="package an app that already exists on disk instead of "
+                        "building one; its build args are NOT verified in this "
+                        "run (see the warning printed at runtime). Mutually "
+                        "exclusive with --distribute.")
     args = p.parse_args(argv)
+
+    if args.skip_build and args.distribute:
+        raise SystemExit(
+            "--skip-build cannot be combined with --distribute: publishing must "
+            "only ship an app whose build args were verified in THIS run. "
+            "Re-run without --skip-build to build + sign + publish normally, or "
+            "drop --distribute to package + sign + notarize the --skip-build "
+            "app locally without publishing it.")
 
     channel = resolve_channel(args.channel)
     out = args.out or channel.out
@@ -57,9 +126,13 @@ def main(argv: list[str] | None = None) -> int:
                   f"verify baked version {version} in {app}/Contents/Info.plist  "
                   f"(build only, channel {channel.name})")
             return 0
-        build(out, channel)
+        if args.skip_build:
+            _prepare_skip_build(app, out, channel)
+        else:
+            build(out, channel, distributing=args.distribute)
         _package.assert_baked_version(app, version)
-        print(f"built {channel.name} app at {app} (version {version})")
+        verb = "packaged (--skip-build)" if args.skip_build else "built"
+        print(f"{verb} {channel.name} app at {app} (version {version})")
         return 0
 
     # ---- distributable channel ----
@@ -114,8 +187,13 @@ def main(argv: list[str] | None = None) -> int:
 
     # Build -> verify baked version -> inject Sparkle keys -> stage icons, then
     # decide whether a previously-notarized dmg can be reused (app byte-identical)
-    # or must be rebuilt + re-notarized.
-    build(out, channel)
+    # or must be rebuilt + re-notarized. --skip-build substitutes an existing
+    # app for the build step; see _prepare_skip_build for what is (and is not)
+    # still verified in that case.
+    if args.skip_build:
+        _prepare_skip_build(app, out, channel)
+    else:
+        build(out, channel, distributing=args.distribute)
     _package.assert_baked_version(app, version)
     _package.inject_sparkle_keys(app, cfg, channel.name)
     _package.stage_channel_icons(app, channel.name)

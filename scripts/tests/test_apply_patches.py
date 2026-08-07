@@ -99,3 +99,51 @@ def test_find_patches_sorted(tmp_path: Path):
     (patches / "a" / "y.patch").write_text("")
     found = apply_patches.find_patches(patches)
     assert [p.relative_to(patches).as_posix() for p in found] == ["a/y.patch", "b/z.patch"]
+
+
+# ---------------------------------------------------------------------------
+# main() --skip-branding
+#
+# branding_strings.main() ignores its caller's --root (it always targets
+# chromium_src(repo_root()), i.e. the REAL checkout) so these tests always
+# stub it out -- invoking the real thing here would rebrand whatever
+# checkout this machine currently has pinned, not a test fixture.
+# chromium_src() itself is redirected via $TELEPORT_CHROMIUM_DIR so main()'s
+# other path derivation (generate_version's writes) also stays inside
+# tmp_path.
+# ---------------------------------------------------------------------------
+
+def _make_fake_root_and_src(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    root = tmp_path / "repo"
+    (root / "patches").mkdir(parents=True)
+    chromium_dir = tmp_path / "chromium"
+    src = chromium_dir / "src"
+    src.mkdir(parents=True)
+    _git(src, "init", "-q")
+    _git(src, "config", "user.email", "t@t")
+    _git(src, "config", "user.name", "t")
+    (src / "chrome").mkdir()
+    (src / "chrome" / "keep.txt").write_text("x\n")
+    _git(src, "add", "-A")
+    _git(src, "commit", "-qm", "base")
+    monkeypatch.setenv("TELEPORT_CHROMIUM_DIR", str(chromium_dir))
+    (root / "CHROMIUM_VERSION").write_text("151.0.7922.76\n")
+    (root / "TELEPORT_VERSION").write_text("0.1.0.0\n")
+    monkeypatch.setattr(apply_patches, "run_check", lambda: None)
+    return root, src
+
+
+def test_apply_patches_runs_branding_pass_by_default(tmp_path: Path, monkeypatch):
+    root, _src = _make_fake_root_and_src(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(apply_patches.branding_strings, "main", lambda: calls.append(1))
+    assert apply_patches.main(["--root", str(root)]) == 0
+    assert calls == [1]
+
+
+def test_apply_patches_skip_branding_flag_skips_the_rebrand_pass(tmp_path: Path, monkeypatch):
+    root, _src = _make_fake_root_and_src(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(apply_patches.branding_strings, "main", lambda: calls.append(1))
+    assert apply_patches.main(["--root", str(root), "--skip-branding"]) == 0
+    assert calls == []

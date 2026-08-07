@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
-index 722391dc04be6..5205b4b75bd46 100644
+index 99c63b6d6b11f..f04ebed09be83 100644
 --- a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
 +++ b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
 @@ -16,6 +16,7 @@

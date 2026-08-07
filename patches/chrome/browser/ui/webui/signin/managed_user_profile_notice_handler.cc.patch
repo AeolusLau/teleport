@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
-index 9d849925ecd37..847102979df0e 100644
+index 1ba5d5ac4b88d..d1a827b53cb60 100644
 --- a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
 +++ b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
-@@ -435,16 +435,22 @@ base::DictValue ManagedUserProfileNoticeHandler::GetProfileInfoValue() {
+@@ -499,16 +499,22 @@ base::DictValue ManagedUserProfileNoticeHandler::GetProfileInfoValue() {
        dict.Set("proceedLabel", l10n_util::GetStringUTF8(IDS_DONE));
        break;
      case ManagedUserProfileNoticeUI::ScreenType::kEnterpriseOIDC:
@@ -30,5 +30,5 @@ index 9d849925ecd37..847102979df0e 100644
 -                       : IDS_APP_CONTINUE));
 +      dict.Set("proceedLabel", l10n_util::GetStringUTF8(IDS_APP_CONTINUE));
        break;
-     case ManagedUserProfileNoticeUI::ScreenType::kFirstRun:
-       // TODO(crbug.com/483637730): Specify the exact UI for the First Run case
+     case ManagedUserProfileNoticeUI::ScreenType::kDeviceSignalsDisclaimer:
+       dict.Set("showEnterpriseBadge", true);

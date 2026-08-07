@@ -1,11 +1,11 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_management_flow_controller.cc b/chrome/browser/ui/views/profiles/profile_management_flow_controller.cc
-index b97220b8d91e6..cf6f9e3034de0 100644
+index 850d2e5f48c04..3fa33d565ca2b 100644
 --- a/chrome/browser/ui/views/profiles/profile_management_flow_controller.cc
 +++ b/chrome/browser/ui/views/profiles/profile_management_flow_controller.cc
-@@ -46,6 +46,8 @@ std::string_view GetStepHistogramSuffix(
-       return ".SearchEngineChoice";
-     case ProfileManagementFlowController::Step::kFinishFlow:
-       return ".FinishFlow";
+@@ -52,6 +52,8 @@ std::string_view GetStepHistogramSuffix(
+       return ".FeatureShowcase";
+     case ProfileManagementFlowController::Step::kFinishOrContinue:
+       return ".FinishOrContinue";
 +    case ProfileManagementFlowController::Step::kTeleportEnrollment:
 +      return ".TeleportEnrollment";
    }

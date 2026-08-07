@@ -1,8 +1,8 @@
 diff --git a/chrome/app/resources/generated_resources_zh-CN.xtb b/chrome/app/resources/generated_resources_zh-CN.xtb
-index dac84ad637c50..5fd75069298b0 100644
+index aac3d71dd8df2..daf6f1e1047b7 100644
 --- a/chrome/app/resources/generated_resources_zh-CN.xtb
 +++ b/chrome/app/resources/generated_resources_zh-CN.xtb
-@@ -11964,4 +11964,6 @@
+@@ -11127,4 +11127,6 @@
  <translation id="998347228911661591">同步标签页分组</translation>
  <translation id="998747458861718449">检查(&amp;N)</translation>
  <translation id="998852291477823323">配置的政策不允许执行此操作。</translation>

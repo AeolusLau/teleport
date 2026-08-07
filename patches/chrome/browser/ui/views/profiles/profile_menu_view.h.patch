@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_menu_view.h b/chrome/browser/ui/views/profiles/profile_menu_view.h
-index 3b3f7dcf4b9fb..72e2bb238fa78 100644
+index 2b876009054a7..65b4ee7cce23c 100644
 --- a/chrome/browser/ui/views/profiles/profile_menu_view.h
 +++ b/chrome/browser/ui/views/profiles/profile_menu_view.h
-@@ -98,6 +98,9 @@ class ProfileMenuView : public ProfileMenuViewBase {
+@@ -91,6 +91,9 @@ class ProfileMenuView : public ProfileMenuViewBase {
    void OnSigninButtonClicked(CoreAccountInfo account,
                               ActionableItem button_type,
                               signin_metrics::AccessPoint access_point);
