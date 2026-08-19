@@ -45,8 +45,10 @@ bool ReadRestrictDomainChangeForced() {
 
 namespace {
 
-#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
+#if BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
 constexpr char kBakedDefaultDomain[] = "douan.cn";
+#elif BUILDFLAG(TELEPORT_ENV_IS_STAGING)
+constexpr char kBakedDefaultDomain[] = "staging.douan.cn";
 #else
 constexpr char kBakedDefaultDomain[] = "fairyland.io";
 #endif
@@ -238,6 +240,19 @@ std::optional<std::string> NormalizeDeploymentDomain(std::string_view input) {
     result += url.port();
   }
   return result;
+}
+
+std::optional<std::string> SelectCommandLineDomain(bool allows_override,
+                                                   bool switch_present,
+                                                   std::string_view switch_value) {
+  if (!allows_override || !switch_present) {
+    return std::nullopt;
+  }
+  std::optional<std::string> d = NormalizeDeploymentDomain(switch_value);
+  if (!d) {
+    LOG(ERROR) << "[teleport-deployment] --teleport-deployment-domain invalid";
+  }
+  return d;
 }
 
 DeploymentResolution SelectDeploymentDomain(

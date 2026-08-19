@@ -26,22 +26,25 @@ constexpr char kManagedPrefsBundleId[] = "cn.douan.Teleport";
 
 }  // namespace
 
-// Level 1: dev-only command-line switch. Compiled OUT of release binaries so it
-// is not merely disabled but absent (Global Constraint: release has no backdoor).
+// Level 1: command-line switch, compiled OUT of release builds so it is not
+// merely disabled but absent (Global Constraint: release has no backdoor).
+// staging keeps it: staging exists to be poked at, and the switch can only
+// redirect the endpoint, never the trust anchor — a staging binary aimed at an
+// attacker's server still cannot be handed policy that verifies.
 std::optional<std::string> ReadCommandLineDomain() {
-#if !BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
+#if BUILDFLAG(TELEPORT_ALLOWS_DOMAIN_OVERRIDE)
   const base::CommandLine* cmd = base::CommandLine::ForCurrentProcess();
-  if (!cmd->HasSwitch("teleport-deployment-domain")) {
-    return std::nullopt;
-  }
-  std::optional<std::string> d = NormalizeDeploymentDomain(
-      cmd->GetSwitchValueASCII("teleport-deployment-domain"));
-  if (!d) {
-    LOG(ERROR) << "[teleport-deployment] --teleport-deployment-domain invalid";
-  }
-  return d;
+  const bool present = cmd->HasSwitch("teleport-deployment-domain");
+  return SelectCommandLineDomain(
+      /*allows_override=*/true, present,
+      present ? cmd->GetSwitchValueASCII("teleport-deployment-domain")
+              : std::string());
 #else
-  return std::nullopt;
+  // Release: the switch-reading code is not compiled at all, so the capability
+  // is absent rather than disabled. Routing the answer through the same pure
+  // function keeps both branches honest about what they return.
+  return SelectCommandLineDomain(/*allows_override=*/false,
+                                 /*switch_present=*/false, std::string_view());
 #endif
 }
 

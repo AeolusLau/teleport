@@ -1,0 +1,38 @@
+diff --git a/components/policy/core/common/cloud/cloud_policy_constants.h b/components/policy/core/common/cloud/cloud_policy_constants.h
+index 00f2112912201..7c500bd4e4d37 100644
+--- a/components/policy/core/common/cloud/cloud_policy_constants.h
++++ b/components/policy/core/common/cloud/cloud_policy_constants.h
+@@ -8,6 +8,8 @@
+ #include <stdint.h>
+ 
+ #include <string>
++#include <string_view>
++#include <vector>
+ 
+ #include "components/policy/policy_export.h"
+ 
+@@ -118,8 +120,22 @@ const char* GetChromeUserPolicyType();
+ }  // namespace dm_protocol
+ 
+ // Public half of the verification key that is used to verify that policy
+-// signing keys are originating from DM server.
+-std::string GetPolicyVerificationKey();
++// signing keys are originating from DM server. This is the PRIMARY root; see
++// GetPolicyVerificationKeys() for the full trusted set.
++POLICY_EXPORT std::string GetPolicyVerificationKey();
++
++// Every root this build trusts, primary first. A release build carries a
++// dormant recovery root as a second element; dev and staging carry one. A
++// signature is accepted when ANY element verifies it -- which is also why this
++// set does not revoke anything: dropping a compromised root requires shipping a
++// build whose set no longer contains it.
++POLICY_EXPORT std::vector<std::string> GetPolicyVerificationKeys();
++
++// Whether `key` (a DER SubjectPublicKeyInfo) is one of the trusted roots.
++// Used for cached-key rotation decisions, where the question is membership --
++// "was this cache endorsed by something we still trust" -- and not equality
++// with the primary, which would call every recovery-root-endorsed cache stale.
++POLICY_EXPORT bool IsKnownVerificationKey(std::string_view key);
+ 
+ // Corresponding hash.
+ extern const char kPolicyVerificationKeyHash[];

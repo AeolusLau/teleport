@@ -84,6 +84,19 @@ std::optional<std::string> ReadUserAcceptedDomain();
 // Hardened against URL-parsing confusion (rejects userinfo, IPv6 literals, etc.).
 std::optional<std::string> NormalizeDeploymentDomain(std::string_view input);
 
+// Level-1 policy as a pure function: decide what the command-line switch should
+// yield, given whether this build accepts the override at all, whether the
+// switch was present, and its raw value.
+//
+// Split out of ReadCommandLineDomain() so that all three environment settings
+// are testable from a single dev binary. A test binary is built for exactly one
+// environment, so the branch a release build takes — refuse the override — was
+// otherwise unreachable by any test, which made the one setting the isolation
+// argument rests on the one setting nothing could cover.
+std::optional<std::string> SelectCommandLineDomain(bool allows_override,
+                                                   bool switch_present,
+                                                   std::string_view switch_value);
+
 // Pure precedence selector: pick the highest-priority present candidate. Each
 // argument is the already-read, already-normalized value from that source level
 // (nullopt = level absent). baked_default is always present (level 5). Testable

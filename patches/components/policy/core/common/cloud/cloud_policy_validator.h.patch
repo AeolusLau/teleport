@@ -1,0 +1,47 @@
+diff --git a/components/policy/core/common/cloud/cloud_policy_validator.h b/components/policy/core/common/cloud/cloud_policy_validator.h
+index 653528a9cf80d..27dd971be7c55 100644
+--- a/components/policy/core/common/cloud/cloud_policy_validator.h
++++ b/components/policy/core/common/cloud/cloud_policy_validator.h
+@@ -312,8 +312,10 @@ class POLICY_EXPORT CloudPolicyValidatorBase {
+           policy_response,
+       scoped_refptr<base::SequencedTaskRunner> background_task_runner);
+ 
+-  // Returns the verification key to be used for current process.
+-  static std::optional<std::string> GetCurrentPolicyVerificationKey();
++  // Returns the verification roots to be used for current process. A release
++  // build carries a primary plus a dormant recovery root; dev and staging carry
++  // one. Empty means verification is explicitly disabled (ChromeOS test images).
++  static std::vector<std::string> GetCurrentPolicyVerificationKeys();
+ 
+ 
+   // Helper to check MessageLite-type payloads. It exists so the implementation
+@@ -350,6 +352,16 @@ class POLICY_EXPORT CloudPolicyValidatorBase {
+                                                const std::string& server_key,
+                                                const std::string& signature);
+ 
++  // True if ANY root in `verification_keys_` verifies |signature| over |data|.
++  // A build may trust more than one root (release carries a dormant recovery
++  // root), and the server signs with whichever one is currently active, so the
++  // client must not assume the primary produced the signature it is holding.
++  bool AnyKeyVerifies(const std::string& data, const std::string& signature);
++
++  // Same, for the deprecated domain-bound signature form.
++  bool AnyKeyVerifiesDeprecated(const std::string& key_to_verify,
++                                const std::string& signature);
++
+   // Returns the domain name from the policy being validated. Returns an
+   // empty string if the policy does not contain a username field.
+   std::string ExtractDomainFromPolicy();
+@@ -407,7 +419,11 @@ class POLICY_EXPORT CloudPolicyValidatorBase {
+   std::string cached_key_signature_;
+   std::string new_cached_key_;
+   std::string new_cached_key_signature_;
+-  std::optional<std::string> verification_key_;
++  // Every root this process accepts. A signature passes if ANY of them
++  // verifies it, which is what lets a server rotate to the recovery root
++  // without the client having to be updated first. Empty = verification
++  // disabled (ChromeOS test images only).
++  std::vector<std::string> verification_keys_;
+   std::string owning_domain_;
+   bool allow_key_rotation_;
+   scoped_refptr<base::SequencedTaskRunner> background_task_runner_;

@@ -52,9 +52,9 @@ enable_platform_mpeg_h_audio = true
 disable_fieldtrial_testing_config = true
 
 # Bake the production douan.cn enterprise endpoints (DM/enroll/register-handler
-# URLs + kReleasePolicyKey KMS verification root) into the binary. All release
-# channels (canary/beta/stable) share these values.
-# NOTE: The current kReleasePolicyKey is a throwaway placeholder — replace it
-# with the actual production KMS root public key DER before the first real
-# device-manager deployment. The private key is never committed to the repo.
-teleport_use_release_endpoints = true
+# URLs + the kReleasePolicyKey KMS verification root) into the binary. All
+# release channels (canary/beta/stable) share these values.
+# NOTE: The current kReleasePolicyKey is a throwaway placeholder — teleport.gni's
+# fail-closed assert blocks this build until the real production KMS root public
+# key DER is vendored. The private key is never committed to the repo.
+teleport_deployment_env = "release"

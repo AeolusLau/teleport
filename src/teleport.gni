@@ -7,33 +7,98 @@ declare_args() {
   # (release.mac.gn); off for dev so the dev workflow needs no framework/signing.
   teleport_enable_updater = false
 
-  # Select the release vs. dev set of baked enterprise endpoints. This one
-  # switch governs every dev/release-split constant: the policy verification
-  # root public key (cloud_policy_constants.cc), the default device-management
-  # server URL (browser_policy_connector.cc), and the enroll / register-handler
-  # URLs (common/teleport_enterprise_urls.cc).
-  # false (default / dev.mac.gn): dev values — fairyland.io endpoints +
-  #   kDevPolicyKey (dev root-signer); safe for local testing and CI.
-  # true (release.mac.gn): release values — douan.cn endpoints +
-  #   kReleasePolicyKey (production KMS root); all release channels
-  #   (canary/beta/stable) share one release binary.
-  teleport_use_release_endpoints = false
+  # Which backend environment this binary is built for. Exactly one environment's
+  # trust material — the policy verification root(s) and the default deployment
+  # domain — is baked in; the others are not merely disabled but ABSENT from the
+  # binary. That absence is the point: F6 (fairyland master design 2.5) requires
+  # that a staging compromise cannot mint anything a release client trusts, and
+  # only "the material is not in the binary" delivers that as a certainty rather
+  # than as a runtime check. See the design spec 2.5.
+  #   "dev"     - fairyland.io + the committed dev root; local and CI only.
+  #   "staging" - staging.douan.cn + the staging root (server-side OpenBao
+  #               Transit; Aliyun KMS was retired 2026-08-12); official form.
+  #   "release" - douan.cn + the release root(s); official build form.
+  teleport_deployment_env = "dev"
 
-  # Safety interlock for the release policy verification root key. kReleasePolicyKey
-  # in cloud_policy_constants.cc is currently a THROWAWAY PLACEHOLDER; a release
-  # build must not ship it (a leaked placeholder private key would validate forged
-  # policy, and real KMS-signed policy would fail validation). Flip this to true
-  # ONLY after kReleasePolicyKey + kPolicyVerificationKeyHash are replaced with the
-  # real production KMS root. The assert below blocks any release-endpoints build
-  # until then.
+  # Tombstone for the pre-tristate boolean. GN only WARNS about build args it
+  # does not recognize and still exits 0, so deleting this name outright would
+  # let a stale `teleport_use_release_endpoints=<x>` override — several are
+  # written down in docs/chromium-upgrade-runbook.md and docs/tech-debt.md, and
+  # one is still sitting in out/mac/arm64/release/args.gn — silently no-op.
+  #
+  # The default is the STRING sentinel "unset", not false, so that BOTH values
+  # trip the assert below. `=false` is in fact the more dangerous of the two:
+  # the documented TD-026 workaround is `teleport_use_release_endpoints=false`
+  # layered onto the release template, meaning "release build form, dev
+  # endpoints". Post-migration that override does nothing while the template's
+  # teleport_deployment_env="release" still applies — so the operator would get
+  # the real release endpoints baked in while believing they got dev ones. A
+  # boolean tombstone defaulting to false cannot detect that case at all.
+  teleport_use_release_endpoints = "unset"
+
+  # Safety interlocks: a baked policy root that is still a THROWAWAY PLACEHOLDER
+  # must not ship. Doing so would be the worst of both worlds — a leaked
+  # placeholder private key would validate forged policy, while real signed
+  # policy would fail validation. Flip only after replacing
+  # keys/<env>-policy-root.pub.pem and passing
+  # `gen_policy_verification_key.py --check --require-real <env>`.
+  #
+  # staging: TRUE since 2026-08-13. fairyland delivered the real staging root
+  # (8b06e78b...), whose private half is BYOK-imported into staging's OpenBao
+  # Transit key. staging owns a root distinct from dev's on purpose: dev's
+  # private half is committed in the fairyland repo, so sharing it would have
+  # made every repo reader a valid signer for a real deployment.
+  teleport_staging_policy_key_is_real = true
+
+  # release: still a placeholder. There is no prod environment yet (prod cloud
+  # was never applied), so the production root ceremony is deliberately deferred
+  # rather than pending. See TD-026.
   teleport_release_policy_key_is_real = false
+
+  # Named escape hatch for "I know the roots are placeholders; I only want to
+  # exercise the build/sign/package machinery." It stamps TeleportUnpublishable
+  # into the app's Info.plist, which package.py --distribute refuses outright.
+  # It exists so that validating the pipeline is an explicit, greppable,
+  # self-disarming act rather than an ad-hoc `gn gen` override left behind in
+  # args.gn forever — which is exactly how TD-026 played out.
+  teleport_policy_key_placeholder_ack = false
 }
 
-# A build that bakes the release endpoints must also bake the real release policy
-# root key — never the placeholder. Keep this fail-closed.
-assert(
-    !teleport_use_release_endpoints || teleport_release_policy_key_is_real,
-    "teleport_use_release_endpoints=true requires teleport_release_policy_key_is_real=true: kReleasePolicyKey is still a placeholder; set the real production KMS root key first.")
+assert(teleport_use_release_endpoints == "unset",
+       "teleport_use_release_endpoints was replaced by teleport_deployment_env " +
+           "(\"dev\" | \"staging\" | \"release\"). Update whatever set it — a " +
+           "stale override is silently ignored, so the build would bake whatever " +
+           "environment the args template selected, not the one you asked for.")
+
+assert(teleport_deployment_env == "dev" || teleport_deployment_env == "staging" ||
+           teleport_deployment_env == "release",
+       "teleport_deployment_env must be dev|staging|release, got: " +
+           teleport_deployment_env)
+
+teleport_env_is_release = teleport_deployment_env == "release"
+teleport_env_is_staging = teleport_deployment_env == "staging"
+
+# The level-1 --teleport-deployment-domain switch is compiled OUT of release
+# builds (design spec 4.4). staging keeps it: staging exists to be poked at, and
+# the switch can only redirect the endpoint, never the trust anchor.
+teleport_allows_domain_override = !teleport_env_is_release
+
+# A build that bakes an environment's endpoints must also bake that
+# environment's REAL policy root. Keep this fail-closed; the placeholder-ack arg
+# above is the only sanctioned way past it, and it disarms distribution.
+assert(!teleport_env_is_staging || teleport_staging_policy_key_is_real ||
+           teleport_policy_key_placeholder_ack,
+       "teleport_deployment_env=\"staging\" requires " +
+           "teleport_staging_policy_key_is_real=true (vendor the real staging " +
+           "root first), or teleport_policy_key_placeholder_ack=true for an " +
+           "explicitly unpublishable build.")
+
+assert(!teleport_env_is_release || teleport_release_policy_key_is_real ||
+           teleport_policy_key_placeholder_ack,
+       "teleport_deployment_env=\"release\" requires " +
+           "teleport_release_policy_key_is_real=true (vendor the real release " +
+           "root first), or teleport_policy_key_placeholder_ack=true for an " +
+           "explicitly unpublishable build.")
 
 # Inside-checkout dir where fetch_sparkle.py symlinks the pinned framework.
 teleport_sparkle_dir = "//third_party/teleport_sparkle"

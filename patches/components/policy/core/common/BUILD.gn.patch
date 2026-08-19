@@ -1,8 +1,16 @@
 diff --git a/components/policy/core/common/BUILD.gn b/components/policy/core/common/BUILD.gn
-index a09be30459452..cdc9cf1d54058 100644
+index a09be30459452..a46421ee8d8b1 100644
 --- a/components/policy/core/common/BUILD.gn
 +++ b/components/policy/core/common/BUILD.gn
-@@ -497,7 +497,10 @@ static_library("test_support") {
+@@ -236,6 +236,7 @@ source_set("internal") {
+   ]
+ 
+   deps = [
++    "//teleport:teleport_policy_buildflags",
+     "//base:i18n",
+     "//build:android_buildflags",
+     "//components/account_id",
+@@ -497,7 +498,10 @@ static_library("test_support") {
  
  source_set("common_constants") {
    configs += [ "//components/policy:component_implementation" ]

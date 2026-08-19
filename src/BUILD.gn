@@ -16,14 +16,23 @@ config("sparkle_rpath") {
   ldflags = [ "-Wl,-rpath,@loader_path/../../.." ]
 }
 
-# Leaf buildflag header that bakes the dev/release endpoint selection into the
-# binary at compile time (policy verification root key, default DM server URL,
+# Leaf buildflag header that bakes the deployment-environment selection into the
+# binary at compile time (policy verification root key(s), default DM server URL,
 # enroll / register-handler URLs). Kept as a separate target (not part of
 # :teleport) so that //components/policy can dep on it without pulling in
 # //content and creating a dependency cycle.
 buildflag_header("teleport_policy_buildflags") {
   header = "teleport_policy_buildflags.h"
-  flags = [ "TELEPORT_USE_RELEASE_ENDPOINTS=$teleport_use_release_endpoints" ]
+
+  # Three booleans rather than one string: BUILDFLAG() values are consumed by
+  # #if, and the preprocessor cannot compare strings. (buildflag_header itself
+  # does support string values — see build/buildflag_header.gni — they are just
+  # unusable in the conditional we need.) dev is the both-false case.
+  flags = [
+    "TELEPORT_ENV_IS_RELEASE=$teleport_env_is_release",
+    "TELEPORT_ENV_IS_STAGING=$teleport_env_is_staging",
+    "TELEPORT_ALLOWS_DOMAIN_OVERRIDE=$teleport_allows_domain_override",
+  ]
 }
 
 # Client mirror of fairyland's teleport.v1.ServerIdentityData (proto3),

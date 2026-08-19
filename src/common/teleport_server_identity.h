@@ -63,6 +63,26 @@ bool VerifyServerIdentity(base::span<const uint8_t> signed_bytes,
                           std::string_view candidate_domain,
                           base::Time now);
 
+// Same check against a SET of roots (each a DER SubjectPublicKeyInfo), because a
+// release build trusts a primary plus a dormant recovery root and the server
+// signs with whichever is currently active. The set is still INJECTED, so this
+// stays free of //components/policy.
+//
+// Verdict aggregation, which is not merely cosmetic: return kValid if any root
+// validates; otherwise prefer a NON-signature verdict (kDomainMismatch,
+// kExpired, ...) over kBadSignature, because a non-signature verdict means some
+// root's signature DID check out and a later field did not -- strictly more
+// informative than another root's kBadSignature. Reporting the signature as bad
+// instead would send an operator hunting a key problem that does not exist, and
+// the historical symptom of a failure here is a silent hang on "Completing
+// enrollment...".
+ServerIdentityVerdict VerifyAgainstRootSet(
+    base::span<const uint8_t> signed_bytes,
+    base::span<const uint8_t> signature,
+    const std::vector<std::string>& root_keys_der,
+    std::string_view candidate_domain,
+    base::Time now);
+
 }  // namespace teleport
 
 #endif  // TELEPORT_COMMON_TELEPORT_SERVER_IDENTITY_H_

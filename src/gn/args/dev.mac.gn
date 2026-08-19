@@ -52,6 +52,6 @@ enable_platform_mpeg_h_audio = true       # MPEG-H 3D Audio
 disable_fieldtrial_testing_config = true
 
 # Bake the dev enterprise endpoints (fairyland.io DM/enroll/register-handler
-# URLs + kDevPolicyKey verification root) into the binary. Set to true in
-# release.mac.gn to bake the production douan.cn endpoints + KMS root instead.
-teleport_use_release_endpoints = false
+# URLs + kDevPolicyKey verification root) into the binary. See teleport.gni for
+# the other two environments; staging.mac.gn and release.mac.gn select those.
+teleport_deployment_env = "dev"

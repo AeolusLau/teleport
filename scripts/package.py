@@ -45,7 +45,7 @@ _SKIP_BUILD_WARNING = (
     "--skip-build is set (see below), this run can never reach the publish\n"
     "hazard that check exists to block, so a mismatch here only WARNS, it does\n"
     "not raise. That check can also only catch an EXPLICIT\n"
-    "teleport_use_release_endpoints override still recorded as text in\n"
+    "teleport_deployment_env override still recorded as text in\n"
     "args.gn -- if args.gn has since been regenerated back to a plain template\n"
     "import (no override text left to compare against), this run has NO way to\n"
     "tell what endpoint configuration the on-disk app was actually built with.\n"
@@ -90,6 +90,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--force", action="store_true",
                    help="ignore the package-state cache; re-sign + re-notarize even "
                         "if the app is unchanged")
+    p.add_argument("--rehearse", action="store_true",
+                   help="run the full publish chain against the channel's "
+                        "configured endpoints WITHOUT tagging: build, sign, "
+                        "notarize, dmg, appcast, upload. Every guard a real "
+                        "--distribute run applies stays armed -- a rehearsal "
+                        "that relaxed them would rehearse a path publishing "
+                        "does not take. Exists so that exercising the release "
+                        "machinery is a named, self-limiting mode rather than "
+                        "a hand-run sequence that silently drifts from the "
+                        "real one. Mutually exclusive with --distribute.")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--config", type=Path, default=_default_config())
     p.add_argument("--out", default=None, help="override the channel's default out dir")
@@ -101,7 +111,17 @@ def main(argv: list[str] | None = None) -> int:
                         "exclusive with --distribute.")
     args = p.parse_args(argv)
 
-    if args.skip_build and args.distribute:
+    if args.distribute and args.rehearse:
+        raise SystemExit(
+            "--rehearse cannot be combined with --distribute: a rehearsal is a "
+            "publish minus the tag, so asking for both is asking whether this "
+            "is the real thing. Pick one.")
+
+    # A rehearsal drives every distribute-side code path; the single difference
+    # is applied at the tagging step below.
+    publishing = args.distribute or args.rehearse
+
+    if args.skip_build and publishing:
         raise SystemExit(
             "--skip-build cannot be combined with --distribute: publishing must "
             "only ship an app whose build args were verified in THIS run. "
@@ -114,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     updates_dir = args.updates_dir or (repo_root() / "dist" / channel.name)
     version = read_teleport_version()
 
-    if args.distribute and not channel.distributable:
+    if publishing and not channel.distributable:
         raise SystemExit(
             f"channel {channel.name!r} is not distributable; --distribute not allowed")
 
@@ -129,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.skip_build:
             _prepare_skip_build(app, out, channel)
         else:
-            build(out, channel, distributing=args.distribute)
+            build(out, channel, distributing=publishing)
         _package.assert_baked_version(app, version)
         verb = "packaged (--skip-build)" if args.skip_build else "built"
         print(f"{verb} {channel.name} app at {app} (version {version})")
@@ -138,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- distributable channel ----
     cfg = _config.load_channel_config(args.config, channel.name)
     _config.require_keys(cfg, _config.SPARKLE_KEYS + _config.NOTARIZE_KEYS)
-    if args.distribute:
+    if publishing:
         _config.require_keys(cfg, _config.PUBLISH_KEYS)
     app = chromium_src() / out / "Teleport.app"
 
@@ -167,23 +187,59 @@ def main(argv: list[str] | None = None) -> int:
             f"verify baked version {version} + inject Sparkle keys into {app}/Contents/Info.plist",
             sign_dmg_line,
         ]
-        if args.distribute:
+        if publishing:
             plan += [
-                f"generate_appcast (download-url-prefix {cfg['download_base_url']}) into {updates_dir}",
-                f"ossutil upload dmg + appcast.xml to {cfg['oss_upload_target']}",
-                f"git tag -a v{version} -m 'release {version}' && git push {cfg['git_remote']} v{version}",
+                f"generate_appcast (download-url-prefix {cfg['download_base_url']}, "
+                f"signed with keychain account {cfg['ed_key_account']}) into {updates_dir}",
+                f"ossutil upload dmg + appcast.xml to {cfg['oss_upload_target']} "
+                f"(endpoint {cfg['oss_endpoint']}, region {cfg['oss_region']})",
             ]
-        print(f"DRY RUN (channel {channel.name}"
-              f"{', distribute' if args.distribute else ''}):\n  " + "\n  ".join(plan))
+            # The plan must describe what THIS invocation will do. Printing a
+            # tag step for a rehearsal, or printing the wrong tag name, defeats
+            # the only thing a dry run exists for.
+            if args.rehearse:
+                plan.append("NOT tagging (rehearsal)")
+            else:
+                tag = _publish.tag_name(version, channel.name)
+                plan.append(
+                    f"git tag -a {tag} -m 'release {version}' && "
+                    f"git push {cfg['git_remote']} {tag}")
+        mode = ", distribute" if args.distribute else (
+            ", rehearse" if args.rehearse else "")
+        print(f"DRY RUN (channel {channel.name}{mode}):\n  " + "\n  ".join(plan))
         return 0
 
     # Real run: detect identity, then (for distribute) fail-fast guards BEFORE the build.
     if not cfg.get("codesign_identity"):
         cfg["codesign_identity"] = _package.detect_codesign_identity()
-    if args.distribute:
-        _publish.assert_on_main()
+    if publishing:
+        _config.assert_channel_keys_distinct(_default_config())
+        _config.assert_channel_urls_self_consistent(_default_config(), channel.name)
+        # Before anything else: a build made through the placeholder-key escape
+        # hatch must never publish. The hatch exists so that exercising the
+        # pipeline against placeholder roots is an explicit, self-disarming act;
+        # if --distribute still worked, it would just be the TD-026 override
+        # with extra steps.
+        if _build.effective_gn_arg(
+                out, "teleport_policy_key_placeholder_ack") == "true":
+            raise SystemExit(
+                f"refusing to --distribute from {out}: it was configured with "
+                f"teleport_policy_key_placeholder_ack=true, so it bakes "
+                f"PLACEHOLDER policy verification roots whose private halves "
+                f"were discarded. Such a build can validate no real policy and "
+                f"must not reach users. Vendor the real KMS roots and drop the "
+                f"ack arg before publishing."
+            )
+        # staging rehearses from feature branches by design, so the main-branch
+        # requirement is release-only. assert_clean_tree stays for BOTH: a dirty
+        # tree makes TeleportSourceRevision a lie, and that stamp is the only
+        # way to trace a staging artifact back to source now that it has no
+        # release tag.
+        if channel.name != "staging":
+            _publish.assert_on_main()
         _publish.assert_clean_tree()
-        _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
+        _publish.assert_not_published(
+            version, channel.name, _publish.fetch_live_appcast(cfg["feed_url"]))
 
     # Build -> verify baked version -> inject Sparkle keys -> stage icons, then
     # decide whether a previously-notarized dmg can be reused (app byte-identical)
@@ -193,9 +249,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.skip_build:
         _prepare_skip_build(app, out, channel)
     else:
-        build(out, channel, distributing=args.distribute)
+        build(out, channel, distributing=publishing)
     _package.assert_baked_version(app, version)
     _package.inject_sparkle_keys(app, cfg, channel.name)
+    _package.stamp_source_revision(app)
+    if _package.stamp_unpublishable(app, out):
+        print(f"NOTE: {app.name} is marked TeleportUnpublishable — it bakes "
+              f"placeholder policy roots. Useful for exercising the packaging "
+              f"pipeline; --distribute will refuse it.")
     _package.stage_channel_icons(app, channel.name)
 
     sp = _package_state.state_path(repo_root(), channel.name)
@@ -215,18 +276,31 @@ def main(argv: list[str] | None = None) -> int:
             channel.name)
         _package_state.write_state(sp, key, target_dmg.name)
 
-    if not args.distribute:
+    if not publishing:
         print(f"built + signed {channel.name} dmg at {target_dmg} (not published)")
         return 0
 
     # Re-check (cheap), then a final notarization gate before ANY upload.
-    _publish.assert_not_published(version, _publish.fetch_live_appcast(cfg["feed_url"]))
+    _publish.assert_not_published(
+            version, channel.name, _publish.fetch_live_appcast(cfg["feed_url"]))
     if not _package.stapler_validate(target_dmg):
         raise SystemExit(
             f"{target_dmg.name} failed stapler validate; refusing to publish")
-    _publish.generate_appcast(updates_dir, cfg["download_base_url"], target_dmg.name)
-    _publish.upload_to_oss(updates_dir, cfg["oss_upload_target"])
-    _publish.tag_and_push(version, cfg["git_remote"])
+    _publish.generate_appcast(updates_dir, cfg["download_base_url"],
+                              target_dmg.name, cfg["ed_key_account"])
+    _publish.upload_to_oss(updates_dir, cfg["oss_upload_target"],
+                           cfg["oss_endpoint"], cfg["oss_region"])
+    if args.rehearse:
+        # The one step a rehearsal omits. Tagging is the irreversible,
+        # outward-facing half of publishing -- it pushes to a remote and claims
+        # a version -- and a rehearsal has nothing to claim.
+        print(f"REHEARSED {version} ({channel.name}): appcast + upload done, "
+              f"NOT tagged. feed {cfg['feed_url']}")
+        print("  This artifact is a rehearsal. It is downloadable from the "
+              "configured prefix, so treat that prefix as scratch space, not "
+              "as a distribution surface.")
+        return 0
+    _publish.tag_and_push(version, channel.name, cfg["git_remote"])
     print(f"published {version} ({channel.name}), tagged v{version}: feed {cfg['feed_url']}")
     return 0
 

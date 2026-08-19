@@ -36,8 +36,10 @@ TEST(TeleportDeploymentConfigTrustTest, RejectsMissingFile) {
 TEST(TeleportDeploymentConfigTest, FallsBackToBakedDefault) {
   EXPECT_FALSE(DeploymentDomain().empty());
   EXPECT_EQ(DeploymentDomainSourceLevel(), DeploymentDomainSource::kBakedDefault);
-#if BUILDFLAG(TELEPORT_USE_RELEASE_ENDPOINTS)
+#if BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
   EXPECT_EQ(DeploymentDomain(), "douan.cn");
+#elif BUILDFLAG(TELEPORT_ENV_IS_STAGING)
+  EXPECT_EQ(DeploymentDomain(), "staging.douan.cn");
 #else
   EXPECT_EQ(DeploymentDomain(), "fairyland.io");
 #endif
@@ -360,6 +362,37 @@ TEST(TeleportDomainLockTest, RestrictPolicyLocksBakedDefault) {
                                    /*restrict_change_forced=*/true));
 }
 
+
+
+// The level-1 policy, exercised at all three settings from one dev binary.
+// The buildflag itself is unreachable here — a test binary is built for exactly
+// one environment — which is precisely why the decision lives in a pure
+// function that takes the flag as a parameter. Before this seam existed, the
+// release setting (override refused) was the one setting no test could cover,
+// even though it is the setting the isolation argument rests on.
+TEST(TeleportDeploymentCommandLineTest, IgnoredWhenOverrideNotAllowed) {
+  EXPECT_EQ(SelectCommandLineDomain(/*allows_override=*/false,
+                                    /*switch_present=*/true, "acme.internal"),
+            std::nullopt);
+}
+
+TEST(TeleportDeploymentCommandLineTest, AbsentSwitchYieldsNullopt) {
+  EXPECT_EQ(SelectCommandLineDomain(/*allows_override=*/true,
+                                    /*switch_present=*/false, ""),
+            std::nullopt);
+}
+
+TEST(TeleportDeploymentCommandLineTest, NormalizesAcceptedValue) {
+  EXPECT_EQ(SelectCommandLineDomain(/*allows_override=*/true,
+                                    /*switch_present=*/true, "ACME.Internal."),
+            "acme.internal");
+}
+
+TEST(TeleportDeploymentCommandLineTest, RejectsMalformedValue) {
+  EXPECT_EQ(SelectCommandLineDomain(/*allows_override=*/true,
+                                    /*switch_present=*/true, "not a domain"),
+            std::nullopt);
+}
 
 }  // namespace
 }  // namespace teleport

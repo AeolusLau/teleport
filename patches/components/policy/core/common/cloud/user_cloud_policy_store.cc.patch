@@ -1,0 +1,26 @@
+diff --git a/components/policy/core/common/cloud/user_cloud_policy_store.cc b/components/policy/core/common/cloud/user_cloud_policy_store.cc
+index 0902268b31eef..fe0c16002aa20 100644
+--- a/components/policy/core/common/cloud/user_cloud_policy_store.cc
++++ b/components/policy/core/common/cloud/user_cloud_policy_store.cc
+@@ -261,10 +261,17 @@ void DesktopCloudPolicyStore::PolicyLoaded(bool validate_in_background,
+ 
+       bool doing_key_rotation = result.doing_key_rotation;
+       if (key && (!key->has_verification_key() ||
+-                  key->verification_key() != GetPolicyVerificationKey())) {
+-        // The cached key didn't match our current key, so we're doing a key
+-        // rotation - make sure we request a new key from the server on our
+-        // next fetch.
++                  !IsKnownVerificationKey(key->verification_key()))) {
++        // The cached key was endorsed by a root this build no longer trusts, so
++        // we're doing a key rotation - make sure we request a new key from the
++        // server on our next fetch.
++        //
++        // Membership, not equality with the primary: a release build trusts a
++        // primary and a dormant recovery root, and a cache endorsed by either
++        // one is legitimate. Comparing against the primary alone would declare
++        // every recovery-endorsed cache stale and make every launch re-fetch --
++        // across every profile at once, right after a rotation, which is the
++        // worst possible moment to add load.
+         doing_key_rotation = true;
+         LOG_POLICY(WARNING, POLICY_PROCESSING)
+             << PolicyTypeLogPrefix(policy_type(), std::string())

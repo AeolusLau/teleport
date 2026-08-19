@@ -58,12 +58,14 @@ std::optional<std::string> ReadVerifiedUserAcceptedDomain() {
   if (!entry) {
     return std::nullopt;
   }
-  // Baked policy-verification root key (DER SubjectPublicKeyInfo), the same trust
-  // anchor the policy chain uses. Injected here rather than baked into the leaf.
-  const std::string root_key = policy::GetPolicyVerificationKey();
-  if (!VerifyServerIdentity(entry->signed_bytes, entry->signature,
-                            base::as_byte_span(root_key), entry->domain,
-                            base::Time::Now())) {
+  // Baked policy-verification roots (DER SubjectPublicKeyInfo), the same trust
+  // anchors the policy chain uses. Injected here rather than baked into the leaf.
+  // The whole set, not just the primary: a release build also carries a dormant
+  // recovery root, and an entry endorsed by it is just as legitimate.
+  const std::vector<std::string> root_keys = policy::GetPolicyVerificationKeys();
+  if (VerifyAgainstRootSet(entry->signed_bytes, entry->signature, root_keys,
+                           entry->domain,
+                           base::Time::Now()) != ServerIdentityVerdict::kValid) {
     return std::nullopt;
   }
   return NormalizeDeploymentDomain(entry->domain);

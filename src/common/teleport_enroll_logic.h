@@ -71,6 +71,16 @@ EnrollVerifyResult VerifyFetchedIdentity(base::span<const uint8_t> body,
                                           base::span<const uint8_t> root_key_der,
                                           base::Time now);
 
+// Same, against the full set of baked roots. A release build trusts a primary
+// plus a dormant recovery root and the server signs with whichever is active,
+// so the caller passes the whole set rather than guessing which one signed.
+// Root DERs are still INJECTED, keeping this free of //components/policy.
+EnrollVerifyResult VerifyFetchedIdentity(
+    base::span<const uint8_t> body,
+    std::string_view canonical_domain,
+    const std::vector<std::string>& root_keys_der,
+    base::Time now);
+
 // Persistence seam: the enroll handler lives in the //chrome/browser/ui/webui
 // layer and must NOT reach into g_browser_process to write Local State (that
 // would drag chrome/browser into this WebUI target). Instead //chrome/browser

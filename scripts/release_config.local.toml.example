@@ -15,9 +15,40 @@ notary_profile = "teleport-notary"
 [channel.canary]
 # Sparkle public EdDSA key (base64) printed by generate_keys.
 public_ed_key = "PASTE_BASE64_PUBLIC_KEY"
+# Keychain account holding the matching PRIVATE key (generate_keys --account).
+# Every channel needs its OWN key pair. Sharing one means the machine that
+# publishes any channel can sign an update every other channel's clients will
+# install -- and an update carries arbitrary code, so that exposure is heavier
+# than the policy chain the per-environment roots protect. A publish refuses if
+# two channels declare the same public_ed_key.
+ed_key_account = "ed25519"
 # Appcast feed URL (public https; the OSS native endpoint + unguessable token).
 feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/appcast.xml"
 # Public https base the appcast download links + SUFeedURL point at (trailing /).
 download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/canary/<token>/"
 # OSS path the dmg + appcast are uploaded to via ossutil (trailing /).
 oss_upload_target = "oss://<bucket>/canary/<token>/"
+# OSS endpoint + signing region for THIS channel's bucket. Both required and
+# both per-channel: ossutil 2.x signs with SigV4, so an endpoint without a
+# matching region is rejected ("Invalid signing region"), and channels may
+# live in different regions.
+oss_endpoint = "https://oss-cn-<region>.aliyuncs.com"
+oss_region = "cn-<region>"
+
+[channel.staging]
+# staging rehearses the release pipeline against the staging backend. It is the
+# deliberately weaker environment, so it must not hold release's signing key.
+public_ed_key = "PASTE_STAGING_BASE64_PUBLIC_KEY"
+ed_key_account = "ed25519-staging"
+feed_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/staging/<token>/appcast.xml"
+download_base_url = "https://<bucket>.oss-cn-<region>.aliyuncs.com/staging/<token>/"
+oss_upload_target = "oss://<bucket>/staging/<token>/"
+oss_endpoint = "https://oss-cn-<region>.aliyuncs.com"
+oss_region = "cn-<region>"
+
+# Credentials are NEVER stored here. package.py --distribute reads them from
+# ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET and hands them to
+# ossutil explicitly, because ossutil prefers ~/.ossutilconfig over the
+# environment -- so on a machine that has published any other channel, merely
+# exporting them is silently ignored and the upload goes out as the wrong RAM
+# user. Export the credential for the channel you are publishing.

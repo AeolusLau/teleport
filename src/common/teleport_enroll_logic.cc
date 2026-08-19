@@ -79,14 +79,27 @@ EnrollVerifyResult VerifyFetchedIdentity(base::span<const uint8_t> body,
                                           std::string_view canonical_domain,
                                           base::span<const uint8_t> root_key_der,
                                           base::Time now) {
+  return VerifyFetchedIdentity(
+      body, canonical_domain,
+      std::vector<std::string>{std::string(
+          reinterpret_cast<const char*>(root_key_der.data()),
+          root_key_der.size())},
+      now);
+}
+
+EnrollVerifyResult VerifyFetchedIdentity(
+    base::span<const uint8_t> body,
+    std::string_view canonical_domain,
+    const std::vector<std::string>& root_keys_der,
+    base::Time now) {
   EnrollVerifyResult result;
   std::optional<ServerIdentityParts> parts = ParseServerIdentityContainer(body);
   if (!parts) {
     result.status = EnrollStatus::kMalformedResponse;
     return result;
   }
-  ServerIdentityVerdict verdict = VerifyServerIdentityDetailed(
-      parts->signed_bytes, parts->signature, root_key_der, canonical_domain,
+  ServerIdentityVerdict verdict = VerifyAgainstRootSet(
+      parts->signed_bytes, parts->signature, root_keys_der, canonical_domain,
       now);
   result.status = StatusForVerdict(verdict);
   if (verdict == ServerIdentityVerdict::kValid) {

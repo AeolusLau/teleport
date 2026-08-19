@@ -1,0 +1,19 @@
+# Staging channel build args for the teleport overlay on macOS (Apple Silicon).
+#
+# Chain-imports release.mac.gn rather than copying it. The whole point of the
+# staging variant is to be the same pipeline as release — official build, PGO,
+# Sparkle, Developer ID signing, notarization, styled dmg — with only the baked
+# trust material and endpoints differing, so that a staging run rehearses what a
+# release run will do. A copied 60-line template would drift from release the
+# first time either side is touched, and the drift would be invisible: it would
+# read as two files that merely disagree, with nothing marking which is right.
+#
+# Everything below the import is the deliberate difference.
+import("//teleport/gn/args/release.mac.gn")
+
+# staging.douan.cn + the staging KMS verification root. NOT the release root:
+# under F6 each environment owns its own teleport-root, so a release binary
+# cannot verify staging-signed policy and a staging binary cannot verify
+# release-signed policy. That mutual failure IS the isolation — the design
+# spec's cross-negative e2e exists to prove it holds.
+teleport_deployment_env = "staging"

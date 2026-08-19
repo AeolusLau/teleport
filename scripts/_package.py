@@ -83,6 +83,47 @@ def sparkle_plist_string_keys(cfg: dict, channel_name: str) -> dict[str, str]:
     }
 
 
+def stamp_unpublishable(app: Path, out: str) -> bool:
+    """Mark the app unpublishable when it was built through the placeholder-key
+    escape hatch. Returns whether the marker was written.
+
+    The GN arg lives in the build; the refusal happens in the publish step. This
+    carries the fact across that gap by writing it into the artifact itself, so
+    a dmg that escapes onto a shelf still says what it is rather than looking
+    exactly like a real one.
+    """
+    from _build import effective_gn_arg  # local: avoids a module cycle
+    if effective_gn_arg(out, "teleport_policy_key_placeholder_ack") != "true":
+        return False
+    info = app / "Contents" / "Info.plist"
+    subprocess.run(
+        ["plutil", "-replace", "TeleportUnpublishable", "-string",
+         "built with placeholder policy roots", str(info)],
+        check=True,
+    )
+    return True
+
+
+def stamp_source_revision(app: Path) -> str:
+    """Record the commit the app was built from, in its Info.plist.
+
+    staging publishes from feature branches, so it has no release tag to trace
+    an artifact back to. Without this, "staging 0.2.0.0 misbehaves" cannot be
+    resolved to a commit at all -- the version string is shared with release and
+    the branch is gone by the time anyone asks.
+    """
+    rev = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root(), capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    info = app / "Contents" / "Info.plist"
+    subprocess.run(
+        ["plutil", "-replace", "TeleportSourceRevision", "-string", rev, str(info)],
+        check=True,
+    )
+    return rev
+
+
 def inject_sparkle_keys(app: Path, cfg: dict, channel_name: str) -> None:
     """Inject Sparkle keys + the TeleportChannel marker into the app's
     Info.plist (pre-sign). Version fields are baked at build time and verified

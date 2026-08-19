@@ -84,4 +84,27 @@ bool VerifyServerIdentity(base::span<const uint8_t> signed_bytes,
          ServerIdentityVerdict::kValid;
 }
 
+ServerIdentityVerdict VerifyAgainstRootSet(
+    base::span<const uint8_t> signed_bytes,
+    base::span<const uint8_t> signature,
+    const std::vector<std::string>& root_keys_der,
+    std::string_view candidate_domain,
+    base::Time now) {
+  ServerIdentityVerdict best = ServerIdentityVerdict::kBadSignature;
+  for (const std::string& key : root_keys_der) {
+    ServerIdentityVerdict verdict = VerifyServerIdentityDetailed(
+        signed_bytes, signature, base::as_byte_span(key), candidate_domain, now);
+    if (verdict == ServerIdentityVerdict::kValid) {
+      return verdict;
+    }
+    // A non-signature verdict means THIS root's signature checked out and a
+    // later field did not. That is the reason worth surfacing; keep it even if
+    // a subsequent root only manages kBadSignature.
+    if (verdict != ServerIdentityVerdict::kBadSignature) {
+      best = verdict;
+    }
+  }
+  return best;
+}
+
 }  // namespace teleport

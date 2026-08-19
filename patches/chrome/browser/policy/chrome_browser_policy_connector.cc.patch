@@ -1,16 +1,17 @@
 diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
-index c475e2858878b..9a7582f0d9ff9 100644
+index c475e2858878b..2eff15e73db52 100644
 --- a/chrome/browser/policy/chrome_browser_policy_connector.cc
 +++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
-@@ -54,6 +54,7 @@
+@@ -54,6 +54,8 @@
  #include "base/strings/sys_string_conversions.h"
  #include "components/policy/core/common/policy_loader_mac.h"
  #include "components/policy/core/common/preferences_mac.h"
 +#include "teleport/common/teleport_enterprise_enrollment.h"
++#include "teleport/teleport_policy_buildflags.h"
  #elif BUILDFLAG(IS_ANDROID)
  #include "chrome/browser/policy/chrome_browser_cloud_management_controller_android.h"
  #include "components/policy/core/common/android/android_combined_policy_provider.h"
-@@ -103,9 +104,16 @@ void ChromeBrowserPolicyConnector::Init(
+@@ -103,9 +105,16 @@ void ChromeBrowserPolicyConnector::Init(
      PrefService* local_state,
      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
    PolicyLogger::GetInstance()->EnableLogDeletion();
@@ -29,7 +30,35 @@ index c475e2858878b..9a7582f0d9ff9 100644
    auto device_management_service =
        std::make_unique<DeviceManagementService>(std::move(configuration));
    device_management_service->ScheduleInitialization(
-@@ -331,8 +339,16 @@ ChromeBrowserPolicyConnector::CreatePlatformProvider() {
+@@ -243,9 +252,27 @@ bool ChromeBrowserPolicyConnector::IsCommandLineSwitchSupported() const {
+     return true;
+   }
+ 
++#if BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
++  // Teleport: a release build accepts no enterprise-endpoint override at all.
++  // This predicate is the single gate for the whole family --
++  // --device-management-url, --realtime-reporting-url,
++  // --encrypted-reporting-url, --cloud-binary-upload-service-url and
++  // --secure-connect-api-url all consult it -- so closing it here closes the
++  // family rather than one member, which is why the check belongs here and not
++  // in GetUrlOverride (that helper is generic over the flag name and cannot
++  // single one out).
++  //
++  // Defensive rather than corrective: our own connector patch already routes DM
++  // endpoints around GetUrlOverride entirely, so --device-management-url is
++  // inert on desktop today. The point is that an upstream refactor which
++  // reconnects that path must not silently reopen the door.
++  return false;
++#else
++
+   version_info::Channel channel = chrome::GetChannel();
+   return channel != version_info::Channel::STABLE &&
+          channel != version_info::Channel::BETA;
++#endif  // BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
+ }
+ 
+ // static
+@@ -331,8 +358,16 @@ ChromeBrowserPolicyConnector::CreatePlatformProvider() {
  #elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
    CFStringRef bundle_id = CFSTR("com.google.ChromeForTesting");
  #else

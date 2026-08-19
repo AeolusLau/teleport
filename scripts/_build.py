@@ -16,12 +16,19 @@ from dataclasses import dataclass
 
 from _lib import chromium_src, repo_root
 
-# Matches a `teleport_use_release_endpoints = true|false` line the way GN
-# writes it back into args.gn (and the way our gn/args/*.mac.gn templates
+# Matches a `teleport_deployment_env = "dev"|"staging"|"release"` line the way
+# GN writes it back into args.gn (and the way our gn/args/*.mac.gn templates
 # spell it): possibly indented, `=` surrounded by whitespace, nothing else on
 # the line.
-_USE_RELEASE_ENDPOINTS_RE = re.compile(
-    r"^\s*teleport_use_release_endpoints\s*=\s*(true|false)\s*$", re.MULTILINE)
+#
+# This replaced a `teleport_use_release_endpoints = true|false` matcher when
+# the boolean became a tristate. That rename alone silently disarmed the guard:
+# it kept looking for a name that, post-rename, no template can legally contain
+# (teleport.gni asserts on it as a tombstone), so `expected` was always None and
+# every comparison was skipped.
+_DEPLOYMENT_ENV_RE = re.compile(
+    r"""^\s*teleport_deployment_env\s*=\s*"(dev|staging|release)"\s*$""",
+    re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -39,6 +46,14 @@ CHANNELS = {
         "canary", "out/mac/arm64/release", True,
         ("chrome", "chrome/installer/mac"), "release.mac.gn",
     ),
+    # staging is an ENVIRONMENT that borrows a channel slot: same official
+    # pipeline as release, different baked trust material. It gets its own out
+    # dir because the two differ inside //components/policy, which relinks most
+    # of the browser -- sharing a dir would mean a full rebuild on every switch.
+    "staging": Channel(
+        "staging", "out/mac/arm64/staging", True,
+        ("chrome", "chrome/installer/mac"), "staging.mac.gn",
+    ),
 }
 
 
@@ -50,20 +65,63 @@ def resolve_channel(name: str) -> Channel:
         raise SystemExit(f"unknown channel {name!r}; valid channels: {valid}")
 
 
-def _extract_use_release_endpoints(gn_args_text: str) -> str | None:
-    """"true"/"false" as textually parsed out of a GN args file, or None if
-    the arg is not explicitly set there."""
-    m = _USE_RELEASE_ENDPOINTS_RE.search(gn_args_text)
+_GN_ARG_VALUE_RE = re.compile(r'^\s*(\w+)\s*=\s*"?([^"\n]*?)"?\s*$')
+
+
+def gn_bin():
+    return chromium_src() / "buildtools" / "mac" / "gn"
+
+
+def effective_gn_arg(out: str, arg: str) -> str | None:
+    """The value GN actually resolves for `arg` in <out>, or None if unset.
+
+    Asks gn rather than reading args.gn as text. Text cannot see through an
+    import() chain, and a normal `gn gen` writes an args.gn containing exactly
+    one import line -- so a text matcher finds nothing to compare against and
+    skips the comparison entirely. That is how the previous guard came to
+    protect nothing at all.
+
+    gn exits 0 even for an unknown argument (it prints an ERROR banner on
+    stdout), so the returned SHAPE is validated rather than the exit code.
+    """
+    try:
+        r = subprocess.run(
+            [str(gn_bin()), "args", out, f"--list={arg}", "--short"],
+            # cwd matters: gn locates the source root by walking up from the
+            # working directory looking for a .gn file. Run it from anywhere
+            # else -- this repo, a worktree, CI's checkout dir -- and it fails
+            # with "Can't find source root" regardless of how absolute the out
+            # path is, which would make every lookup return None and every
+            # distributable channel fail the guard spuriously.
+            cwd=chromium_src(),
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        # No gn binary reachable (fresh checkout, CI image without buildtools).
+        # "Cannot determine" is the honest answer, and callers treat it as a
+        # refusal rather than as consent -- raising here instead would turn an
+        # environment gap into an unhandled traceback.
+        return None
+    m = _GN_ARG_VALUE_RE.match(r.stdout.strip())
+    if not m or m.group(1) != arg:
+        return None
+    return m.group(2)
+
+
+def _extract_deployment_env(gn_args_text: str) -> str | None:
+    """"dev"/"staging"/"release" as textually parsed out of a GN args file, or
+    None if the arg is not explicitly set there."""
+    m = _DEPLOYMENT_ENV_RE.search(gn_args_text)
     return m.group(1) if m else None
 
 
 def assert_release_endpoints_consistent(out: str, channel: Channel, *, distributing: bool) -> None:
     """Guard the trap a stale <out>/args.gn otherwise leaves in place: gn gen
     only runs when args.gn is missing (see ensure_gn_gen below), so an
-    args.gn left over from a manual override -- e.g. `gn gen ... teleport_
-    use_release_endpoints=false` used to work around TD-026's KMS fail-closed
-    assert while validating something else about a release build -- persists
-    across every future package.py run against the same out dir.
+    args.gn left over from a manual override -- e.g. `gn gen ...
+    teleport_deployment_env="dev"` used to work around TD-026's KMS
+    fail-closed assert while validating something else about a release build
+    -- persists across every future package.py run against the same out dir.
 
     Fires on DISTRIBUTION INTENT (the `distributing` keyword -- i.e. whether
     this run is a `--distribute` run), not on whether the channel merely CAN
@@ -82,7 +140,7 @@ def assert_release_endpoints_consistent(out: str, channel: Channel, *, distribut
       return normally without raising. This is what lets a non-distributing
       run (e.g. `package.py --channel canary --skip-build`, used to verify
       packaging mechanics against an out dir that was deliberately gn-gen'd
-      with a truthful teleport_use_release_endpoints=false override for
+      with a truthful teleport_deployment_env="dev" override for
       TD-026) proceed. `--skip-build` already hard-refuses `--distribute`
       (see package.py), so a non-distributing run can never reach the
       hazard this guard exists to prevent -- there is nothing left to
@@ -94,37 +152,51 @@ def assert_release_endpoints_consistent(out: str, channel: Channel, *, distribut
 
     Only checked for distributable channels at all: dev's out dir has no
     shipped-artifact risk, and its template intentionally sets
-    teleport_use_release_endpoints=false anyway.
+    teleport_deployment_env="dev" anyway.
 
-    A real args.gn generated with no override -- just `import("//teleport/gn/
-    args/<channel>.mac.gn")`, e.g. every `gn gen` this codebase's own
-    tooling runs -- has nothing to compare: whatever the imported template
-    currently says IS the effective value, by construction, and there is
-    nothing in args.gn's own text to contradict it. The only way for a
-    genuine mismatch to exist is an EXPLICIT override baked into args.gn
-    (typically appended after the import in the --args string) that
-    disagrees with the template -- exactly the TD-026 workaround shape. So
-    this only compares when args.gn explicitly sets the var; an args.gn
-    that relies purely on the import is trusted, not skipped due to a
-    parsing limitation.
+    The comparison uses the EFFECTIVE value from `gn args --list`, not the text
+    of args.gn. That distinction is the whole point. An args.gn produced by a
+    normal `gn gen` contains exactly one line -- `import("//teleport/gn/args/
+    <channel>.mac.gn")` -- so a text matcher finds no assignment, has nothing to
+    compare, and returns early. Every out dir this codebase's own tooling
+    creates has that shape, which means the text-based version of this guard
+    skipped essentially every real case while appearing to run.
+
+    Reading the effective value catches both shapes that matter: an explicit
+    override appended after the import (the TD-026 workaround shape), and an
+    out dir seeded from a DIFFERENT channel's template altogether -- e.g. a
+    directory once gn-gen'd for staging and later reused for a canary
+    `--distribute`, where nothing in the text disagrees with anything because
+    the text says almost nothing at all.
+
+    A None result means gn could not resolve the argument. That is treated as a
+    mismatch rather than as "no override": if we cannot establish what this out
+    dir bakes, we must not sign and publish whatever it happens to contain.
     """
     if not channel.distributable:
         return
     args_gn = chromium_src() / out / "args.gn"
     if not args_gn.exists():
         return  # ensure_gn_gen will seed it fresh from the template below
-    actual = _extract_use_release_endpoints(args_gn.read_text())
-    if actual is None:
-        return  # no explicit override in args.gn -- nothing to contradict
+    # The EFFECTIVE value, not the text: an args.gn that merely imports a
+    # template still resolves to a concrete environment, and that resolution is
+    # exactly what a stale out dir gets wrong.
+    actual = effective_gn_arg(out, "teleport_deployment_env")
     template = repo_root() / "src" / "gn" / "args" / channel.gn_args
-    expected = _extract_use_release_endpoints(template.read_text())
+    expected = _extract_deployment_env(template.read_text())
     if actual == expected:
         return
+    if actual is None:
+        found = (
+            "gn could not resolve teleport_deployment_env for this out dir at "
+            "all, so what it bakes cannot be established")
+    else:
+        found = f"resolves teleport_deployment_env to {actual!r}"
     detail = (
-        f"{args_gn} has an explicit teleport_use_release_endpoints={actual!r} "
-        f"override, but the {channel.name!r} channel's template ({template}) "
-        f"expects {expected!r}. This out dir was very likely gn-gen'd with a "
-        f"manual override (e.g. to work around TD-026's KMS assert) -- "
+        f"{args_gn} {found}, but the {channel.name!r} channel's template "
+        f"({template}) expects {expected!r}. This out dir was very likely "
+        f"gn-gen'd for another channel or with a manual override (e.g. to work "
+        f"around TD-026's KMS assert) -- "
         f"ensure_gn_gen() silently no-ops whenever args.gn already exists, so "
         f"that override otherwise persists across every future run against "
         f"this out dir.")

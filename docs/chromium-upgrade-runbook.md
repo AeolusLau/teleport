@@ -295,12 +295,12 @@ uv run python scripts/package.py --channel canary   # 不加 --distribute
 
 **已知的、与本次升级无关的预置阻断项——不要在没确认前提的情况下尝试绕过它:**
 
-`gn gen` 对 release 配置会命中一个**故意设计的 fail-closed 断言**(`src/teleport.gni:34-36`):`teleport_use_release_endpoints=true` 要求 `teleport_release_policy_key_is_real=true`,而生产 KMS 根密钥**按设计从不入库**。这不是本次升级引入的问题——`main` 分支的 `src/gn/args/release.mac.gn` 与本分支在这个文件上**零差异**,该断言随 commit `1adc884`(纳管强制锁 Layer 1 特性)一起落地,而检出里最后一次成功的 release 产物早于这次提交。**结论:自那次提交合入以来,`main` 上就没有能构建出正式 release 的能力,只是因为期间没有发过版所以没人注意到。**
+`gn gen` 对 release 配置会命中一个**故意设计的 fail-closed 断言**(`src/teleport.gni`):`teleport_deployment_env="release"` 要求 `teleport_release_policy_key_is_real=true`,而生产 KMS 根密钥**按设计从不入库**。这不是本次升级引入的问题——`main` 分支的 `src/gn/args/release.mac.gn` 与本分支在这个文件上**零差异**,该断言随 commit `1adc884`(纳管强制锁 Layer 1 特性)一起落地,而检出里最后一次成功的 release 产物早于这次提交。**结论:自那次提交合入以来,`main` 上就没有能构建出正式 release 的能力,只是因为期间没有发过版所以没人注意到。**
 
-处置方式(本次做法,供参考):**没有**设置 `teleport_release_policy_key_is_real=true`——那样做等于烤进一把占位密钥,恰好是这道防线存在的目的要阻止的事。改为在 `gn gen` 的 `--args` 里额外加一行覆盖(不改动已提交的 `release.mac.gn` 文件本身),只把 `teleport_use_release_endpoints` 设为 `false`,以验证本次升级需要证明的部分——PGO、Sparkle 链接、签名、公证、dmg 出包在 M151 上依然工作:
+处置方式(本次做法,供参考):**没有**设置 `teleport_release_policy_key_is_real=true`——那样做等于烤进一把占位密钥,恰好是这道防线存在的目的要阻止的事。改为使用**具名逃生口** `teleport_policy_key_placeholder_ack=true`(2026-08-10 引入,取代当年那种临时覆盖):它放行构建,但把 `TeleportUnpublishable` 烙进产物 Info.plist,并让 `package.py --distribute` 硬拒。这样「我知道这是占位密钥、只想验证流水线机制」成为一个显式、可 grep、且自我解除的动作,而不是一条留在 args.gn 里没人记得的覆盖——TD-026 正是后者的后果:
 
 ```bash
-gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn") teleport_use_release_endpoints=false'
+gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn") teleport_policy_key_placeholder_ack=true'
 ```
 
 **这样产出的 .app/dmg 不是可发布的 canary 包**(内置的是 dev 端点),**绝不能当作正式产物报告**。生产 KMS 密钥问题本身超出一次基线升级的范围,已登记为 `docs/tech-debt.md` 的独立条目,需要走密钥管理的正常流程解决,不属于升级 runbook 能处理的事。
@@ -437,7 +437,7 @@ $TELEPORT_CHROMIUM_DIR                                       # 仍可整体覆�
 | G2(编译到绿) | PASS(`teleport_unittests` 目标可编,全量 `chrome` 构建成功) |
 | G3(单测绿) | PASS —— `teleport_unittests` 136/136;`UserAgentUtilsTest` 23/23(`components_unittests --single-process-tests`);`BrowserDMTokenStorageMacTest` 5/5(`unit_tests`);`NetworkServiceProxyDelegateTest` 3/3(`services_unittests`);Track T 转发代理 4 个用例 12/12(`net_unittests`);`uv run pytest` 288/288,0 skipped |
 | G4(GUI 冒烟) | **PARTIAL**——自动化可核实项已通过(UA 引擎版本正确、纳管后端可达);人工逐项点击验证因 macOS keychain 弹窗阻塞自动化流程,按用户指示推迟,不得报告为 PASS |
-| G5(release 构建 + 出包) | **PARTIAL PASS**——release 构建(带 `teleport_use_release_endpoints=false` 的机制验证包,非可发布 canary)已**成功完成**:解析后的 args 已核实 `chrome_pgo_phase=2`(PGO 真正生效)、`teleport_enable_updater=true`、`is_official_build=true`、`enable_update_notifications=true`,产出 `Teleport.app`(版本 `0.2.0.0`),`Sparkle.framework` 以真实 3.0M 目录(而非会在 dmg 里变死链的符号链接)嵌入。签名 / 公证 / 样式 dmg 三步因需要人工在场处理 keychain 弹窗而未做。真正可发布的 release 因生产 KMS 密钥缺失而结构性受阻,登记为独立技术债(TD-026),不属于升级本身的范畴 |
+| G5(release 构建 + 出包) | **PARTIAL PASS**——release 构建(机制验证包,非可发布 canary;当年用 `teleport_use_release_endpoints=false`,现改用 `teleport_policy_key_placeholder_ack=true`)已**成功完成**:解析后的 args 已核实 `chrome_pgo_phase=2`(PGO 真正生效)、`teleport_enable_updater=true`、`is_official_build=true`、`enable_update_notifications=true`,产出 `Teleport.app`(版本 `0.2.0.0`),`Sparkle.framework` 以真实 3.0M 目录(而非会在 dmg 里变死链的符号链接)嵌入。签名 / 公证 / 样式 dmg 三步因需要人工在场处理 keychain 弹窗而未做。真正可发布的 release 因生产 KMS 密钥缺失而结构性受阻,登记为独立技术债(TD-026),不属于升级本身的范畴 |
 
 **读这张表时的注意事项**:「dry-run 估算冲突」与「真实 rebase 冲突」两行刻意并排放,提醒下一次升级的人不要把前者当后者的预测值用;「全量构建规模」与「真正需要修复的文件数」两行说明 overlay 引用的 36 个已变动上游头文件是**不确定性上限**而不是实际损伤的量级,过度悲观地预估工作量同样会误导排期。
 

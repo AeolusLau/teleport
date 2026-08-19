@@ -1,0 +1,155 @@
+diff --git a/components/policy/core/common/cloud/cloud_policy_validator.cc b/components/policy/core/common/cloud/cloud_policy_validator.cc
+index f41974db1e593..009638301a964 100644
+--- a/components/policy/core/common/cloud/cloud_policy_validator.cc
++++ b/components/policy/core/common/cloud/cloud_policy_validator.cc
+@@ -22,6 +22,7 @@
+ #include "build/build_config.h"
+ #include "cloud_policy_validator.h"
+ #include "components/policy/core/common/cloud/cloud_policy_constants.h"
++#include "teleport/teleport_policy_buildflags.h"
+ #include "components/policy/core/common/cloud/cloud_policy_util.h"
+ #include "components/policy/core/common/policy_logger.h"
+ #include "components/policy/core/common/policy_switches.h"
+@@ -302,32 +303,39 @@ CloudPolicyValidatorBase::CloudPolicyValidatorBase(
+       dm_token_option_(DM_TOKEN_REQUIRED),
+       device_id_option_(DEVICE_ID_REQUIRED),
+       canonicalize_user_(false),
+-      verification_key_(GetCurrentPolicyVerificationKey()),
++      verification_keys_(GetCurrentPolicyVerificationKeys()),
+       allow_key_rotation_(false),
+       background_task_runner_(background_task_runner) {}
+ 
+ // static
+-std::optional<std::string>
+-CloudPolicyValidatorBase::GetCurrentPolicyVerificationKey() {
++std::vector<std::string>
++CloudPolicyValidatorBase::GetCurrentPolicyVerificationKeys() {
+   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+ #if BUILDFLAG(IS_CHROMEOS)
+-  // Empty `verification_key_` is only allowed on Chrome OS test image when
+-  // policy key verification is disabled via command line flag.
++  // An empty `verification_keys_` is only allowed on a Chrome OS test image
++  // when policy key verification is disabled via command line flag.
+   if (command_line->HasSwitch(switches::kDisablePolicyKeyVerification)) {
+     base::SysInfo::CrashIfChromeOSNonTestImage();
+-    // GetPolicyVerificationKey() returns a non-empty string.
+-    return std::nullopt;
++    // GetPolicyVerificationKeys() is otherwise never empty.
++    return {};
+   }
+ #endif  // BUILDFLAG(IS_CHROMEOS)
++#if !BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
++  // Teleport: compiled out of release builds. The switch is guarded by
++  // CHECK_IS_TEST(), and g_this_is_a_test is permanently false in a shipped
++  // binary, so passing it does not swap the anchor -- it CHECK-fails on the
++  // first policy load. That makes it a one-line local denial of service in a
++  // managed browser, which is reason enough for the code not to exist here.
+   if (command_line->HasSwitch(switches::kPolicyVerificationKey)) {
+     CHECK_IS_TEST();
+     std::string decoded_key;
+     CHECK(base::Base64Decode(
+         command_line->GetSwitchValueASCII(switches::kPolicyVerificationKey),
+         &decoded_key));
+-    return decoded_key;
++    return {decoded_key};
+   }
+-  return GetPolicyVerificationKey();
++#endif  // !BUILDFLAG(TELEPORT_ENV_IS_RELEASE)
++  return GetPolicyVerificationKeys();
+ }
+ 
+ // static
+@@ -442,18 +450,17 @@ void CloudPolicyValidatorBase::RunChecks() {
+ // |new_public_key| in the policy blob.
+ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
+ #if BUILDFLAG(IS_CHROMEOS)
+-  // Skip verification if the key is empty (disabled via command line).
+-  if (!verification_key_) {
++  // Skip verification if the key set is empty (disabled via command line).
++  if (verification_keys_.empty()) {
+     return true;
+   }
+ #endif  // BUILDFLAG(IS_CHROMEOS)
+ 
+   if (policy_->has_new_public_key_verification_data() &&
+       policy_->has_new_public_key_verification_data_signature() &&
+-      VerifySignature(policy_->new_public_key_verification_data(),
+-                      verification_key_.value(),
+-                      policy_->new_public_key_verification_data_signature(),
+-                      em::PolicyFetchRequest::SHA256_RSA) &&
++      AnyKeyVerifies(
++          policy_->new_public_key_verification_data(),
++          policy_->new_public_key_verification_data_signature()) &&
+       CheckPublicKeyVerificationData(
+           policy_->new_public_key_verification_data(),
+           policy_->new_public_key())) {
+@@ -483,8 +490,8 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
+     return false;
+   }
+ 
+-  if (!CheckVerificationKeySignatureDeprecated(
+-          policy_->new_public_key(), verification_key_.value(),
++  if (!AnyKeyVerifiesDeprecated(
++          policy_->new_public_key(),
+           policy_->new_public_key_verification_signature_deprecated())) {
+     UMA_HISTOGRAM_ENUMERATION(kMetricKeySignatureVerification,
+                               MetricKeySignatureVerification::kFailed);
+@@ -503,6 +510,29 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
+   return true;
+ }
+ 
++bool CloudPolicyValidatorBase::AnyKeyVerifies(const std::string& data,
++                                              const std::string& signature) {
++  for (const std::string& key : verification_keys_) {
++    if (VerifySignature(data, key, signature,
++                        em::PolicyFetchRequest::SHA256_RSA)) {
++      return true;
++    }
++  }
++  return false;
++}
++
++bool CloudPolicyValidatorBase::AnyKeyVerifiesDeprecated(
++    const std::string& key_to_verify,
++    const std::string& signature) {
++  for (const std::string& key : verification_keys_) {
++    if (CheckVerificationKeySignatureDeprecated(key_to_verify, key,
++                                                signature)) {
++      return true;
++    }
++  }
++  return false;
++}
++
+ bool CloudPolicyValidatorBase::CheckVerificationKeySignatureDeprecated(
+     const std::string& key,
+     const std::string& verification_key,
+@@ -630,15 +660,13 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckInitialKey() {
+ 
+ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckCachedKey() {
+ #if BUILDFLAG(IS_CHROMEOS)
+-  // Skip verification if the key is empty (disabled via command line).
+-  if (!verification_key_) {
++  // Skip verification if the key set is empty (disabled via command line).
++  if (verification_keys_.empty()) {
+     return VALIDATION_OK;
+   }
+ #endif  // BUILDFLAG(IS_CHROMEOS)
+ 
+-  if (VerifySignature(new_cached_key_, verification_key_.value(),
+-                      new_cached_key_signature_,
+-                      em::PolicyFetchRequest::SHA256_RSA) &&
++  if (AnyKeyVerifies(new_cached_key_, new_cached_key_signature_) &&
+       CheckPublicKeyVerificationData(new_cached_key_, cached_key_)) {
+     UMA_HISTOGRAM_ENUMERATION(kMetricKeySignatureVerification,
+                               MetricKeySignatureVerification::kSuccess);
+@@ -653,8 +681,7 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckCachedKey() {
+       << PolicyTypeLogPrefix(policy_type_, settings_entity_id_)
+       << "Cached key new signature verification failed";
+ 
+-  if (!CheckVerificationKeySignatureDeprecated(
+-          cached_key_, verification_key_.value(), cached_key_signature_)) {
++  if (!AnyKeyVerifiesDeprecated(cached_key_, cached_key_signature_)) {
+     LOG_POLICY(ERROR, POLICY_FETCHING)
+         << PolicyTypeLogPrefix(policy_type_, settings_entity_id_)
+         << "[Deprecated] Cached key signature verification failed";

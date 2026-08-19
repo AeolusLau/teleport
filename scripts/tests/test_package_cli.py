@@ -60,13 +60,17 @@ def _stub_distributable(monkeypatch, order, *, distribute):
     """Stub every side-effecting call package.main makes for a canary run,
     recording call order. Returns nothing; assertions live in the test."""
     monkeypatch.setattr(package, "read_teleport_version", lambda: "1.2.3")
+    monkeypatch.setattr(package._config, "assert_channel_keys_distinct", lambda p: None)
+    monkeypatch.setattr(package._config, "assert_channel_urls_self_consistent", lambda p, c: None)
     monkeypatch.setattr(package, "build",
                         lambda out, ch, distributing: order.append(
                             ("build", out, ch.name, distributing)))
     cfg = {
-        "public_ed_key": "k", "feed_url": "https://h/appcast.xml",
+        "public_ed_key": "k", "ed_key_account": "ed25519", "feed_url": "https://h/appcast.xml",
         "notary_profile": "p", "codesign_identity": "Developer ID Application: X (T)",
         "download_base_url": "https://h/dl/", "oss_upload_target": "oss://b/x/",
+        "oss_endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "oss_region": "cn-hangzhou",
         "git_remote": "origin",
     }
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: dict(cfg))
@@ -74,6 +78,12 @@ def _stub_distributable(monkeypatch, order, *, distribute):
                         lambda app, v: order.append(("assert_baked_version", v)))
     monkeypatch.setattr(package._package, "inject_sparkle_keys",
                         lambda app, c, ch: order.append(("inject_sparkle_keys", ch)))
+    # Both stamps shell out to plutil against a real Info.plist; these tests use
+    # a fake app bundle, so record the calls instead of performing them.
+    monkeypatch.setattr(package._package, "stamp_source_revision",
+                        lambda app: order.append(("stamp_source_revision",)) or "abc123")
+    monkeypatch.setattr(package._package, "stamp_unpublishable",
+                        lambda app, out: False)
     monkeypatch.setattr(package._package, "stage_channel_icons",
                         lambda app, ch: order.append(("stage_icons", ch)))
     monkeypatch.setattr(package._package, "sign_app",
@@ -87,13 +97,13 @@ def _stub_distributable(monkeypatch, order, *, distribute):
                         lambda: order.append(("assert_clean_tree",)))
     monkeypatch.setattr(package._publish, "fetch_live_appcast", lambda url: None)
     monkeypatch.setattr(package._publish, "assert_not_published",
-                        lambda v, xml: order.append(("assert_not_published", v)))
+                        lambda v, ch, xml: order.append(("assert_not_published", v, ch)))
     monkeypatch.setattr(package._publish, "generate_appcast",
-                        lambda ud, base, keep: order.append(("generate_appcast", keep)))
+                        lambda ud, base, keep, acct: order.append(("generate_appcast", keep, acct)))
     monkeypatch.setattr(package._publish, "upload_to_oss",
-                        lambda ud, target: order.append(("upload", target)))
+                        lambda ud, target, ep, rg: order.append(("upload", target)))
     monkeypatch.setattr(package._publish, "tag_and_push",
-                        lambda v, remote: order.append(("tag_and_push", v, remote)))
+                        lambda v, ch, remote: order.append(("tag_and_push", v, ch, remote)))
 
     # package-state cache: default to "no reuse" so existing tests are unaffected.
     monkeypatch.setattr(package._package_state, "app_content_digest",
@@ -123,8 +133,8 @@ def test_distribute_runs_guards_before_build_and_tags_after_upload(monkeypatch, 
     assert names.index("inject_sparkle_keys") < names.index("sign")
     # tag strictly after upload; appcast uses the dmg name as keep
     assert names.index("upload") < names.index("tag_and_push")
-    assert ("generate_appcast", "Teleport-1.2.3.dmg") in order
-    assert ("tag_and_push", "1.2.3", "origin") in order
+    assert ("generate_appcast", "Teleport-1.2.3.dmg", "ed25519") in order
+    assert ("tag_and_push", "1.2.3", "canary", "origin") in order
     assert ("assert_baked_version", "1.2.3") in order
     assert ("inject_sparkle_keys", "canary") in order
     assert ("build", "out/mac/arm64/release", "canary", True) in order  # distributing=True forwarded
@@ -343,18 +353,26 @@ def test_skip_build_canary_skips_build_but_still_signs(monkeypatch, tmp_path):
 
 def test_distribute_refuses_against_a_real_stale_args_gn_override(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(package, "read_teleport_version", lambda: "1.2.3")
+    monkeypatch.setattr(package._config, "assert_channel_keys_distinct", lambda p: None)
+    monkeypatch.setattr(package._config, "assert_channel_urls_self_consistent", lambda p, c: None)
     monkeypatch.setattr(package._build, "chromium_src", lambda: tmp_path)
     monkeypatch.setattr(package, "chromium_src", lambda: tmp_path)
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: {
-        "public_ed_key": "k", "feed_url": "https://h/appcast.xml",
+        "public_ed_key": "k", "ed_key_account": "ed25519", "feed_url": "https://h/appcast.xml",
         "notary_profile": "p", "codesign_identity": "Developer ID Application: X (T)",
         "download_base_url": "https://h/dl/", "oss_upload_target": "oss://b/x/",
+        "oss_endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "oss_region": "cn-hangzhou",
         "git_remote": "origin",
     })
     monkeypatch.setattr(package._publish, "assert_on_main", lambda: None)
     monkeypatch.setattr(package._publish, "assert_clean_tree", lambda: None)
     monkeypatch.setattr(package._publish, "fetch_live_appcast", lambda url: None)
-    monkeypatch.setattr(package._publish, "assert_not_published", lambda v, xml: None)
+    monkeypatch.setattr(package._publish, "assert_not_published", lambda v, ch, xml: None)
+    # Stub the effective-value lookup rather than letting it shell out to gn:
+    # this test asserts the guard refuses BEFORE any build subprocess runs, and
+    # a real gn invocation would both land in `calls` and require a checkout.
+    monkeypatch.setattr(package._build, "effective_gn_arg", lambda out, arg: "dev")
 
     out = "out/mac/arm64/release"
     (tmp_path / out).mkdir(parents=True)
@@ -363,12 +381,114 @@ def test_distribute_refuses_against_a_real_stale_args_gn_override(monkeypatch, t
     # distributability-keyed guard did.
     (tmp_path / out / "args.gn").write_text(
         'import("//teleport/gn/args/release.mac.gn")\n'
-        'teleport_use_release_endpoints = false\n')
+        'teleport_deployment_env = "dev"\n')
 
     calls = []
     monkeypatch.setattr(package._build.subprocess, "run",
                         lambda argv, **kw: calls.append(argv))
 
-    with pytest.raises(SystemExit, match="teleport_use_release_endpoints"):
+    with pytest.raises(SystemExit, match="teleport_deployment_env"):
         package.main(["--channel", "canary", "--distribute"])
     assert calls == []  # refused before any autoninja/gn subprocess ran
+
+
+def test_distribute_refuses_a_placeholder_ack_build(monkeypatch, tmp_path):
+    """A build made through the placeholder escape hatch must never publish.
+
+    The hatch exists so that exercising the pipeline against placeholder roots
+    is explicit and self-disarming. If --distribute still worked against it, the
+    hatch would just be the TD-026 override with extra steps -- and TD-026 is
+    precisely the pattern of a one-off override outliving the reason for it.
+    """
+    monkeypatch.setattr(package, "read_teleport_version", lambda: "1.2.3")
+    monkeypatch.setattr(package._config, "assert_channel_keys_distinct", lambda p: None)
+    monkeypatch.setattr(package._config, "assert_channel_urls_self_consistent", lambda p, c: None)
+    monkeypatch.setattr(package._build, "chromium_src", lambda: tmp_path)
+    monkeypatch.setattr(package, "chromium_src", lambda: tmp_path)
+    monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: {
+        "public_ed_key": "k", "ed_key_account": "ed25519", "feed_url": "https://h/appcast.xml",
+        "notary_profile": "p", "codesign_identity": "Developer ID Application: X (T)",
+        "download_base_url": "https://h/dl/", "oss_upload_target": "oss://b/x/",
+        "oss_endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "oss_region": "cn-hangzhou",
+        "git_remote": "origin",
+    })
+    monkeypatch.setattr(package._build, "effective_gn_arg",
+                        lambda out, arg: "true" if "placeholder_ack" in arg else "release")
+    calls = []
+    monkeypatch.setattr(package._build.subprocess, "run",
+                        lambda argv, **kw: calls.append(argv))
+    with pytest.raises(SystemExit, match="placeholder_ack"):
+        package.main(["--channel", "canary", "--distribute"])
+    assert calls == []  # refused before any build subprocess ran
+
+
+def test_staging_may_publish_off_main_but_not_from_a_dirty_tree(monkeypatch, tmp_path):
+    """staging rehearses from feature branches, so the main-branch requirement
+    is release-only. The clean-tree requirement is NOT relaxed: a dirty tree
+    makes TeleportSourceRevision a lie, and that stamp is the only way to trace
+    a staging artifact back to source now that it carries no release tag."""
+    order = []
+    monkeypatch.setattr(package, "chromium_src", lambda: tmp_path)
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._build, "effective_gn_arg",
+                        lambda out, arg: "staging" if "env" in arg else "false")
+    package.main(["--channel", "staging", "--distribute"])
+    names = [c[0] for c in order]
+    assert "assert_on_main" not in names       # relaxed for staging
+    assert "assert_clean_tree" in names        # still required
+
+
+# --- Rehearsal mode --------------------------------------------------------
+#
+# A rehearsal exercises the REAL publish path -- that is its whole point, and
+# why it is a mode rather than a hand-run sequence of the same commands. It
+# differs from a publish in exactly one respect: it does not tag. Every guard
+# stays armed, because a rehearsal that skipped them would rehearse something
+# other than what publishing does.
+
+def test_rehearse_runs_the_publish_chain_but_does_not_tag(monkeypatch, tmp_path):
+    order = []
+    monkeypatch.setattr(package, "chromium_src", lambda: tmp_path)
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._build, "effective_gn_arg",
+                        lambda out, arg: "staging" if "env" in arg else "false")
+    package.main(["--channel", "staging", "--rehearse"])
+    names = [c[0] for c in order]
+    # The publish chain runs...
+    for step in ("assert_not_published", "generate_appcast", "upload"):
+        assert step in names, f"{step} must still run in a rehearsal"
+    # ...and the one irreversible, outward-facing step does not.
+    assert "tag_and_push" not in names
+
+
+def test_rehearse_arms_the_stale_args_guard_at_publish_strength(
+        monkeypatch, tmp_path):
+    """The guard must be told distributing=True during a rehearsal.
+
+    That keyword is what decides between refusing and merely warning. If a
+    rehearsal passed False it would sail past a stale out dir that a real
+    publish rejects -- rehearsing a path publishing does not take, which is
+    the one thing a rehearsal must never do.
+    """
+    order = []
+    monkeypatch.setattr(package, "chromium_src", lambda: tmp_path)
+    _stub_distributable(monkeypatch, order, distribute=True)
+    monkeypatch.setattr(package._build, "effective_gn_arg",
+                        lambda out, arg: "staging" if "env" in arg else "false")
+    package.main(["--channel", "staging", "--rehearse"])
+    # build() forwards `distributing` to ensure_gn_gen -> the stale-args guard,
+    # so this is where the strength is decided.
+    build_call = next(c for c in order if c[0] == "build")
+    assert build_call[-1] is True, f"rehearsal must build at publish strength: {build_call}"
+
+
+def test_rehearse_and_distribute_are_mutually_exclusive(monkeypatch):
+    with pytest.raises(SystemExit, match="--rehearse"):
+        package.main(["--channel", "staging", "--distribute", "--rehearse"])
+
+
+def test_rehearse_refuses_a_non_distributable_channel(monkeypatch):
+    """dev has no publish surface at all, so there is nothing to rehearse."""
+    with pytest.raises(SystemExit, match="not distributable"):
+        package.main(["--channel", "dev", "--rehearse"])

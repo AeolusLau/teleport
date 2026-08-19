@@ -220,10 +220,11 @@ class EnrollPageHandler : public enroll::mojom::PageHandler {
     } else if (!body) {
       status = EnrollStatus::kCannotConnect;
     } else {
-      const std::string root_key = policy::GetPolicyVerificationKey();
-      EnrollVerifyResult result = VerifyFetchedIdentity(
-          base::as_byte_span(*body), pending_domain_,
-          base::as_byte_span(root_key), base::Time::Now());
+      const std::vector<std::string> root_keys =
+          policy::GetPolicyVerificationKeys();
+      EnrollVerifyResult result =
+          VerifyFetchedIdentity(base::as_byte_span(*body), pending_domain_,
+                                root_keys, base::Time::Now());
       status = result.status;
       if (status == EnrollStatus::kSuccess) {
         pending_entry_ = std::move(result.entry);
