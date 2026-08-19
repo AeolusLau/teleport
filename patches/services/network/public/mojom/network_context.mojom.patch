@@ -1,5 +1,5 @@
 diff --git a/services/network/public/mojom/network_context.mojom b/services/network/public/mojom/network_context.mojom
-index 09da137f59543..a925aa0cad1af 100644
+index 09da137f59543..1b031e01d5222 100644
 --- a/services/network/public/mojom/network_context.mojom
 +++ b/services/network/public/mojom/network_context.mojom
 @@ -136,6 +136,14 @@ struct CustomProxyConfig {
@@ -17,3 +17,18 @@ index 09da137f59543..a925aa0cad1af 100644
  };
  
  // Observer of custom proxy connections, especially for when errors occur.
+@@ -147,9 +155,13 @@ interface CustomProxyConnectionObserver {
+   OnFallback(ProxyChain bad_chain, int32 net_error);
+ 
+   // Called when the response headers for the proxy tunnel request have been
+-  // received.
++  // received. `endpoint` is the authority the CONNECT was issued for, which the
++  // proxy chain alone cannot report -- without it an observer can see that a
++  // tunnel failed but not which origin it failed for. It is empty for callers
++  // that hold no destination (CONNECT-UDP / MASQUE).
+   OnTunnelHeadersReceived(ProxyChain proxy_chain,
+                           uint64 chain_index,
++                          HostPortPair endpoint,
+                           HttpResponseHeaders response_headers);
+ };
+ 

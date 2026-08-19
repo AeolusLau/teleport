@@ -1,0 +1,18 @@
+diff --git a/net/spdy/spdy_proxy_client_socket.cc b/net/spdy/spdy_proxy_client_socket.cc
+index 3963896271f13..e00d572ad998d 100644
+--- a/net/spdy/spdy_proxy_client_socket.cc
++++ b/net/spdy/spdy_proxy_client_socket.cc
+@@ -502,8 +502,11 @@ int SpdyProxyClientSocket::DoProcessResponseHeaders() {
+   next_state_ = STATE_PROCESS_RESPONSE_HEADERS_COMPLETE;
+ 
+   if (proxy_delegate_) {
+-    return proxy_delegate_->OnTunnelHeadersReceived(
+-        proxy_chain_, proxy_chain_index_, *response_.headers,
++    // See HttpProxyClientSocket::DoProcessResponseHeaders: the CONNECT's
++    // destination is what lets a delegate attribute a tunnel failure to an
++    // origin, and it is not recoverable from the proxy chain.
++    return proxy_delegate_->OnTunnelHeadersReceivedForEndpoint(
++        proxy_chain_, proxy_chain_index_, endpoint_, *response_.headers,
+         base::BindOnce(&SpdyProxyClientSocket::OnIOComplete,
+                        weak_factory_.GetWeakPtr()));
+   }

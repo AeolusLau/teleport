@@ -1,0 +1,19 @@
+diff --git a/net/http/http_proxy_client_socket.cc b/net/http/http_proxy_client_socket.cc
+index 2b864b051ffa3..3ba6352aab28f 100644
+--- a/net/http/http_proxy_client_socket.cc
++++ b/net/http/http_proxy_client_socket.cc
+@@ -476,8 +476,12 @@ int HttpProxyClientSocket::DoProcessResponseHeaders() {
+   next_state_ = STATE_PROCESS_RESPONSE_HEADERS_COMPLETE;
+ 
+   if (proxy_delegate_) {
+-    return proxy_delegate_->OnTunnelHeadersReceived(
+-        proxy_chain_, proxy_chain_index_, *response_.headers,
++    // The endpoint-carrying overload: `endpoint_` is the authority this CONNECT
++    // was issued for, without which a delegate can see that a tunnel failed but
++    // not which origin it failed for. Delegates that do not override it get the
++    // base class's forward to the endpoint-less OnTunnelHeadersReceived().
++    return proxy_delegate_->OnTunnelHeadersReceivedForEndpoint(
++        proxy_chain_, proxy_chain_index_, endpoint_, *response_.headers,
+         base::BindOnce(&HttpProxyClientSocket::OnIOComplete,
+                        weak_factory_.GetWeakPtr()));
+   }

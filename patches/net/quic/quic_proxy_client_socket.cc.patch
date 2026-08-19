@@ -1,0 +1,18 @@
+diff --git a/net/quic/quic_proxy_client_socket.cc b/net/quic/quic_proxy_client_socket.cc
+index 7ebbcf64e80c2..ebab91a4c086d 100644
+--- a/net/quic/quic_proxy_client_socket.cc
++++ b/net/quic/quic_proxy_client_socket.cc
+@@ -460,8 +460,11 @@ int QuicProxyClientSocket::DoProcessResponseHeaders() {
+   next_state_ = STATE_PROCESS_RESPONSE_HEADERS_COMPLETE;
+ 
+   if (proxy_delegate_) {
+-    return proxy_delegate_->OnTunnelHeadersReceived(
+-        proxy_chain_, proxy_chain_index_, *response_.headers,
++    // See HttpProxyClientSocket::DoProcessResponseHeaders: the CONNECT's
++    // destination is what lets a delegate attribute a tunnel failure to an
++    // origin, and it is not recoverable from the proxy chain.
++    return proxy_delegate_->OnTunnelHeadersReceivedForEndpoint(
++        proxy_chain_, proxy_chain_index_, endpoint_, *response_.headers,
+         base::BindOnce(&QuicProxyClientSocket::OnIOComplete,
+                        weak_factory_.GetWeakPtr()));
+   }

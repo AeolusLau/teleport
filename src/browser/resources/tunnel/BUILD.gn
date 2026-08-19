@@ -1,0 +1,44 @@
+# Copyright 2026 The Teleport Authors
+
+import("//ui/webui/resources/tools/build_webui.gni")
+
+# Tunnel diagnostics page (teleport://tunnel -> chrome://tunnel) resources: a Lit
+# (cr-elements) app, TS-compiled + grit-packed via the standard WebUI pipeline.
+# Generates the tunnel_resources map consumed by
+# //chrome/browser/ui/webui:teleport_tunnel.
+build_webui("build") {
+  grd_prefix = "tunnel"
+
+  static_files = [ "tunnel.html" ]
+
+  css_files = [ "tunnel_app.css" ]
+
+  # Plain ts_files, NOT web_component_files: the latter would derive a .html per
+  # component and run html_to_wrapper over it, while tunnel_app.html.ts is
+  # hand-written (same choice the enroll page made).
+  ts_files = [
+    "tunnel.ts",
+    "tunnel_app.ts",
+    "tunnel_app.html.ts",
+  ]
+
+  mojo_files_deps =
+      [ "//chrome/browser/ui/webui:teleport_tunnel_mojo_ts__generator" ]
+  mojo_files =
+      [ "$root_gen_dir/teleport/browser/webui/tunnel.mojom-webui.ts" ]
+
+  # Required for //third_party/lit/v3_0:build_ts to be able to list this target
+  # in its visibility allowlist: build_webui only leaves build_ts's visibility
+  # open in the composite branch.
+  ts_composite = true
+
+  ts_deps = [
+    "//third_party/lit/v3_0:build_ts",
+    "//ui/webui/resources/cr_components/color_change_listener:build_ts",
+    "//ui/webui/resources/cr_elements:build_ts",
+    "//ui/webui/resources/js:build_ts",
+    "//ui/webui/resources/mojo:build_ts",
+  ]
+
+  webui_context_type = "trusted"
+}

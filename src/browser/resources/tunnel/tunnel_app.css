@@ -1,0 +1,139 @@
+/* Copyright 2026 The Teleport Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file. */
+
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #import=//resources/cr_elements/cr_shared_style_lit.css.js
+ * #import=//resources/cr_elements/cr_shared_vars.css.js
+ * #scheme=relative
+ * #include=cr-shared-style-lit
+ * #css_wrapper_metadata_end */
+
+:host {
+  background-color: var(--color-sys-surface, var(--md-background-color));
+  box-sizing: border-box;
+  color: var(--cr-primary-text-color);
+  display: block;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.page {
+  margin: 0 auto;
+  max-width: 880px;
+}
+
+h1 {
+  color: var(--cr-primary-text-color);
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: var(--cr-secondary-text-color);
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0 0 20px;
+}
+
+.card {
+  background-color: var(--cr-card-background-color);
+  border-radius: 12px;
+  box-shadow: var(--cr-card-shadow);
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 20px 24px;
+}
+
+h2 {
+  color: var(--cr-primary-text-color);
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+dl {
+  display: grid;
+  gap: 8px 16px;
+  grid-template-columns: max-content 1fr;
+  margin: 0;
+}
+
+dt {
+  color: var(--cr-secondary-text-color);
+  font-size: 13px;
+}
+
+dd {
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+dl.meta {
+  border-top: var(--cr-separator-line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.empty {
+  color: var(--cr-secondary-text-color);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* The hard-stale banner: preserving a stale routing table is only safe while
+ * somebody can see that it is being preserved, so this must stand out. */
+.card.warning {
+  border-inline-start: 4px solid var(--color-sys-error,
+      var(--cr-fallback-color-error));
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+
+th {
+  border-bottom: var(--cr-separator-line);
+  color: var(--cr-secondary-text-color);
+  font-weight: 500;
+  padding: 6px 8px 6px 0;
+  text-align: start;
+}
+
+td {
+  border-bottom: var(--cr-separator-line);
+  overflow-wrap: anywhere;
+  padding: 6px 8px 6px 0;
+  vertical-align: top;
+}
+
+.tag {
+  background-color: var(--color-sys-neutral-container,
+      var(--cr-fallback-color-neutral-container));
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.note {
+  color: var(--cr-secondary-text-color);
+  font-size: 12px;
+  line-height: 18px;
+  margin-top: 12px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mono {
+  font-family: monospace;
+}

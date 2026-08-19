@@ -1,0 +1,104 @@
+// Copyright 2026 The Teleport Authors
+
+module teleport.tunnel.mojom;
+
+// One entry of the routing table currently in force, as adopted from the last
+// well-formed bind response.
+struct RoutableOrigin {
+  string host;
+  uint32 port;
+  // Structured, never a string convention: the whole point of moving off the
+  // content-settings "[*.]host" pattern (C-2).
+  bool include_subdomains;
+  // DIAGNOSTICS ONLY. The server marked this address as having no route row of
+  // its own; the edge computes its verdict over a COLLAPSED claimant set, so
+  // this flag can legitimately disagree with what actually happens. The page
+  // must never render it as "this will fail".
+  bool blocked;
+};
+
+// An entry the response carried that did not survive validation. Surfaced
+// rather than dropped: silently dropping entries is the C-2 defect this whole
+// change replaces.
+struct SkippedEntry {
+  string raw;
+  string reason;
+};
+
+// One CONNECT result observed on our edge chain.
+struct ConnectResult {
+  // Milliseconds since the Unix epoch; 0 means unset. Plain doubles rather than
+  // mojo_base.mojom.Time so the page needs no typemap to read them.
+  double time_ms;
+  // "host:port" the CONNECT was issued for. Without it a failure is visible but
+  // unattributable, which is the whole reason for the upstream ProxyDelegate
+  // patch that supplies it.
+  string authority;
+  int32 response_code;
+};
+
+// Load-time state of the profile's tunnel. Deliberately carries no cnf token
+// and nothing derived from one.
+struct TunnelState {
+  // The read-gate's two inputs, so a refused rebind can say which is missing.
+  bool enrolled;
+  bool auto_select_policy_present;
+
+  // The bind orchestration has begun for this profile.
+  bool started;
+  bool bind_in_flight;
+  // A cnf is currently held. Which one is never sent.
+  bool has_token;
+  bool config_pushed;
+
+  // All milliseconds since the Unix epoch; 0 means "never" / "not armed".
+  double last_bind_attempt_ms;
+  double last_bind_success_ms;
+  double token_expires_ms;
+  double next_refresh_ms;
+  double next_retry_ms;
+
+  string last_bind_error;
+
+  array<RoutableOrigin> routable_origins;
+  array<SkippedEntry> skipped_entries;
+  // No well-formed table has EVER been adopted. Distinct from having adopted an
+  // explicitly empty one; the page must word the two differently and must not
+  // guess why an empty one was sent.
+  bool routes_unavailable;
+  // The last successful bind carried no usable table, so the one above is one an
+  // earlier response vouched for. Must be shown prominently: preserving a stale
+  // table is only safe while somebody can see that it is being preserved.
+  bool routes_hard_stale;
+  string routes_hard_stale_reason;
+  // Server-supplied metadata. DIAGNOSTICS ONLY by the cross-repo contract.
+  bool routes_stale;
+  bool routes_truncated;
+  int32 routes_dropped;
+  string routes_digest;
+
+  string edge_host;
+  uint32 edge_port;
+  string gate_host;
+
+  // Newest first, bounded.
+  array<ConnectResult> recent_connects;
+};
+
+// Used by the tunnel diagnostics page (teleport://tunnel) to bootstrap
+// communication.
+interface PageHandlerFactory {
+  CreatePageHandler(pending_receiver<PageHandler> handler);
+};
+
+// Browser-side handler for the tunnel diagnostics page.
+interface PageHandler {
+  // One pull of everything the page may show. There is no push channel: the
+  // page is a snapshot view and re-reads on demand.
+  GetState() => (TunnelState state);
+
+  // Ask for an immediate re-bind. Returns whether the request was ACCEPTED:
+  // false when the read-gate is shut, while a bind is already outstanding, or
+  // within the service's minimum interval since the last accepted one.
+  Rebind() => (bool accepted);
+};

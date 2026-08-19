@@ -1,8 +1,16 @@
 diff --git a/net/base/proxy_delegate.h b/net/base/proxy_delegate.h
-index ff614802f7bb1..f4c3fcd7ac707 100644
+index ff614802f7bb1..10fc0b2f27290 100644
 --- a/net/base/proxy_delegate.h
 +++ b/net/base/proxy_delegate.h
-@@ -74,6 +74,16 @@ class NET_EXPORT ProxyDelegate {
+@@ -10,6 +10,7 @@
+ #include "base/types/expected.h"
+ #include "base/types/optional_ref.h"
+ #include "net/base/completion_once_callback.h"
++#include "net/base/host_port_pair.h"
+ #include "net/base/net_errors.h"
+ #include "net/base/net_export.h"
+ #include "net/base/network_anonymization_key.h"
+@@ -74,6 +75,16 @@ class NET_EXPORT ProxyDelegate {
    using OnBeforeTunnelRequestCallback =
        base::OnceCallback<void(base::expected<HttpRequestHeaders, Error>)>;
  
@@ -19,3 +27,46 @@ index ff614802f7bb1..f4c3fcd7ac707 100644
    // Called immediately before a proxy tunnel request is sent. Provides the
    // embedder an opportunity to add extra request headers to the request.
    // Returns:
+@@ -93,6 +104,30 @@ class NET_EXPORT ProxyDelegate {
+       size_t proxy_index,
+       OnBeforeTunnelRequestCallback callback) = 0;
+ 
++  // Called when the response headers for the proxy tunnel request have been
++  // received, carrying the tunnel's destination. `endpoint` is the host and
++  // port the CONNECT was issued for; the proxy-chain-only overload below cannot
++  // report it, which leaves an embedder unable to attribute a tunnel failure to
++  // the origin that caused it. `proxy_chain`, `proxy_index`,
++  // `response_headers`, `callback` and the return value all carry exactly the
++  // same contract as OnTunnelHeadersReceived() -- in particular, returning
++  // ERR_IO_PENDING promises that `callback` will be run exactly once,
++  // asynchronously, with the final error, and the CONNECT state machine stays
++  // suspended until it is.
++  //
++  // The default implementation (in the .cc, since the chromium-style plugin
++  // rejects a non-empty virtual body declared inline) forwards to
++  // OnTunnelHeadersReceived() and drops `endpoint`, so existing ProxyDelegate
++  // subclasses are unaffected. Forwarding `callback` unchanged is load-bearing:
++  // a default body that dropped it would hang every asynchronous delegate's
++  // CONNECT forever.
++  virtual Error OnTunnelHeadersReceivedForEndpoint(
++      const ProxyChain& proxy_chain,
++      size_t proxy_index,
++      const HostPortPair& endpoint,
++      const HttpResponseHeaders& response_headers,
++      CompletionOnceCallback callback);
++
+   // Called when the response headers for the proxy tunnel request have been
+   // received. Allows the delegate to override the net error code of the tunnel
+   // request. Returning OK causes the standard tunnel response handling to be
+@@ -100,6 +135,11 @@ class NET_EXPORT ProxyDelegate {
+   // we're receiving response headers from. Implementations should make sure
+   // they can trust said proxy before making decisions based on
+   // `response_headers`.
++  //
++  // Prefer overriding OnTunnelHeadersReceivedForEndpoint() above, which adds
++  // the tunnel's destination; this overload stays pure so that no existing
++  // subclass has to move. It remains the one the CONNECT-UDP (MASQUE) call site
++  // uses, since that socket holds no destination to pass.
+   virtual Error OnTunnelHeadersReceived(
+       const ProxyChain& proxy_chain,
+       size_t proxy_index,

@@ -1,5 +1,5 @@
 diff --git a/services/network/network_service_proxy_delegate.cc b/services/network/network_service_proxy_delegate.cc
-index 8075625c0c111..41625f5ad3951 100644
+index 8075625c0c111..c3d85eaab8b53 100644
 --- a/services/network/network_service_proxy_delegate.cc
 +++ b/services/network/network_service_proxy_delegate.cc
 @@ -157,6 +157,17 @@ void NetworkServiceProxyDelegate::OnFallback(const net::ProxyChain& bad_chain,
@@ -20,3 +20,48 @@ index 8075625c0c111..41625f5ad3951 100644
  base::expected<net::HttpRequestHeaders, net::Error>
  NetworkServiceProxyDelegate::OnBeforeTunnelRequest(
      const net::ProxyChain& proxy_chain,
+@@ -169,15 +180,43 @@ NetworkServiceProxyDelegate::OnBeforeTunnelRequest(
+   return extra_headers;
+ }
+ 
++net::Error NetworkServiceProxyDelegate::OnTunnelHeadersReceivedForEndpoint(
++    const net::ProxyChain& proxy_chain,
++    size_t proxy_index,
++    const net::HostPortPair& endpoint,
++    const net::HttpResponseHeaders& response_headers,
++    net::CompletionOnceCallback callback) {
++  return NotifyTunnelHeadersReceived(proxy_chain, proxy_index, endpoint,
++                                     response_headers);
++}
++
+ net::Error NetworkServiceProxyDelegate::OnTunnelHeadersReceived(
+     const net::ProxyChain& proxy_chain,
+     size_t proxy_index,
+     const net::HttpResponseHeaders& response_headers,
+     net::CompletionOnceCallback callback) {
++  // No destination to report: the only caller left on this overload is the
++  // CONNECT-UDP (MASQUE) socket, which holds none. Still notify, so that path
++  // is unchanged apart from an empty authority.
++  return NotifyTunnelHeadersReceived(proxy_chain, proxy_index,
++                                     net::HostPortPair(), response_headers);
++}
++
++net::Error NetworkServiceProxyDelegate::NotifyTunnelHeadersReceived(
++    const net::ProxyChain& proxy_chain,
++    size_t proxy_index,
++    const net::HostPortPair& endpoint,
++    const net::HttpResponseHeaders& response_headers) {
+   if (observer_) {
++    // Deliberately NOT gated on IsInProxyConfig(), matching OnFallback and
++    // differing from the two header-writing methods above: an observer is told
++    // about every proxy chain and filters for itself (as
++    // PrefetchProxyConfigurator does). Adding a gate here would change what
++    // existing observers see.
++    //
+     // Copy the response headers since mojo expects a ref counted object.
+     observer_->OnTunnelHeadersReceived(
+-        proxy_chain, proxy_index,
++        proxy_chain, proxy_index, endpoint,
+         base::MakeRefCounted<net::HttpResponseHeaders>(
+             response_headers.raw_headers()));
+   }

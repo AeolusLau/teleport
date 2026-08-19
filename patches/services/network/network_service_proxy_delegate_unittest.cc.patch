@@ -1,8 +1,29 @@
 diff --git a/services/network/network_service_proxy_delegate_unittest.cc b/services/network/network_service_proxy_delegate_unittest.cc
-index 6f533552a44c9..a1ee57c10369a 100644
+index 6f533552a44c9..220923507780d 100644
 --- a/services/network/network_service_proxy_delegate_unittest.cc
 +++ b/services/network/network_service_proxy_delegate_unittest.cc
-@@ -165,6 +165,34 @@ TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToTunnelRequest) {
+@@ -50,6 +50,7 @@ MATCHER_P2(Contain,
+ struct HeadersReceived {
+   net::ProxyChain proxy_chain;
+   uint64_t chain_index;
++  net::HostPortPair endpoint;
+   scoped_refptr<net::HttpResponseHeaders> response_headers;
+ };
+ 
+@@ -73,10 +74,11 @@ class TestCustomProxyConnectionObserver
+   }
+   void OnTunnelHeadersReceived(const net::ProxyChain& proxy_chain,
+                                uint64_t chain_index,
++                               const net::HostPortPair& endpoint,
+                                const scoped_refptr<net::HttpResponseHeaders>&
+                                    response_headers) override {
+     headers_received_ =
+-        HeadersReceived{proxy_chain, chain_index, response_headers};
++        HeadersReceived{proxy_chain, chain_index, endpoint, response_headers};
+   }
+ 
+  private:
+@@ -165,6 +167,34 @@ TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToTunnelRequest) {
    EXPECT_THAT(result.value(), Contain("connect", "baz"));
  }
  
@@ -37,3 +58,53 @@ index 6f533552a44c9..a1ee57c10369a 100644
  TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxySuccessHttpProxy) {
    auto config = mojom::CustomProxyConfig::New();
    config->rules.ParseFromString("http=foo");
+@@ -493,17 +523,46 @@ TEST_F(NetworkServiceProxyDelegateTest, OnTunnelHeadersReceivedObserved) {
+   auto delegate = CreateDelegate(std::move(config));
+ 
+   EXPECT_FALSE(TestObserver()->HeadersReceivedArgs());
+-  EXPECT_EQ(net::OK,
+-            delegate->OnTunnelHeadersReceived(proxy_chain, /*chain_index=*/2,
+-                                              *headers, base::DoNothing()));
++  EXPECT_EQ(net::OK, delegate->OnTunnelHeadersReceivedForEndpoint(
++                         proxy_chain, /*chain_index=*/2,
++                         net::HostPortPair("app.corp.example", 443), *headers,
++                         base::DoNothing()));
+   RunUntilIdle();
+   ASSERT_TRUE(TestObserver()->HeadersReceivedArgs());
+   EXPECT_EQ(TestObserver()->HeadersReceivedArgs()->proxy_chain, proxy_chain);
+   EXPECT_EQ(TestObserver()->HeadersReceivedArgs()->chain_index, 2UL);
++  // The tunnel's destination reaches the observer. Without it an observer can
++  // see that a CONNECT failed but not which origin it failed for.
++  EXPECT_EQ(TestObserver()->HeadersReceivedArgs()->endpoint,
++            net::HostPortPair("app.corp.example", 443));
+   // Compare raw header strings since the headers pointer is copied.
+   EXPECT_EQ(
+       TestObserver()->HeadersReceivedArgs()->response_headers->raw_headers(),
+       headers->raw_headers());
+ }
+ 
++// The endpoint-less overload is the one the CONNECT-UDP (MASQUE) call site
++// still uses. It must keep notifying -- just with an empty authority -- rather
++// than silently dropping the notification.
++TEST_F(NetworkServiceProxyDelegateTest,
++       OnTunnelHeadersReceivedWithoutEndpointStillObserved) {
++  net::ProxyChain proxy_chain(net::ProxyServer::SCHEME_HTTP,
++                              net::HostPortPair("proxy1.com", 80));
++  scoped_refptr<net::HttpResponseHeaders> headers =
++      base::MakeRefCounted<net::HttpResponseHeaders>(
++          "HTTP/1.1 200\nHello: World\n\n");
++
++  auto config = mojom::CustomProxyConfig::New();
++  config->rules.ParseFromString("http=foo");
++  auto delegate = CreateDelegate(std::move(config));
++
++  EXPECT_EQ(net::OK,
++            delegate->OnTunnelHeadersReceived(proxy_chain, /*chain_index=*/0,
++                                              *headers, base::DoNothing()));
++  RunUntilIdle();
++  ASSERT_TRUE(TestObserver()->HeadersReceivedArgs());
++  EXPECT_EQ(TestObserver()->HeadersReceivedArgs()->proxy_chain, proxy_chain);
++  EXPECT_TRUE(TestObserver()->HeadersReceivedArgs()->endpoint.IsEmpty());
++}
++
+ }  // namespace network

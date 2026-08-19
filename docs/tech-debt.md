@@ -453,6 +453,8 @@
 ## TD-TUNNEL-UNITTEST-WIRING · P1d Track T tunnel 单测在 teleport_unittests 里不可编/不可跑 — ✅ 完全解决(2026-07-27,4/4 组真跑真过)
 
 - **登记日期**:2026-07-26 · **优先级**:P2(测试覆盖缺口;client 构建与运行不受影响) · **结清日期**:2026-07-27
+> **符号名已过期(2026-08-16 补注,勿照抄)**:下面两处提到的 `DeriveRoutableOrigins` **已不存在**——A 组把路由表从 `AutoSelectCertificateForUrls` 策略推导改为直接解析 bind 响应,该函数随之删除(commit `10815e5`),替代者是 `ParseRoutableOrigins`。**本条目的结论(source_set 拆分方案有效、`teleport_unittests` 可链接)完全不变**,过期的只是当年那两个函数的名字。`:teleport_tunnel_logic` 现在承载的是 `ParseRoutableOrigins` / `BuildTunnelProxyConfig` / `IsEdgeProxyChain` / `TunnelStateSnapshotToDebugJson`、诊断页的两个 seam(`SetTunnelStateProvider` / `SetTunnelRebindRequester`),以及跨仓字节预算常量 `kMaxBindBodyBytes` / `kServerRoutesBudgetBytes`。**这条约束仍然是活的纪律**:任何新的纯逻辑都必须落在 `teleport_tunnel_logic`,不得写进 `teleport_tunnel_service.cc`——后者经 `patches/chrome/browser/BUILD.gn.patch` 编进 `chrome/browser`,轻量套件链不到它的符号。以下按原样保留 2026-07-27 的记录。
+
 - **已解决 · 纯逻辑三组(轻量 `teleport_unittests`)**:把两个纯 free function(`DeriveRoutableOrigins`/`BuildTunnelProxyConfig`)从 `teleport_tunnel_service.{h,cc}` 抽进**独立轻量 source_set `:teleport_tunnel_logic`**(`teleport_tunnel_logic.{h,cc}`,只依赖 //base+//net+//services/network mojom+//url)。三组测试(`RoutesDeriver`×2 + `ProxyConfig`)搬入 `teleport_tunnel_logic_unittest.cc` 接进 `teleport_unittests`。**零 chrome/browser patch 改动**:`:teleport_tunnel_logic` 设为 `:teleport` 的 `public_dep`,chrome/browser(已 `deps += "//teleport"`)经传递链接。实证:`teleport_unittests` 128 测试绿 + 增量 `chrome` 构建 `libchrome_dll.dylib` 重链 `nm` 确认含两符号。
 - **已解决 · BindClient fixture 五组(重型 `unit_tests`)**:`TeleportTunnelBindClientTest`(5 个测试:单跳 bind 无 Authorization、8min 刷新环重铸+重推、刷新失败复用 backoff、重启自启、未纳管不自启)需完整 `TeleportTunnelService`(编在 chrome/browser)+ content/chrome/network test_support,不能进轻量 `teleport_unittests`。改经 `patches/chrome/test/BUILD.gn.patch` **接进 Chromium 既有的 `unit_tests`**(那里本就链 chrome/browser + 全 test_support;补 `//teleport` dep 供测试 include teleport 头)。首跑逮到 1 个**测试自身 bug**:auto-start 测试用 `profile_.GetPrefs()->SetList(kManagedAutoSelectCertificateForUrls,…)`(user store)触发上游 `content_settings::PolicyProvider::DCHECK(!HasUserSetting())` 崩溃——策略 pref 须经 **managed store**,改用 `GetTestingPrefService()->SetManagedPref` 修复。**5/5 全过**。
 - **顺带补丁安全验证(用户诉求)**:借 `unit_tests` 已构建,定向跑我们 ~13 个行为补丁文件的上游覆盖套件(181 测试)。**全绿,除** `BrowserDMTokenStorageMacTest.{SaveDMToken,DeleteDMToken}` 2 个失败——根因 = 我们 `browser_dm_token_storage_mac.mm` 补丁**有意**把 DM token 存储目录从 `Google/Chrome Cloud Enrollment` 挪到 `teleport::kDmTokenStorageDir`(`Teleport/Cloud Enrollment/`),上游测试算旧路径故失败(**有意分叉,非回归**;真机 enrollment 一直正常)。处置:`patches/chrome/browser/policy/browser_dm_token_storage_mac_unittest.cc.patch` 把测试常量 fork 到 `teleport::kDmTokenStorageDir`(实现同款,路径按构造相等)→ DM-token 套件 5/5 转绿。**结论:已跑的上游套件里,我们的补丁除这一处有意路径分叉外均不破坏上游预期。**
@@ -473,3 +475,86 @@
 - **运行坑(必记)**:① `components_unittests` 含未实例化参数化套件(autofill,与我们无关)使 `base::TestLauncher` **abort 全部测试**——CI 必须 `--single-process-tests`(或修那些 autofill 套件);② `unit_tests` 首次构建编 ~1366 个测试源(数十分钟),`components_unittests` 类似——CI 需缓存 out 目录或接受首建成本;③ 定向跑用 `--gtest_filter`(只减运行时,不减构建)。
 - **影响**:纯 CI 覆盖缺口。**当前补丁已人工定向验证零回归**;缺的是自动化 + 全量基线。
 - **关键引用**:本轮 filter 见 `TD-TUNNEL-UNITTEST-WIRING`(unit_tests 侧)+ commit `cd3f11f`(components 侧);构建配方 `PATH=<depot_tools>:$PATH autoninja -C out/mac/arm64/dev <unit_tests|components_unittests>`。
+
+## TD-OVERLAY-GN-CHECK-VIOLATIONS · 本树过不了 `gn check`(既有 overlay 违规,28 处 / 19 文件)— 📌 待排期(P2)
+
+- **登记日期**:2026-08-16(A 组 Task 13 顺带发现) · **优先级**:P2(构建与运行不受影响;失去的是一层静态防护) · **结清日期**:未
+- **事实(实测,非推断)**:`gn check out/mac/arm64/dev --error-limit=500` **失败**,`EXIT=1`,**28 个 ERROR,分布在 19 个文件**。全部是**既有**违规,与 A 组的隧道改动无关——隧道相关文件(`teleport_tunnel_*`、`teleport_tunnel_ui.cc`)**一个都没出现在错误列表里**。
+- **两类形状**:
+  1. **打了补丁的上游文件 include `teleport/...` 头,但所在 target 没有 `//teleport` 依赖边**。命中最多的是 `chrome/browser/ui/webui/version/version_ui.cc`(4)、`chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc`(4)、`chrome/browser/prefs/browser_prefs.cc`(2)、`chrome/browser/net/profile_network_context_service.cc`(2)、`chrome/browser/ui/webui/signin/profile_picker_handler.cc`(2),外加 policy / signin / profiles 下十余个各 1 处。被 include 的头多数属于 `//chrome/browser:core`(经 `chrome/browser/BUILD.gn.patch` 把我们的 `.cc` 编进去),而 include 方在 `//chrome/browser/enterprise:impl`、`//chrome/browser/policy:impl`、`//chrome/browser/ui:ui`、`//chrome/browser/ui/webui/version:version` 等**同级或下游 target**里。
+  2. **我们自己的两个 overlay 源文件**同样违规:`teleport/browser/enterprise/teleport_voluntary_signin.cc`(从 `//chrome/browser/ui:ui` include `:core` 的头)、`teleport/browser/webui/teleport_enroll_ui.cc`(从 `//chrome/browser/ui/webui:teleport_enroll` include `//teleport:teleport_deployment_config`,依赖是 private 的)。
+- **为什么一直没暴露**:**`gn gen` 不跑 check**。`.gn` 里没有 `check_targets`,这只意味着「check 跑起来时全部在范围内」,不意味着它在跑。日常构建路径(`gn gen` + `autoninja`)从不执行它,所以这些违规可以无限期存在而构建始终绿。
+- **由此推翻的一条断言(已改)**:A 组计划初稿与两处代码注释曾写「gn check is on in this tree」,并以此作为「坏的依赖边会被抓住」的依据。**该依据不成立**。隧道诊断页的 callback seam 设计**结论仍然正确**,但正确的理由是:那条依赖边会让**普通 `gn gen`** 直接报 Dependency cycle(已实测),与 check 无关。两处注释已按此改正(`src/browser/enterprise/teleport_tunnel_logic.h`、`patches/chrome/browser/ui/webui/BUILD.gn.patch`)。
+- **影响**:纯静态分析缺口。**构建、链接、运行全部正常**(GN 的 check 只校验 include 与依赖图是否自洽,不影响链接——符号经 `//chrome/browser` 内部或传递依赖实际是可达的)。代价是:未来任何**真正**的坏依赖边不会被任何东西拦下,只能靠人工与 rebase 时的冲突暴露。
+- **处置(将来)**:两条路,建议按序 —— ① **先补依赖边**:给违规的上游 target 加上它实际需要的 `//teleport` / `:core` dep,或把被 include 的头挪到一个双方都能依赖的轻量 target(隧道的 `:teleport_tunnel_logic` 就是这个形状的范例);无法补的(会成环的)按上游惯例加 `// nogncheck` 并**逐条注明理由**。② **补齐后接 CI**:把 `gn check` 加进构建 job,变成回归门禁。在 ① 完成前接 CI 只会得到一个恒红的门禁。
+- **触发条件**:建 CI 时;或下次里程碑升级(rebase 会重排这些 include,届时逐条判定成本最低);或有人再次想引用「gn check 会兜住」这条已被证伪的假设。
+- **复现配方**:`cd $TELEPORT_CHROMIUM_ROOT/151.0.7922/src && gn check out/mac/arm64/dev --error-limit=500`(**默认 error-limit 会在 10 条就截断并打印「Too many errors」,给人「只有一处违规」的错觉**——A 组计划初稿正是这样只看到了一个文件。`--error-limit=0` 不是「不限」,它会直接抑制全部输出,必须给一个足够大的正数)。
+
+---
+
+# 隧道 Web 应用兼容性判定的已知残余(2026-08-15 登记)
+
+> 来源:`docs/research/2026-08-14-tunnel-webapp-compat-assessment.md` 对同事《Web 应用代理发布兼容性问题清单》的逐项判定。该报告把 11 条待处理问题编号为 `C-1`…`C-11` 并按根因分成 A–E 五组。**A 组**(C-1 WebSocket / C-2 通配 origin / C-7 生命周期 / C-10 可观测性 + C-11 AutoSelect 解耦 + C-5 粒度半)已立项,见 spec `2026-08-15-tunnel-webapp-compat-group-a-design.md`。以下是**本仓主责**的残余条目;服务端主责的残余登记在 `../fairyland/docs/tech-debt.md` 同批次。
+>
+> research 报告是 **2026-08-14 的判定快照**,不随进展更新;条目状态以本文件为准。
+
+## TD-TUNNEL-ENDPOINT-PROXY-COEXIST(端点透明代理 / SASE 客户端与选择性代理共存,2026-08-15;**系统代理模式已真机复核,矛盾已解除** 2026-08-18)
+
+- **组 / 编号**:C 组 · `C-6` · **判定依据**:research 报告 §6「`C-6`」
+- **背景**:Clash TUN、深信服 / 奇安信 VPN 客户端、Zscaler 这类端点工具工作在 Chrome **之下**,我们推给 NetworkContext 的 `CustomProxyConfig` 压不过它们。中国企业终端上常驻这类客户端是常态。
+- **判定处于自相矛盾状态,这是本条最重要的部分**:
+  - **代码侧**:`services/network/network_service_proxy_delegate.cc` 的 `EligibleForProxy` 在 `should_override_existing_config=true`(我们就是 true)时**不会**因已有代理配置而放弃;`ApplyProxyConfigToProxyInfo` 对未命中 `reverse_bypass` 白名单的 URL 返回 false、`result` 不被触碰。据此**推论**:命中的 origin 我们赢,未命中的保留客户既有系统代理——共存方向正确。
+  - **实测侧**:`../fairyland/docs/tech-debt.md` 的 `TD-HTTP-BACKEND-REAL-SITES-VERIFIED` 记录「受管 Chromium / 普通浏览器访问 `*.example.com` 需把 `example.com` 加进 macOS 系统代理 bypass,否则落 Clash 系统代理:http 502 / https RESET,请求根本不到 edge」。
+  - 两者表面相左。可能的解释:该记录**混述**了「普通浏览器」的情形(普通浏览器当然落系统代理);或 Clash 当时工作在 **TUN 模式**(网络层劫持,Chrome 无从感知,任何浏览器内配置都压不过)。**未经复核,不得把任一侧当结论使用。**
+- **影响**:现场杀伤力最高的一条——最容易在客户端装机第一天炸,且最难归因(表现为「隧道配好了但打不开」,与 origin 未注册、连接器不通等多种原因同形)。
+- **暂行处置**:无代码改动。A 组的 `teleport://tunnel` 诊断页会显示 CONNECT 的实际结果(403/407/连不上),能把「请求到没到 edge」这个关键分叉暴露出来,**部分**缓解归因难度。
+- **触发条件**:① 任一客户 POC 前的装机排查;② 或本条被拿来支撑任何设计决策之前。**先复核再设计**,不要在矛盾判定上加载荷(同 `TD-RIFT-ADVERSARY-TUNNEL-PROBE-FAIL-OPEN` 的纪律)。
+- **✅ 复核结果(2026-08-18,`fairyland-test` 活栈 + 本机 Clash 系统代理模式)——矛盾解除,代码侧推论成立**:
+  - **实验**:把 `*.example.com` 从**生效的**系统代理例外列表中临时移除(注意:必须改**主服务**的那一份;本机 `networksetup` 的 `Thunderbolt Bridge` 与 `Wi-Fi` 两份列表内容不同,而 `scutil --proxy` 报告的才是 CFNetwork/Chrome 实际读到的那份 —— 用错服务会得到假结论)。此时系统代理 **`HTTPEnable=1` / `HTTPSEnable=1` / `SOCKSEnable=1` → 127.0.0.1:7890 且端口确在监听**,`clientcert.example.com` 已**不在**例外内,即系统代理会认领它。
+  - **结果**:受管浏览器**照常经我们的隧道到达**该站点,响应体回显 `client_cert_issuer=CN=Teleport Device CA`。该证据不可伪造——那台 fixture 只在连接器所在的 `data-net` 内可达,Clash 根本够不到;设备证书也只会在我们这条 edge 链路上被出示。
+  - **判定**:**在系统代理模式下,我们推给 NetworkContext 的 `CustomProxyConfig` 压得过系统代理**,`should_override_existing_config=true` 的代码侧推论得到实测支持。
+  - **原「实测侧」记录的解释**:`../fairyland/docs/tech-debt.md` 的 `TD-HTTP-BACKEND-REAL-SITES-VERIFIED` 那句「必须把 `example.com` 加进 bypass,否则 502/RESET」应理解为**普通浏览器 / 非受管客户端**的情形,或当时 Clash 处于 TUN 模式;它**不适用于受管浏览器的选择性代理路径**。原条目里「两者表面相左」的矛盾到此消除。
+- **仍未复核:TUN 模式**。本次未测(切换 Clash 到 TUN 会改动开发者本机的网络栈)。就机制而言 TUN 工作在网络层、位于 Chrome 之下,浏览器内的任何代理配置都无从压过它 —— 但这是**结构性推断,不是测量**,不得当作已验证结论使用。
+- **本条因此收窄为**:「仅 TUN / 网络层劫持类端点工具不可共存」。解法是**交付前置检查清单**(装机时确认端点工具的工作模式;TUN 模式需要客户在其分流规则中放行我们的 edge 与已注册 origin),**不是代码改动**。原「现场杀伤力最高」的评级相应下调:系统代理模式(更常见)已证实共存。
+
+- **方向性结论**:复核配方 = 在装有 Clash 的真机上,分别在**系统代理模式**与 **TUN 模式**下访问已注册 origin,用 `chrome://net-export` 看代理解析结果落到 edge 还是 Clash。系统代理模式若确认我们赢,则本条收窄为「仅 TUN / 网络层劫持类不可共存」,解法是交付前置检查清单而非代码。
+
+## TD-TUNNEL-NO-PROXY-CHAINING(客户强制出网代理下隧道建不起来,2026-08-15)
+
+- **组 / 编号**:C 组 · `C-8` · **判定依据**:research 报告 §6「`C-8`」
+- **背景**:Chromium 不支持代理链(`network_service_proxy_delegate.cc` 明文 `TODO(crbug.com/40284947): Support nested proxies`),浏览器必须能**直连** `edge:443`。客户若强制所有出网流量经他们自己的代理并禁止直连,隧道根本建不起来(bind 和 CONNECT 都到不了 edge)。
+- **影响**:能力缺口,不是缺陷。命中即整个产品在该客户环境不可用,无绕过。
+- **暂行处置**:无。属于部署前置条件。
+- **触发条件**:遇到第一个「强制出网代理且不肯为 edge 开例外」的客户;或产品要进入这类环境(金融、政务内网常见)。
+- **方向性结论**:三条路,都不便宜——① 交付前置:要求客户为 `edge.<域>:443` 开直连例外(最现实,应先进售前采集表);② 等上游支持嵌套代理(不可控);③ 改变 edge 暴露形态,使其可经客户代理到达(需要重新设计浏览器→edge 这一跳,与设备证书 mTLS 强耦合,代价大)。**先做 ①**。
+
+## TD-TUNNEL-INTRANET-ROOT-CA-DELIVERY · 客户端半(内网根 CA 无下发链路,自签证书照常拦截,2026-08-15)
+
+- **组 / 编号**:D 组 · `C-4` · **判定依据**:research 报告 §5.4
+- **背景**:盲模式下 backend 用自己的真证书与浏览器**端到端**握手(总纲决策 ⑦:我方不出示、不重签、不补链)。内网常见的自签证书 / 私有 CA / 链不全 / 证书域名不符,浏览器**一如直连时那样拦截**。反向代理方案里「网关重签一张干净证书」的补救在我们这里不存在,也不应存在。
+- **影响**:凡是内网证书不规范的客户,POC 第一天就会看到满屏「不安全」。这是数据主权设计的直接代价,不是 bug。
+- **本仓(客户端)缺的部分**:消费侧——把客户内网根 CA 装进本 profile 的信任锚。Chromium 有对应策略面,但我们尚未接线,也未验证 M151 的 Chrome Root Store 下企业本地锚的实际行为。
+- **服务端半**:编译 + 下发通道,见 `../fairyland/docs/tech-debt.md` 同名条目。**两侧必须同批做**(跨仓并行开发法则)。
+- **触发条件**:第一个内网证书不规范的客户;或 D 组立项。
+- **方向性结论**:走既有 machine/user 策略编译器多产一条根 CA 策略,客户端消费进 profile 信任锚。**须先验证** M151 Chrome Root Store 是否仍尊重企业下发的本地锚(上游近年在收紧本地锚的适用范围),验证结果决定这条路是否成立。
+
+## TD-TUNNEL-BIND-RESPONSE-UNSIGNED · 隧道路由表的信任域从签名策略通道降级为 TLS 通道信任(2026-08-15)
+
+- **来源**:A 组 spec `2026-08-15-tunnel-webapp-compat-group-a-design.md` §3.1。
+- **背景**:A 组把隧道路由白名单从 `AutoSelectCertificateForUrls` 搬到 `POST /tunnel/bind` 的响应体。旧载体走云策略,受 `keys/dev-policy-root.pub.pem` 锚定的**签名链**保护(`teleport_release_policy_key_is_real` fail-closed);新载体是 JSON body,`OnTunnelToken` 只做 `JSONReader` 解析,**无任何签名校验**,信任仅来自 `gate.<D>` 的服务器 TLS 与设备证书 mTLS。
+- **这是有意的取舍**(换取两端同源、去掉与证书策略的耦合、消灭 `C-2` 那类静默丢弃),但它确实缩小了纵深:被攻陷的 gateway 或能冒充 `gate.<D>` 的一方,可以直接支配客户端的代理路由。
+- **当前补偿(A 组已落地,2026-08-16 按实际实现重写。此前版本写的判据有两处与代码不符,勿再引用旧文)**:`ParseRoutableOrigins` → `RejectHost()`(`src/browser/enterprise/teleport_tunnel_logic.cc`),**顺序是承重的**,逐条如下:
+  1. **长度** ≤ 253(RFC1034 FQDN 上限)。构造上与第 2 步冗余(`IsCanonicalizedHostCompliant` 已拒 ≥254 的非尾点 host),保留是因为它同时是**响应体字节预算的锚点**(见 `docs/verification/2026-08-16-payload-budget.md`),不是新增覆盖面。
+  2. **`net::IsCanonicalizedHostCompliant(host)`** —— 一次调用干掉**全部**规则语法元字符,而不是先前记的 `/ : * .` 四个:`;` `,` `/` `:` `<` `>` `*` `?` `\` `@` `#` `%` 与空白,外加大写、非 ASCII(IDN)、**前导点**、空标签、>63 字符的标签。这一条同时**顺带**关掉了 IPv6(每种拼法都带 `:`,方括号形式还带 `[` `]`)——见下方的产品约束。
+  3. **尾点**单独拒。`IsCanonicalizedHostCompliant` 明确允许尾点,而 GURL 往返**不会**去掉普通域名的尾点(只对 IP 字面量去),`base::MatchPattern` 又是纯串比较 ⇒ 规则看着配好了却永远不可能命中。
+  4. **IP 字面量**(`net::IPAddress::AssignFromIPLiteral`):先拒**非规范拼法**(`ip.ToString() != host`),因为规则按**规范化后**的地址构建而诊断页显示原始串——`010.0.0.5` 是八进制的 `8.0.0.5`,不拒就是「显示一个地址、路由另一个」;再拒 `include_subdomains` 配 IP;最后拒 loopback / link-local / unspecified。
+  5. **名字形态的 localhost 族**(`net::HostStringIsLocalhost`)。`AssignFromIPLiteral` 命中不了 `localhost` 这种名字。**不用 `net::IsHostnameNonUnique()`**——它会连 `app.corp` 这类合法内网名一起误杀。
+  6. **GURL 往返逐字节相等**,作兜底(对已枚举的输入而言与 2/3/4 冗余)。
+  7. **公共后缀,仅对 `include_subdomains`**:`net::registry_controlled_domains::HostIsRegistryIdentifier(host, INCLUDE_PRIVATE_REGISTRIES)`。**先前记的「至少两个标签」已被证伪**:`co.uk` 与 `corp.example` 同为两标签,而前者必须拒、后者必须放行;且 `github.io` / `s3.amazonaws.com` 带 **private** 标志,默认的 `EXCLUDE_PRIVATE_REGISTRIES` 看不见它们。**此步必须排在最后**——`HostIsRegistryIdentifier` 带三个 `CHECK`(非 DCHECK),空串 / 非规范 / IP 输入**直接崩进程**,而输入正是未签名的服务端字符串。
+  另有一层不在 `RejectHost` 里但同属本补偿:**edge / gate 覆盖排除**(`CoversReservedHost`),按 glob **覆盖**而非相等判定——`*` 跨点,任何在部署域及以上的通配都会捕获 gate,把 bind 自己的请求导进 edge 而自锁。
+- **RFC1918 是有意放行的,这条边界的理由记在此处**(计划里的产品决定):`10/8`、`172.16/12`、`192.168/16` **不拒**。验证结论曾建议用 `IPAddress::IsPubliclyRoutable()` 一刀切覆盖全部保留段,那会把 RFC1918 一并拒掉——**而内网应用跑在 RFC1918 上正是本产品的目标场景**,按 IP 注册 origin 是合理形态。这道检查要防的是「把**全部**流量导进 edge」(`*`、`0.0.0.0/0` 这类规则注入)与「把**本机**服务导出去」(loopback / link-local / unspecified),**不是**「够到一个内网 IP」——后者是产品的全部意义;且按 spec §2 的不变量,**路由不等于授权**,edge 才是真值。注意「显式规则**胜过**上游隐式的 loopback bypass」,所以 loopback 那一段必须在这里拒掉,否则一条恶意条目真能把本机服务隧道出去。
+- **产品约束:IPv6 origin 不支持**(两侧一致,2026-08-16)。服务端投影侧**显式**拒绝并计入分类 drop(`tunnelroutes.DropReasonIPv6Origin`,先于通用校验分类,否则原因会被折叠成 sentinel),客户端由上面第 2 步顺带拒绝——**两侧都不是静默丢弃**。理由与取证见 `docs/verification/2026-08-16-ipv6-origins.md`。
+- **这是粗粒度 fail-safe,不是策略引擎**——它挡住的是「把全部流量导进 edge 并附带 cnf 令牌」这类粗暴形态,挡不住一个精心构造的、看起来合法的内网主机名。
+- **彻底解**:给 bind 响应加签(复用既有的策略验签根锚,或用 `teleport-tunnel` signer 对路由表单独签一层),客户端验签后才采纳。这样信任域回到与旧载体同级。
+- **触发条件**:进入生产/私有化交付之前;或威胁模型评审明确要求 gateway 被攻陷时路由表不可被支配。
+- **相关**:`TD-TUNNEL-ROUTING-TABLE-PER-SUBJECT`(fairyland 仓)。

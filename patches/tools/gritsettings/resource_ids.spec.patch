@@ -1,8 +1,8 @@
 diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
-index e1f3030f0c0cc..7c88c251f5d37 100644
+index e1f3030f0c0cc..42cf26b77d15b 100644
 --- a/tools/gritsettings/resource_ids.spec
 +++ b/tools/gritsettings/resource_ids.spec
-@@ -1802,6 +1802,12 @@
+@@ -1802,6 +1802,24 @@
      "includes": [10140],
    },
  
@@ -10,6 +10,18 @@ index e1f3030f0c0cc..7c88c251f5d37 100644
 +  "<(SHARED_INTERMEDIATE_DIR)/teleport/browser/resources/enroll/resources.grd": {
 +    "META": {"sizes": {"includes": [10]}},
 +    "includes": [11800],
++  },
++
++  # teleport overlay: chrome://tunnel page resources (build_webui-generated grd).
++  # The value is a FAKE start id: only its position relative to its neighbours
++  # is meaningful, and it must fall strictly inside the open interval left by
++  # them (11800 < 11900 < 12000). Reusing 11800 would be read as "mutually
++  # exclusive with enroll, ids may be shared", which is false — both pages are
++  # compiled into the same chrome. META.sizes is a hard cap: exceeding it fails
++  # the build with IdRangeOverflow, so it is generous (6 includes today).
++  "<(SHARED_INTERMEDIATE_DIR)/teleport/browser/resources/tunnel/resources.grd": {
++    "META": {"sizes": {"includes": [20]}},
++    "includes": [11900],
 +  },
 +
    "<(SHARED_INTERMEDIATE_DIR)/THIS_IS_A_PLACEHOLDER.grd": {

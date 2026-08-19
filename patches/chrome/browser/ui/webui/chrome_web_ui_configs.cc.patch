@@ -1,20 +1,22 @@
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
-index 184305a45acc2..3c158819d1862 100644
+index 184305a45acc2..7ebda12a3d772 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 +++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
-@@ -19,6 +19,7 @@
+@@ -19,6 +19,8 @@
  #include "chrome/browser/ui/webui/browsing_topics/browsing_topics_internals_ui.h"
  #include "chrome/browser/ui/webui/chrome_finds_internals/chrome_finds_internals_ui.h"
  #include "chrome/browser/ui/webui/chrome_urls/chrome_urls_ui.h"
 +#include "teleport/browser/webui/teleport_enroll_ui.h"
++#include "teleport/browser/webui/teleport_tunnel_ui.h"
  #include "chrome/browser/ui/webui/commerce/commerce_internals_ui_config.h"
  #include "chrome/browser/ui/webui/components/components_ui.h"
  #include "chrome/browser/ui/webui/connectors_internals/connectors_internals_ui.h"
-@@ -259,6 +260,7 @@ void RegisterChromeWebUIConfigs() {
+@@ -259,6 +261,8 @@ void RegisterChromeWebUIConfigs() {
    map.AddWebUIConfig(
        std::make_unique<chrome_finds_internals::ChromeFindsInternalsUIConfig>());
    map.AddWebUIConfig(std::make_unique<chrome_urls::ChromeUrlsUIConfig>());
 +  map.AddWebUIConfig(std::make_unique<teleport::TeleportEnrollUIConfig>());
++  map.AddWebUIConfig(std::make_unique<teleport::TeleportTunnelUIConfig>());
    map.AddWebUIConfig(std::make_unique<chromeos::DeviceLogUIConfig>());
    map.AddWebUIConfig(std::make_unique<CrashesUIConfig>());
    map.AddWebUIConfig(std::make_unique<commerce::CommerceInternalsUIConfig>());

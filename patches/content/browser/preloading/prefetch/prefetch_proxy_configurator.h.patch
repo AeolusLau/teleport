@@ -1,0 +1,12 @@
+diff --git a/content/browser/preloading/prefetch/prefetch_proxy_configurator.h b/content/browser/preloading/prefetch/prefetch_proxy_configurator.h
+index e2012f3a71691..68c05b68836ef 100644
+--- a/content/browser/preloading/prefetch/prefetch_proxy_configurator.h
++++ b/content/browser/preloading/prefetch/prefetch_proxy_configurator.h
+@@ -66,6 +66,7 @@ class CONTENT_EXPORT PrefetchProxyConfigurator
+   void OnTunnelHeadersReceived(
+       const net::ProxyChain& proxy_chain,
+       uint64_t chain_index,
++      const net::HostPortPair& endpoint,
+       const scoped_refptr<net::HttpResponseHeaders>& response_headers) override;
+ 
+  private:

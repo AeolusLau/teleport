@@ -1,0 +1,15 @@
+diff --git a/content/browser/preloading/prefetch/prefetch_proxy_configurator.cc b/content/browser/preloading/prefetch/prefetch_proxy_configurator.cc
+index dddb729407c6b..9f71ed109eef4 100644
+--- a/content/browser/preloading/prefetch/prefetch_proxy_configurator.cc
++++ b/content/browser/preloading/prefetch/prefetch_proxy_configurator.cc
+@@ -124,7 +124,10 @@ void PrefetchProxyConfigurator::OnFallback(const net::ProxyChain& bad_chain,
+ void PrefetchProxyConfigurator::OnTunnelHeadersReceived(
+     const net::ProxyChain& proxy_chain,
+     uint64_t chain_index,
++    const net::HostPortPair& endpoint,
+     const scoped_refptr<net::HttpResponseHeaders>& response_headers) {
++  // `endpoint` is unused here: this observer aggregates prefetch-proxy health
++  // per proxy chain, not per destination.
+   DCHECK(response_headers);
+ 
+   if (proxy_chain != prefetch_proxy_chain_) {

@@ -341,9 +341,13 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
       // channel domain change is detected as a migration (§4.5).
       PersistEnrolledDomain();
       // Trigger orchestration (Task T5): the profile is now a signed-in managed
-      // profile with a provisioned device certificate and a fetched managed
-      // policy — exactly the precondition TeleportTunnelService::Start()
-      // documents. Establish the access tunnel before reporting success.
+      // profile with a fetched managed policy. The device certificate is NOT
+      // yet provisioned at this point — provisioning only STARTS once the
+      // provisioning policy reaches its pref, and then needs its own DMServer
+      // round trip (docs/verification/2026-08-16-bind-preconditions.md section
+      // 0.1). So this call is deliberately optimistic: it kicks off the bind,
+      // whose failure/backoff loop is what actually covers the certificate's
+      // arrival, since certificate readiness is not observable in this build.
       MaybeStartTunnelService();
       RunDoneAndDelete(EnrollmentResult::kSuccess);
       return;
@@ -369,9 +373,10 @@ class TeleportOidcInPlaceRegistrar : public InPlaceEnrollmentSteps {
   // (surviving, non-deleting profile). Single-hop collapse (T8): the tunnel
   // no longer needs the tenant console origin (no session cookie, no bind
   // ticket) — Start() alone is the whole seam. A LATER browser restart
-  // re-triggers Start() itself via TeleportTunnelService::
-  // MaybeAutoStartFromPrefs (observes the managed AutoSelect pref + this
-  // profile's persisted DM token), so nothing needs to be persisted here.
+  // re-triggers Start() itself via TeleportTunnelService's read-gate
+  // (PreconditionsMet: the managed AutoSelect pref + this profile's persisted
+  // DM token, both READ rather than merely observed), so nothing needs to be
+  // persisted here.
   void MaybeStartTunnelService() {
     TeleportTunnelService* tunnel =
         TeleportTunnelServiceFactory::GetForProfile(profile_);

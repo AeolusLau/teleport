@@ -1,0 +1,34 @@
+diff --git a/net/base/proxy_delegate.cc b/net/base/proxy_delegate.cc
+index 515426fe1e645..3ca59ea0e4e6e 100644
+--- a/net/base/proxy_delegate.cc
++++ b/net/base/proxy_delegate.cc
+@@ -5,7 +5,9 @@
+ #include "net/base/proxy_delegate.h"
+ 
+ #include <optional>
++#include <utility>
+ 
++#include "net/base/host_port_pair.h"
+ #include "net/base/proxy_chain.h"
+ #include "net/http/proxy_fallback.h"
+ 
+@@ -17,4 +19,19 @@ std::optional<bool> ProxyDelegate::CanFalloverToNextProxyOverride(
+   return std::nullopt;
+ }
+ 
++Error ProxyDelegate::OnTunnelHeadersReceivedForEndpoint(
++    const ProxyChain& proxy_chain,
++    size_t proxy_index,
++    const HostPortPair& endpoint,
++    const HttpResponseHeaders& response_headers,
++    CompletionOnceCallback callback) {
++  // Drop `endpoint` and defer to the overload every existing subclass already
++  // implements. `callback` MUST be moved through unchanged: returning
++  // ERR_IO_PENDING is a promise to run it exactly once later, with the whole
++  // CONNECT state machine suspended in the meantime, so swallowing it here
++  // would hang the tunnel permanently rather than fail it.
++  return OnTunnelHeadersReceived(proxy_chain, proxy_index, response_headers,
++                                 std::move(callback));
++}
++
+ }  // namespace net
