@@ -132,15 +132,21 @@ python scripts/fetch_sparkle.py                  # 钉版本拉 Sparkle.framewor
 # 拉取:bootstrap.py 已把 checkout_pgo_profiles=True 写进 .gclient;改了开关后重跑一次 sync:
 python scripts/sync.py                           # 触发 chromium DEPS 的两个 PGO hook(幂等)
 gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn")'   # 可省:package.py 在 args.gn 缺失时自动执行
-# 注:staging / release 两档目前都会被占位密钥的 fail-closed assert 挡住(见 gotcha)。
+# 注:staging 档**已解锁**(fairyland 于 2026-08-13 交付真实 staging 根,`teleport_staging_policy_key_is_real=true`),
+# 无需任何逃生口即可 gn gen。release 档仍被占位主根的 fail-closed assert 挡住(TD-026);
+# **canary 渠道走 release.mac.gn,env 即 release,故 canary 构建当前一并被挡**——
+# 「canary 已端到端验证」说的是历史上跑通过,不是现在就能发。
 # 只想验证流水线机制时,加具名逃生口 —— 产物会被烙上 TeleportUnpublishable 且 --distribute 硬拒:
-#   gn gen out/mac/arm64/staging --args='import("//teleport/gn/args/staging.mac.gn") teleport_policy_key_placeholder_ack=true'
+#   gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn") teleport_policy_key_placeholder_ack=true'
 uv run python scripts/gen_policy_verification_key.py --check                 # 四把根 ↔ patch ↔ hash 一致性
-uv run python scripts/gen_policy_verification_key.py --check --require-real --env release   # 额外拒绝占位根
+uv run python scripts/gen_policy_verification_key.py --check --require-real --env release   # 额外拒绝占位根(release 档当前必然失败,这就是它的作用)
+uv run python scripts/gen_policy_verification_key.py --check --require-real --env staging   # staging 已是真实根,应当通过
 printf '<new-version>\n' > TELEPORT_VERSION       # 每次发版 bump(四段 MAJOR.MINOR.BUILD.PATCH,严格大于当前 TELEPORT_VERSION,单调递增;或用 scripts/bump_version.py)并提交
 uv run python scripts/package.py                          # 默认:本地打 dev 包(仅构建,不签名/不发布)
 uv run python scripts/package.py --channel canary        # 本地渠道包:构建+签名+公证+样式dmg,不发布
 uv run python scripts/package.py --channel canary --distribute  # 发布(仅 main):+appcast+上传OSS+打 v<semver> tag 并 push
+uv run python scripts/package.py --channel staging               # staging 本地包(env=staging,不受 TD-026 阻塞)
+uv run python scripts/package.py --channel staging --rehearse    # 演练:真实端点全链、发布级守卫,唯独不打 tag(可从特性分支跑)
 python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重生背景(uv run --with pillow)
 ```
 
@@ -189,7 +195,7 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
   - **staging = 环境借用渠道槽位**:`staging.mac.gn` 链式 `import` release 模板只覆盖 env,故 PGO / official / updater 全部继承(实测确认),两者共用一条流水线;`ChannelFromName("staging")` → `Channel::CANARY`(落 UNKNOWN 会产出 `is_official_build=true` + 上游不认识的渠道)。**将来 staging 需要多渠道时必须先拆开 env 与 channel 两个轴**,这是硬性前置而非可登记取舍。
 - **策略验签根是「集合」而非单把**:`GetPolicyVerificationKeys()` 返回本档全部受信根,`IsKnownVerificationKey()` 判成员;`GetPolicyVerificationKey()` 仍返回**主根**(推导 `kPolicyVerificationKeyHash`、写盘记录用)。release 烤**两把**(主根 + 离线冷存的休眠恢复根),dev/staging 各一把。**六个验签点全部按集合遍历**:`cloud_policy_validator` 的 4 处(新式 + deprecated × `CheckNewPublicKeyVerificationSignature`/`CheckCachedKey`)、`user_cloud_policy_store` 的轮换判定(改为**集合成员**判定,否则恢复根启用后每次启动全量重拉)、以及 overlay 的两个 server-identity 调用点(经 `VerifyAgainstRootSet`,verdict 聚合规则:任一 kValid 即通过;否则优先返回**非签名类**失败,因为那意味着某把根的签名验过了而字段没过——报成 kBadSignature 会把排障引向不存在的密钥问题)。
   - **恢复根买到什么**:客户端对集合内两把根**一视同仁**,故它**不撤销**主根,也不让轮换自动无缝(服务端还需重签存量租户背书)。它买到的是**泄露当天服务不中断、有从容推更新的时间**。撤销泄露根仍必须发新客户端。
-  - **`--require-real`**:`gen_policy_verification_key.py --check` 只能证明 PEM 与 patch 一致——占位密钥同样满足。`--require-real <env>` 对照占位指纹表 fail-closed。dev 根私钥有意提交在 fairyland(`products/teleport/device-manager/keys/dev-policy-root.pem`,dev-only 锚);staging / release 主根仍是占位,由各自的 `*_policy_key_is_real` assert 挡住。
+  - **`--require-real`**:`gen_policy_verification_key.py --check` 只能证明 PEM 与 patch 一致——占位密钥同样满足。`--require-real <env>` 对照占位指纹表 fail-closed。dev 根私钥有意提交在 fairyland(`products/teleport/device-manager/keys/dev-policy-root.pem`,dev-only 锚);**staging 主根已是真实根**(2026-08-13 由 fairyland 交付,指纹 `8b06e78b…`,私钥 BYOK 导入 staging 的 OpenBao Transit;它与 dev 根**刻意不同**——dev 私钥提交在仓库里,共用就等于让每个读仓库的人都成为合法签名者);**release 主根仍是占位**,由 `teleport_release_policy_key_is_real` assert 挡住(TD-026,prod 云未落地,根仪式是刻意推迟而非待办)。
   - **占位期的具名逃生口**:`teleport_policy_key_placeholder_ack=true` 放行构建,但把 `TeleportUnpublishable` 烙进 Info.plist 且 `package.py --distribute` 硬拒。设计意图是让「我知道是占位、只想验流水线」成为显式、可 grep、自我解除的动作——TD-026 正是「临时覆盖留在 args.gn 里没人记得」的后果。
 - **发布链的三条护栏(与三态同批加固)**:① 陈旧 args.gn 守卫改查 **`gn args --list` 的生效值**(文本看不穿 `import()` 链,而正常 `gn gen` 写出的 args.gn 恰恰只有一行 import,旧守卫因此几乎从未真正比较过;注意 gn 靠**工作目录**向上找 `.gn`,调用必须 `cwd=检出根`,且未知 arg 时退出码仍是 0);② **EdDSA 按渠道分离**(`ed_key_account`),共用一把意味着 staging 发布机能签出 release 客户端接受的更新,而更新投递的是任意代码——比策略链更重;③ **tag 按渠道命名空间**(`staging/v<四段>`),staging 与 release 共用 `TELEPORT_VERSION`,单一命名空间会让「先在 staging 演练同一版本再发 release」变成自我拒绝。另:`fetch_live_appcast` 只对 404 返回 None,其余异常硬失败(否则一次超时就会让 `assert_publishable` 静默失效)。
 - **`InstalledVersionPoller` 与 Sparkle「暂存-重启才替换」冲突(patch `upgrade_detector_impl.cc`)**:`enable_update_notifications=true` 在 `UpgradeDetectorImpl::Init()` 里除了订阅 BuildState,还顺带 `installed_version_poller_.emplace()`。该 poller 每 2h(+ 启动首轮 + bundle 监听)读**磁盘 .app 版本**比对运行版:`installed==running` → `SetUpdate(kNone)`。但 Sparkle 把更新暂存到自己缓存、**重启才换主 bundle**,故重启前磁盘版恒等于运行版 → poller 不停 `SetUpdate(kNone)`,与我们 bridge 的 `SetUpdate(kNormalUpdate)` **抢同一 BuildState**。致命点:`UpgradeDetected(NONE)` 把 `upgrade_notification_stage_` 重置为 NONE 但**不调 `NotifyUpgrade()`**(`set_upgrade_notification_stage` 是纯 setter)→ 观察者不被通知 → **chip 缓存的 `kUpgradeNotification` 成 stale(蓝底 Update 一直在),而菜单 `Build()` live 查 `GetTypeAndSeverity()` 因 `stage==NONE`→`severity==kNone` 落空,upgrade 块整段跳过 → 「Relaunch to update」菜单项消失、默认浏览器项浮顶**。chip 与菜单项 desync,即此因。**为何 `--simulate-*` 复现不出**:simulate 走 `SimulateGetInstalledVersion` 伪造 `components[3]+=2` 的高版本,poller 自己就报 update、单写入者、不打架。修复:patch 把 poller 创建**门控在 `if (is_testing_)`**——生产路径(无 simulate)不建 poller,bridge 成 BuildState 唯一写入者;保留 `--simulate-upgrade/--simulate-critical-update` 的本地调试能力(它俩本就依赖 poller 跑 `SimulateGetInstalledVersion`)。
