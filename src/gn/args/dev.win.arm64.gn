@@ -1,0 +1,14 @@
+# Dev build args for the teleport overlay on Windows arm64.
+# Out dir: out/win-arm64-dev.
+#
+# Native on an ARM64 Windows host, so the built chrome.exe launches at full
+# speed for smoke testing -- which is the reason to keep this target alongside
+# x64, not a claim that arm64 is a shipping architecture. Anything verified only
+# here still has to be re-verified on the x64 build before it counts.
+#
+# Note that this does NOT change which toolchain runs: Chromium's prebuilt clang
+# for Windows is x64, so it executes under emulation on an ARM64 host whichever
+# target is selected. Build times are therefore comparable between the two.
+import("//teleport/gn/args/dev.win.gni")
+
+target_cpu = "arm64"

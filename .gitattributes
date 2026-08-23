@@ -1,0 +1,24 @@
+# Line endings are LF in the WORKING TREE on every platform -- not merely in the
+# index, which is what the default `text=auto` alone guarantees.
+#
+# This is a correctness requirement, not a style preference. patches/ is applied
+# onto the chromium checkout with `git apply`, and apply_patches.py decides a
+# patch is ALREADY applied by running `git apply --reverse --check` first, which
+# needs the patch's context lines to match the checked-out file byte for byte. A
+# Windows clone made under the Git-for-Windows default (core.autocrlf=true)
+# materializes all ~120 patch files as CRLF while the chromium checkout stays
+# LF, so every patch both fails to apply AND fails to reverse-apply -- and
+# apply_patches.py's fail-fast turns that into "patch does not apply cleanly" on
+# a tree that is in fact perfectly fine. Worse, `git status` reports the repo
+# clean throughout, because the index is still LF: nothing in the repo shows
+# that anything is wrong.
+#
+# Pinning eol=lf here makes that independent of each developer's core.autocrlf.
+* text=auto eol=lf
+
+# Binary assets: excluded from any conversion or diffing. text=auto would
+# auto-detect these correctly, but stating it means a new asset type cannot be
+# corrupted by a heuristic that guessed wrong.
+*.png  binary
+*.icns binary
+*.tiff binary

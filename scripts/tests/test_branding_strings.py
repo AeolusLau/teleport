@@ -144,9 +144,16 @@ def _materialize_pristine(src: Path, mirror: Path, rel: str, done: set,
 
 def _grit_mirror(src: Path, root: Path) -> Path:
     """Prepare ``root`` to act as a chromium-src stand-in for branding_strings:
-    tools/grit is symlinked from the real checkout so _load_grd_reader works."""
+    tools/grit is linked from the real checkout so _load_grd_reader works.
+
+    _lib.create_dir_link rather than Path.symlink_to: on Windows a real symlink
+    needs SeCreateSymbolicLinkPrivilege, and demanding it here would strand 17
+    tests on any box without Developer Mode. Nothing traverses this link except
+    Python's own sys.path lookup, so the unprivileged junction create_dir_link
+    uses by default is entirely sufficient -- the privileged form is reserved
+    for the overlay injection link, which siso has to walk into."""
     (root / "tools").mkdir(parents=True, exist_ok=True)
-    (root / "tools" / "grit").symlink_to(src / "tools" / "grit")
+    _lib.create_dir_link(root / "tools" / "grit", src / "tools" / "grit")
     return root
 
 

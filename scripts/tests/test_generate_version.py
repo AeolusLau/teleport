@@ -72,3 +72,26 @@ def test_write_chrome_version_rejects_three_segment_file(tmp_path, monkeypatch):
     root = _fake_root(tmp_path, monkeypatch, teleport="0.1.12\n")
     with pytest.raises(ValueError):
         gv.write_chrome_version(root)
+
+
+def test_write_chrome_version_writes_lf_bytes(tmp_path, monkeypatch):
+    """chrome/VERSION must be LF on disk on every host. It is an input to
+    upstream's version tooling and, more importantly, sits in a checkout whose
+    every other file is LF -- a CRLF copy would make the file a permanent
+    phantom diff against the checkout."""
+    root = _fake_root(tmp_path, monkeypatch)
+    gv.write_chrome_version(root)
+    target = gv.chromium_src(root) / "chrome" / "VERSION"
+    assert target.read_bytes() == b"MAJOR=0\nMINOR=1\nBUILD=12\nPATCH=0\n"
+
+
+def test_write_chrome_version_repairs_a_crlf_file(tmp_path, monkeypatch):
+    """The skip-if-unchanged check compares BYTES. read_text() would normalize a
+    CRLF file back to LF before comparing, so a file written once by a
+    line-translating host would compare equal to the LF content forever and never
+    be repaired."""
+    root = _fake_root(tmp_path, monkeypatch)
+    target = gv.chromium_src(root) / "chrome" / "VERSION"
+    target.write_bytes(b"MAJOR=0\r\nMINOR=1\r\nBUILD=12\r\nPATCH=0\r\n")
+    assert gv.write_chrome_version(root) is True
+    assert target.read_bytes() == b"MAJOR=0\nMINOR=1\nBUILD=12\nPATCH=0\n"

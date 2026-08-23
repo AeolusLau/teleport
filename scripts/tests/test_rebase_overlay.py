@@ -10,6 +10,8 @@ silently if left untested.
 import os
 from pathlib import Path
 
+import _lib
+
 import bootstrap
 import fetch_sparkle
 import rebase_overlay as ro
@@ -63,11 +65,25 @@ def test_rebase_in_progress_true_with_rebase_apply_marker(tmp_path: Path):
     assert ro._rebase_in_progress(tmp_path) is True
 
 
+def _link_overlay(tmp_path: Path, src: Path) -> None:
+    """Plant the overlay link exactly as bootstrap.py does -- a symlink on POSIX,
+    a directory junction on Windows. os.symlink() directly would fail there with
+    WinError 1314 for an unelevated user without Developer Mode, which is the
+    normal state of a developer machine and has nothing to do with what these
+    tests are checking."""
+    target = tmp_path / "overlay_src"
+    target.mkdir(exist_ok=True)
+    _lib.create_dir_link(src / bootstrap.SRC_LINK_NAME, target)
+
+
 def test_apply_patches_failed_message_gives_a_literal_recovery_command():
-    msg = ro._apply_patches_failed_message(
-        Path("/chromium/src"), "148.0.7778.180", 1)
-    assert "git -C /chromium/src reset --hard 148.0.7778.180" in msg
-    assert "git -C /chromium/src clean -fd" in msg
+    # The path is interpolated natively -- backslashes on Windows -- because the
+    # message exists to be copy-pasted into the operator's shell, so it must
+    # spell the path the way THAT shell expects, not the way POSIX does.
+    src = Path("/chromium/src")
+    msg = ro._apply_patches_failed_message(src, "148.0.7778.180", 1)
+    assert f"git -C {src} reset --hard 148.0.7778.180" in msg
+    assert f"git -C {src} clean -fd" in msg
     assert ro.WORK_BRANCH in msg
     assert "exit 1" in msg
 
@@ -171,7 +187,7 @@ def test_precheck_passes_on_a_freshly_bootstrapped_checkout(tmp_path: Path):
     src = _make_bootstrapped_repo(tmp_path)
     link_target = tmp_path / "overlay_src"
     link_target.mkdir()
-    os.symlink(link_target, src / bootstrap.SRC_LINK_NAME)
+    _lib.create_dir_link(src / bootstrap.SRC_LINK_NAME, link_target)
 
     status = ro.git(src, "status", "--porcelain").stdout
     assert ro._is_dirty(status) is False
@@ -215,7 +231,7 @@ def test_precheck_passes_when_only_the_sparkle_copy_is_untracked(tmp_path: Path)
 
 def test_precheck_refuses_on_a_genuinely_untracked_unrelated_file(tmp_path: Path):
     src = _make_bootstrapped_repo(tmp_path)
-    os.symlink(tmp_path / "overlay_src", src / bootstrap.SRC_LINK_NAME)
+    _link_overlay(tmp_path, src)
     (src / "surprise.txt").write_text("new, never staged\n")
 
     status = ro.git(src, "status", "--porcelain").stdout
@@ -224,7 +240,7 @@ def test_precheck_refuses_on_a_genuinely_untracked_unrelated_file(tmp_path: Path
 
 def test_precheck_refuses_on_a_genuinely_modified_tracked_file(tmp_path: Path):
     src = _make_bootstrapped_repo(tmp_path)
-    os.symlink(tmp_path / "overlay_src", src / bootstrap.SRC_LINK_NAME)
+    _link_overlay(tmp_path, src)
     (src / "chrome" / "browser" / "foo.cc").write_text("modified\n")
 
     status = ro.git(src, "status", "--porcelain").stdout

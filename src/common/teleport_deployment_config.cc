@@ -1,7 +1,5 @@
 #include "teleport/common/teleport_deployment_config.h"
 
-#include <sys/stat.h>
-
 #include <optional>
 #include <string_view>
 
@@ -15,6 +13,14 @@
 #include "build/build_config.h"
 #include "teleport/teleport_policy_buildflags.h"
 #include "url/gurl.h"
+
+// Conditional system include, so it must follow build/build_config.h above.
+// MSVC ships a <sys/stat.h>, but it has no lstat(), no S_ISREG, and no
+// S_IWGRP/S_IWOTH -- the POSIX ownership/permission model these express does
+// not exist on Windows at all.
+#if BUILDFLAG(IS_POSIX)
+#include <sys/stat.h>
+#endif
 
 namespace teleport {
 
@@ -53,7 +59,7 @@ constexpr char kBakedDefaultDomain[] = "staging.douan.cn";
 constexpr char kBakedDefaultDomain[] = "fairyland.io";
 #endif
 
-// Level 3 (cross-platform): read + trust-gate + parse the machine config file
+// Level 3 (POSIX): read + trust-gate + parse the machine config file
 // ONCE, cached for the process lifetime. The blocking file IO happens on the
 // FIRST call only — which is the startup deployment-domain resolution (an
 // allow-blocking context: DeploymentDomain() -> Cached() -> ResolveUncached()
@@ -66,6 +72,23 @@ constexpr char kBakedDefaultDomain[] = "fairyland.io";
 const DeploymentConfigFields& CachedMachineFile() {
   static const base::NoDestructor<DeploymentConfigFields> cached([] {
     DeploymentConfigFields fields;
+#if !BUILDFLAG(IS_POSIX)
+    // The level-3 machine-file channel does not exist off POSIX, so this
+    // returns the all-defaults fields (i.e. "source absent"), exactly as an
+    // untrusted or missing file would.
+    //
+    // Compiled out rather than left to fail at runtime for two independent
+    // reasons, either of which alone would be enough. (1) There is no trust
+    // check: IsMachineConfigFileTrusted() is fail-closed off POSIX (no uid 0,
+    // no group/other bits -- the Windows equivalent is a DACL question that has
+    // not been implemented), so every read below is already dead code there.
+    // (2) kDeploymentConfigFilePath is "/Library/Teleport/..." -- a macOS
+    // absolute path, and a narrow char[] besides, which does not even convert
+    // to base::FilePath on Windows where StringType is std::wstring. Giving it
+    // a FILE_PATH_LITERAL and a Windows path would make it COMPILE while
+    // reading an unprotected location; the channel needs the trust check first,
+    // not a path. See TD-040.
+#else
     base::FilePath path(kDeploymentConfigFilePath);
     if (!IsMachineConfigFileTrusted(path)) {
       return fields;
@@ -87,6 +110,7 @@ const DeploymentConfigFields& CachedMachineFile() {
                       "no valid deployment domain in machine config file; the "
                       "device stays on the resolved (likely default) domain";
     }
+#endif  // !BUILDFLAG(IS_POSIX)
     return fields;
   }());
   return *cached;
@@ -313,6 +337,7 @@ std::optional<std::string> ParseDeploymentConfigJson(std::string_view contents) 
   return ParseDeploymentConfigFile(contents).domain;
 }
 
+#if BUILDFLAG(IS_POSIX)
 bool IsMachineConfigFileTrusted(const base::FilePath& path) {
   struct stat st;
   if (::lstat(path.value().c_str(), &st) != 0) {
@@ -329,6 +354,26 @@ bool IsMachineConfigFileTrusted(const base::FilePath& path) {
   }
   return true;
 }
+#else
+bool IsMachineConfigFileTrusted(const base::FilePath& path) {
+  // FAIL CLOSED: the machine config file is simply not an available trust
+  // source on this platform yet.
+  //
+  // The POSIX version above asks "root-owned, and not writable by anyone else".
+  // Windows has no uid 0 and no group/other permission bits; the equivalent
+  // question is a DACL one -- owner is SYSTEM or Administrators, and no
+  // non-administrative principal holds write/WRITE_DAC/WRITE_OWNER, with
+  // inherited ACEs resolved. That is a real piece of work, not a translation of
+  // these four lines.
+  //
+  // Returning true here would hand full trust to a file any user could plant;
+  // approximating it (say, checking only the owner) would look like a security
+  // check while leaving the writable-by-everyone case open. Returning false
+  // costs only the level-3 machine-file channel, and does so visibly: the
+  // deployment domain falls through to the next source down. See TD-040.
+  return false;
+}
+#endif
 
 std::string TeleportHostFor(std::string_view d) {
   // Straight prefix concat: the "teleport." label goes in front of D. When D

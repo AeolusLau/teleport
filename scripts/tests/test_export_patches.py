@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import _lib
 import bootstrap
 import export_patches as ep
 import fetch_sparkle
@@ -429,7 +430,9 @@ def test_export_ignores_the_bootstrap_teleport_symlink(tmp_path: Path, monkeypat
     src = _make_src_repo(tmp_path, {"chrome/browser/foo.cc": "orig\n"})
     link_target = tmp_path / "overlay_src"
     link_target.mkdir()
-    os.symlink(link_target, src / bootstrap.SRC_LINK_NAME)
+    # create_dir_link, not os.symlink: this is the artifact bootstrap.py
+    # actually plants, and on Windows that is a junction rather than a symlink.
+    _lib.create_dir_link(src / bootstrap.SRC_LINK_NAME, link_target)
 
     # Must not raise "unclassified changes" -- the symlink is a recognized
     # injected artifact, and there is nothing else to export.
@@ -459,7 +462,7 @@ def test_export_still_catches_an_unrelated_untracked_symlink(tmp_path: Path, mon
     repo = tmp_path / "repo"
     (repo / "patches").mkdir(parents=True)
     src = _make_src_repo(tmp_path, {"chrome/browser/foo.cc": "orig\n"})
-    os.symlink(tmp_path, src / "surprise_link")
+    _lib.create_dir_link(src / "surprise_link", tmp_path)
 
     with pytest.raises(RuntimeError, match="unclassified"):
         ep.export(repo, src, "baseline")

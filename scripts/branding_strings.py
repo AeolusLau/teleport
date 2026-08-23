@@ -421,7 +421,7 @@ def rekey_xtb(xtb_text: str, id_remap: dict[str, str], locale: str,
 # main() — apply branding to the real chromium checkout in-place
 # ---------------------------------------------------------------------------
 
-from _lib import chromium_src, repo_root  # noqa: E402
+from _lib import chromium_src, repo_root, write_text_lf  # noqa: E402
 
 # Each target carries the standalone "Chromium" product name in user-visible
 # strings. "grd" is the en source; "xtb" are its zh translations to re-key;
@@ -600,13 +600,13 @@ def _rebrand_target(src: Path, grd_rel: str, xtb_map: dict, grdp_includes: tuple
     grd_path = src / grd_rel
     grd_dir = grd_path.parent
     old_ids = message_name_to_id(src, grd_path, grd_dir)        # pristine
-    grd_path.write_text(
-        transform_en_grd(grd_path.read_text(encoding="utf-8"), sweep_chrome),
-        encoding="utf-8")
+    write_text_lf(
+        grd_path,
+        transform_en_grd(grd_path.read_text(encoding="utf-8"), sweep_chrome))
     for g in grdp_includes:
         gp = grd_dir / g
-        gp.write_text(rebrand_en_text(gp.read_text(encoding="utf-8"), sweep_chrome),
-                      encoding="utf-8")
+        write_text_lf(
+            gp, rebrand_en_text(gp.read_text(encoding="utf-8"), sweep_chrome))
     new_ids = message_name_to_id(src, grd_path, grd_dir)        # rebranded
     remap = {old_ids[n]: new_ids[n]
              for n in old_ids if n in new_ids and old_ids[n] != new_ids[n]}
@@ -616,7 +616,7 @@ def _rebrand_target(src: Path, grd_rel: str, xtb_map: dict, grdp_includes: tuple
         text = rekey_xtb(p.read_text(encoding="utf-8"), remap, locale, sweep_chrome)
         if inject_ids:
             text = inject_translations(text, inject_ids, _ZH_PRODUCT[locale])
-        p.write_text(text, encoding="utf-8")
+        write_text_lf(p, text)
     return len(remap), len(inject_ids)
 
 
@@ -631,16 +631,15 @@ def renamed_message_names(src: Path, grd_rel: str, grdp_includes: tuple,
     paths = [grd_path] + [grd_dir / g for g in grdp_includes]
     originals = {p: p.read_text(encoding="utf-8") for p in paths}
     try:
-        grd_path.write_text(
-            transform_en_grd(originals[grd_path], sweep_chrome), encoding="utf-8")
+        write_text_lf(
+            grd_path, transform_en_grd(originals[grd_path], sweep_chrome))
         for g in grdp_includes:
             gp = grd_dir / g
-            gp.write_text(rebrand_en_text(originals[gp], sweep_chrome),
-                          encoding="utf-8")
+            write_text_lf(gp, rebrand_en_text(originals[gp], sweep_chrome))
         after = message_name_to_id(src, grd_path, grd_dir)
     finally:
         for p, original in originals.items():
-            p.write_text(original, encoding="utf-8")
+            write_text_lf(p, original)
     return sorted(n for n in before if n in after and before[n] != after[n])
 
 

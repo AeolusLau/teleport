@@ -120,7 +120,10 @@ def test_inject_sparkle_keys_writes_all_plist_keys(monkeypatch, tmp_path):
         argv = plist_calls[key]
         assert argv[3] == typeflag, f"{key}: expected type flag {typeflag!r}, got {argv[3]!r}"
         assert argv[4] == value, f"{key}: expected value {value!r}, got {argv[4]!r}"
-        assert argv[5].endswith("Teleport.app/Contents/Info.plist"), (
+        # as_posix(): argv[5] is a native path string, backslash-separated on
+        # Windows. The plutil call itself is macOS-only, but its argv assembly is
+        # pure string work that is worth pinning on every host.
+        assert Path(argv[5]).as_posix().endswith("Teleport.app/Contents/Info.plist"), (
             f"{key}: plist path {argv[5]!r} does not end with expected suffix"
         )
 

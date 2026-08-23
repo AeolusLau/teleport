@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/common/cloud/cloud_policy_constants.h b/components/policy/core/common/cloud/cloud_policy_constants.h
-index 00f2112912201..7c500bd4e4d37 100644
+index 00f2112912..177c3c857d 100644
 --- a/components/policy/core/common/cloud/cloud_policy_constants.h
 +++ b/components/policy/core/common/cloud/cloud_policy_constants.h
 @@ -8,6 +8,8 @@
@@ -11,28 +11,43 @@ index 00f2112912201..7c500bd4e4d37 100644
  
  #include "components/policy/policy_export.h"
  
-@@ -118,8 +120,22 @@ const char* GetChromeUserPolicyType();
+@@ -117,10 +119,38 @@ const char* GetChromeUserPolicyType();
+ 
  }  // namespace dm_protocol
  
++// NOTE: deliberately NO POLICY_EXPORT on the three functions below, matching
++// how upstream declares GetPolicyVerificationKey(). :common_constants is a
++// source_set carrying the component_implementation config, so EVERY module that
++// links it would dllexport these -- and several do (content.dll and
++// chrome/browser both pull it in). lld-link then sees the symbol defined in the
++// module's own cloud_policy_constants.obj AND imported from content.dll, and
++// fails the component build with "duplicate symbol". Without the macro each
++// linking module simply gets its own private copy, which is correct here: these
++// are pure functions over baked-in constants, and every caller's target already
++// deps :common_constants directly. Adding the macro is not a portability fix --
++// it is what breaks Windows. (It went unnoticed on macOS: there the attribute
++// only widens dylib visibility, and the mach-o linker resolves the duplicate
++// silently instead of erroring.)
++
  // Public half of the verification key that is used to verify that policy
 -// signing keys are originating from DM server.
--std::string GetPolicyVerificationKey();
 +// signing keys are originating from DM server. This is the PRIMARY root; see
 +// GetPolicyVerificationKeys() for the full trusted set.
-+POLICY_EXPORT std::string GetPolicyVerificationKey();
-+
+ std::string GetPolicyVerificationKey();
+ 
 +// Every root this build trusts, primary first. A release build carries a
 +// dormant recovery root as a second element; dev and staging carry one. A
 +// signature is accepted when ANY element verifies it -- which is also why this
 +// set does not revoke anything: dropping a compromised root requires shipping a
 +// build whose set no longer contains it.
-+POLICY_EXPORT std::vector<std::string> GetPolicyVerificationKeys();
++std::vector<std::string> GetPolicyVerificationKeys();
 +
 +// Whether `key` (a DER SubjectPublicKeyInfo) is one of the trusted roots.
 +// Used for cached-key rotation decisions, where the question is membership --
 +// "was this cache endorsed by something we still trust" -- and not equality
 +// with the primary, which would call every recovery-root-endorsed cache stale.
-+POLICY_EXPORT bool IsKnownVerificationKey(std::string_view key);
- 
++bool IsKnownVerificationKey(std::string_view key);
++
  // Corresponding hash.
  extern const char kPolicyVerificationKeyHash[];
+ 

@@ -137,12 +137,20 @@ DeploymentConfigFields ParseDeploymentConfigFile(std::string_view contents);
 std::optional<std::string> ParseDeploymentConfigJson(std::string_view contents);
 
 // Absolute path of the machine-level deployment config file (level 3).
+// macOS/POSIX only, and narrow-char: base::FilePath::StringType is std::wstring
+// on Windows, so this does not even convert there. The level-3 channel is
+// compiled out off POSIX -- see CachedMachineFile() for why a Windows path is
+// not the missing piece.
 inline constexpr char kDeploymentConfigFilePath[] =
     "/Library/Teleport/DeploymentConfig.json";
 
 // True iff path exists, is owned by uid 0 (root), and is not group/world
 // writable. The machine config file is a root-only admin channel; a file that
 // any non-root user could have planted or rewritten must not be trusted.
+//
+// POSIX only. On other platforms (Windows) this always returns false: the
+// equivalent check is a DACL one, and until that exists the machine-file
+// channel is unavailable rather than approximated. See TD-040.
 bool IsMachineConfigFileTrusted(const base::FilePath& path);
 
 // Build "teleport.<d>" (d may include ":port"; the port stays at the tail).

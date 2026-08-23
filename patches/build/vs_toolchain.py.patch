@@ -1,0 +1,59 @@
+diff --git a/build/vs_toolchain.py b/build/vs_toolchain.py
+index 7c62254219..7f2c08ee81 100755
+--- a/build/vs_toolchain.py
++++ b/build/vs_toolchain.py
+@@ -309,21 +309,39 @@ def _SortByHighestVersionNumberFirst(list_of_str_versions):
+ def _CopyUCRTRuntime(target_dir, source_dir, target_cpu, debug):
+   """Copy both the msvcp and vccorlib runtime DLLs, only if the target doesn't
+   exist, but the target directory does exist."""
+-  if target_cpu == 'arm64':
+-    # Windows ARM64 VCRuntime is located at {toolchain_root}/VC/Redist/MSVC/
+-    # {x.y.z}/[debug_nonredist/]arm64/Microsoft.VC14x.CRT/.
+-    # Select VC toolset directory based on Visual Studio version
+-    vc_redist_root = FindVCRedistRoot()
+-    if not debug:
+-      vc_toolset_dir = 'Microsoft.{}.CRT' \
+-         .format(MSVC_TOOLSET_VERSION[GetVisualStudioVersion()])
+-      source_dir = os.path.join(vc_redist_root,
+-                                'arm64', vc_toolset_dir)
+-    else:
+-      vc_toolset_dir = 'Microsoft.{}.DebugCRT' \
+-         .format(MSVC_TOOLSET_VERSION[GetVisualStudioVersion()])
+-      source_dir = os.path.join(vc_redist_root, 'debug_nonredist',
+-                                'arm64', vc_toolset_dir)
++  # teleport: source the runtime from the VC redist for the TARGET cpu whenever
++  # that directory exists -- upstream did this for arm64 only.
++  #
++  # The caller's default source_dir is the HOST's system directory, which holds
++  # the right binaries only when host and target architectures agree. Building
++  # x64 on an ARM64 Windows host breaks that assumption: System32 there holds
++  # ARM64 copies of msvcp140 / msvcp140_atomic_wait / vccorlib140 /
++  # vcruntime140, and an EC-aware x64 vcruntime140_1. The build then succeeds
++  # AND runs on the build machine -- Chromium uses libc++ rather than MSVC's
++  # STL, so the ARM64 ones are never loaded, and the EC-aware one loads fine on
++  # an ARM64 host -- while the output is silently not portable. Copied to a real
++  # x64 machine it dies at startup with "cannot locate entry point RtlIsEcCode
++  # in VCRUNTIME140_1.dll", RtlIsEcCode being an ntdll export that exists only
++  # on ARM64 Windows. Neither the build nor a local smoke test reports this.
++  #
++  # Redist layout: {toolchain_root}/VC/Redist/MSVC/{x.y.z}/
++  #                [debug_nonredist/]{cpu}/Microsoft.VC14x.CRT/
++  vc_redist_root = FindVCRedistRoot()
++  if not debug:
++    vc_toolset_dir = 'Microsoft.{}.CRT' \
++       .format(MSVC_TOOLSET_VERSION[GetVisualStudioVersion()])
++    redist_source_dir = os.path.join(vc_redist_root,
++                                     target_cpu, vc_toolset_dir)
++  else:
++    vc_toolset_dir = 'Microsoft.{}.DebugCRT' \
++       .format(MSVC_TOOLSET_VERSION[GetVisualStudioVersion()])
++    redist_source_dir = os.path.join(vc_redist_root, 'debug_nonredist',
++                                     target_cpu, vc_toolset_dir)
++  # Fall back to the caller's system directory when no redist is installed for
++  # this cpu: that is the pre-existing behaviour, and it is correct whenever
++  # host and target agree.
++  if os.path.isdir(redist_source_dir):
++    source_dir = redist_source_dir
+ 
+   # The filepaths may have an additional 'd' depending on whether we are in
+   # debug mode.

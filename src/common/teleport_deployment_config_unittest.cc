@@ -5,6 +5,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "build/build_config.h"
 #include "teleport/teleport_policy_buildflags.h"
 #include "base/functional/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -29,6 +30,24 @@ TEST(TeleportDeploymentConfigTrustTest, RejectsMissingFile) {
   EXPECT_FALSE(
       IsMachineConfigFileTrusted(dir.GetPath().AppendASCII("nonexistent.json")));
 }
+
+#if !BUILDFLAG(IS_POSIX)
+// Off POSIX the trust check is fail-closed by construction: there is no uid 0
+// and no group/other permission bits, so the real question is a DACL one that
+// has not been implemented. Pinned as its own test because the case above
+// passes off POSIX too, but for the wrong reason -- it would keep passing if
+// someone made the platform body return true for an owner-only check, which is
+// precisely the approximation that must not ship. Here the file is well-formed,
+// readable, and freshly written by this process, and it still must not be
+// trusted.
+TEST(TeleportDeploymentConfigTrustTest, MachineFileIsNeverTrustedOffPosix) {
+  base::ScopedTempDir dir;
+  ASSERT_TRUE(dir.CreateUniqueTempDir());
+  base::FilePath path = dir.GetPath().AppendASCII("DeploymentConfig.json");
+  ASSERT_TRUE(base::WriteFile(path, R"({"domain":"acme.internal"})"));
+  EXPECT_FALSE(IsMachineConfigFileTrusted(path));
+}
+#endif
 
 // With no higher-priority source set (fresh process, no switch/pref/file),
 // DeploymentDomain() must return the baked default for this build variant and

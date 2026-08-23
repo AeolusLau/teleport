@@ -406,6 +406,94 @@
 
 ---
 
+### TD-040 Windows 平台能力缺口(P1 只保证「编得出来」,产品语义仍是 macOS 独有)
+
+- **登记日期**:2026-08-22 · **优先级**:P2(Windows 是企业主力平台,这些缺口决定它能不能被真正纳管;但都不阻塞编译)
+- **背景**:Windows 端 P1 的验收标准明确定为「`chrome.exe` 编出来」。检出、overlay 应用(幂等)、工具脚本单测已通;下列能力在 macOS 侧已实现,在 Windows 侧**结构上就没有对应物**,不是配置没打开。
+- **逐项**:
+
+  | 缺口 | macOS 现状 | Windows 现状 | 后果 |
+  |---|---|---|---|
+  | 渠道来源 | `teleport_channel_mac.mm` 读 Info.plist `TeleportChannel` | `teleport_channel.cc` 的 `#if !BUILDFLAG(IS_MAC)` 桩返回空串 | 渠道恒为 `UNKNOWN`;渠道相关行为(升级指示、渠道门控)全不生效 |
+  | 部署配置读取 | `teleport_deployment_config_mac.mm` | 同上,`#if !IS_MAC` 桩 | 平台侧 deployment domain 覆盖不可用 |
+  | DM token 存储 | `patches/.../browser_dm_token_storage_mac.mm.patch` | 无 `_win` 对应 patch | 纳管无法落盘 → 企业注册链路不通 |
+  | 用户数据目录 / 平台策略读取域 | `chrome_paths_mac.mm` + `CrProductDirName`;策略域恒为基础 bundle id | Windows 走 `install_static` + 注册表,**未核对** | 数据目录命名与 GPO/注册表策略读取路径均未验证 |
+  | 图标 / 品牌资源 | `branding/` 下 `.icns` + `Assets.xcassets`;`generate_icons.py` 产出 | 无 `.ico`,`generate_icons.py` 只出 icns | `chrome.exe` 用上游 Chromium 图标 |
+  | 平台编解码器 | `dev.mac.gn` 开 `enable_platform_*`(VideoToolbox/AudioToolbox) | `dev.win.gni` 只开 `proprietary_codecs` + `ffmpeg_branding` | HEVC/Dolby/DTS 等在 Windows 上走 MediaFoundation,是另一条从未编过的路径,故意不在首次构建里一并打开 |
+  | 打包 / 签名 / 分发 / 自动升级 | 全链路(Sparkle + Developer ID + 公证 + dmg + OSS) | **整条缺失**;`package.py` 的 dev 分支写死 `Teleport.app` | Windows 无任何可分发产物。**安装器必须设 AppContainer ACL,见下方硬性要求(TD-042)** |
+
+- **打包 phase 的硬性要求(来自 TD-042,已在真机上确证)**:Windows 安装器**必须**给安装目录授予 AppContainer 读+执行权限,否则装出来的浏览器会在开若干标签页后整个进程 FATAL。
+
+  ```
+  icacls <installdir> /grant "*S-1-15-2-1:(OI)(CI)(RX)" /T   # ALL APPLICATION PACKAGES
+  icacls <installdir> /grant "*S-1-15-2-2:(OI)(CI)(RX)" /T   # ALL RESTRICTED APPLICATION PACKAGES(LPAC)
+  ```
+
+  这不是「便携包的临时补救」,而是**正式安装包本来就要做的事**——`C:\Program Files` 之所以能直接跑,正是因为系统/安装器在那里设好了同样的 ACE。装到自定义目录(企业常见需求)时若不显式授权,就会重现 TD-042。**必须用 SID**:英文名在中文系统被本地化,按名字授权失败。
+  - 上游 `mini_installer` 走 `C:\Program Files` 时天然满足,所以照搬上游安装器**不一定**暴露这个问题——自定义安装路径、便携分发、以及任何绕过 installer 的部署方式才会踩。验收时要专门测一个**非 `Program Files` 的安装路径**。
+- **另一条独立缺口**:`branding_strings.py` 的 `_GRIT_TARGET_PLATFORM` 写死 `"darwin"`。id 重映射因此始终按 macOS 的 `<if expr>` 分支求解,Windows 构建里 `is_win` 分支独有的消息可能算不出正确重键。**只影响 zh 翻译完整性,不影响编译**。根治方向是对所有目标平台各求一次 id 映射再取并集(而不是把常量改成 `"win32"`——那只是把问题从 Windows 挪回 macOS)。
+- **当前处置**:全部登记不做。`docs/windows-build-setup.md` §6 是同一份清单的面向操作者版本。
+- **将来方向**:按「纳管能不能跑通」排序——DM token 存储 + 策略读取域 + 用户数据目录 是一组(决定 Windows 能不能被管),渠道来源次之,图标/编解码器再次之,打包分发单独成 phase。
+
+---
+
+### TD-041 沙箱渲染进程在 ARM64 宿主上死于 `RegisterWaitForSingleObject` — ✅ 已定性(2026-08-23,环境特有,不需改代码)
+
+- **登记日期**:2026-08-22 · **结案日期**:2026-08-23
+- **现象**(仅在 ARM64 Windows 宿主上):`out/win-x64-dev\chrome.exe` 启动后浏览器进程完全正常(overlay banner、企业策略栈初始化都对),渲染进程随即 FATAL:
+
+  ```
+  FATAL:base\win\object_watcher.cc:131 RegisterWaitForSingleObject failed: Access is denied. (0x5)
+    content::RendererMain → RenderThreadImpl → ChildThreadImpl::Init
+      → IPC::SyncChannel::Create → StartWatching → WaitableEventWatcher → ObjectWatcher
+  ```
+
+  加 `--no-sandbox` 即正常。
+
+- **结论**:**这台 ARM64 模拟宿主特有,真 x64 硬件上不存在。** 2026-08-23 把同一份产物拷到真实 **x64 Windows 10** 机器上运行,**页面正常渲染**(沙箱开启,未加 `--no-sandbox`),关于页显示 `0.2.0.1-dev` / 「闪现」。不需要改代码。
+- **定性路径留档(避免重复调研)**:
+  - 用官方 x64 Chrome(Chrome for Testing 152)在 ARM64 宿主上做对照,渲染进程稳定存活 → 推翻了「x64 模拟 + 沙箱天然不兼容」,但**不能**推出「官方没撞上」:该处是 `DPLOG(FATAL)`(release 编译掉)且 `SyncChannel::StartWatching()` 不检查返回值,官方撞上也只会静默降级。所以这个对照**无法单独定性**,真正定性靠的是把产物拿到真 x64 上跑。
+  - 本构建 `dcheck_always_on = true`(`is_debug=false` + `is_official_build=false` 的默认),所以同一个失败在这里是 FATAL,在 official 构建里会是隐性降级。
+- **仍然成立的操作纪律**:在**这台 ARM64 开发机**上做 Windows 冒烟,一律加 `--no-sandbox` 并在结论里标注;需要验证与沙箱耦合的运行时行为(沙箱本身、GPU、JIT)时,必须拿到真 x64 机器上做,或编 arm64 原生构建。
+
+---
+
+### TD-042 便携解压包缺少 AppContainer ACL,导致浏览器进程 FATAL
+
+- **登记日期**:2026-08-23 · **优先级**:P2(与 Windows 打包 phase 绑定)
+- **现象**(真 x64 Win10):先能正常渲染,**多开几个页面后整个浏览器进程消失**:
+
+  ```
+  ERROR:sandbox\policy\win\sandbox_win.cc:804]
+    Sandbox cannot access executable <dir>\chrome.exe
+    Check filesystem permissions are valid. 拒绝访问。(0x5)
+  FATAL:sandbox\policy\win\sandbox_win.cc:591] DCHECK failed: false.
+    → SandboxWin::GeneratePolicyForSandboxedProcess → StartSandboxedProcess
+  ```
+
+- **成因**:Chromium 部分子进程用 **AppContainer** 沙箱;`AddAppContainerProfileToConfig` 启动前 `AccessCheck` AppContainer SID 对 `chrome.exe` 的读+执行权限。目录 ACL 不含 `ALL APPLICATION PACKAGES` 时检查失败。**「先好后崩」是因为最初的渲染进程不走 AppContainer**,直到某个用它的子进程按需启动才触发。
+- **判据不是「共享目录」,是 ACL —— 这一点曾误判两次,实测数据留档**:
+
+  | 路径 | AppContainer ACE |
+  |---|---|
+  | `C:\` 根 | 无 |
+  | `C:\Users\<user>`、`AppData\Local` | 无 |
+  | `D:\` 根(及其下任意目录) | 无 |
+  | `C:\Program Files` | **有**((RX) 且 `(OI)(CI)(IO)` 可继承) |
+
+  所以「换个非共享目录」或「挪到 C 盘」都**不解决问题**;显式授权是唯一可靠做法。
+- **解法**(实测非提权可执行,子文件继承到 `(I)(RX)`):
+  ```
+  icacls <dir> /grant "*S-1-15-2-1:(OI)(CI)(RX)" /T   # ALL APPLICATION PACKAGES
+  icacls <dir> /grant "*S-1-15-2-2:(OI)(CI)(RX)" /T   # ALL RESTRICTED APPLICATION PACKAGES(LPAC)
+  ```
+  **必须用 SID**:英文名在中文系统被本地化为「所有应用程序包」,按名字授权会失败。
+- **为什么登记而非当作使用错误**:① **便携解压包特有**——正式安装包由 installer 设这些 ACL,故 Windows 打包 phase **必须覆盖这一步**,否则装出来的包同病(见 TD-040 打包项);② DCHECK 构建把它放大成「整个浏览器崩溃」,release 构建里只是子进程启动失败、功能静默不可用,**更难查**。
+- **真机验证(2026-08-23)**:在真 x64 Windows 10 上对解压目录执行上述两条 `icacls` 后,**多标签页不再崩溃**,浏览器稳定。修复手段已确证有效,不是理论推断。
+- **当前处置**:分发 zip 内 README 已把 icacls 列为解压后必做步骤;`TD-040` 的打包项已挂上本条,作为 Windows 安装器的硬性要求。
+
+---
+
 ### TD-NOTE 已核实「沉默良好态」,无需处理(留档防重复调研)
 
 - **登记日期**:2026-05-31

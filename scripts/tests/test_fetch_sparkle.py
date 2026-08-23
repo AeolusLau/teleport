@@ -14,7 +14,8 @@ def test_link_path_under_chromium_src(tmp_path, monkeypatch):
     monkeypatch.setenv("TELEPORT_CHROMIUM_DIR", str(tmp_path / "cr"))
     p = fetch_sparkle.link_path()
     assert p.name == "Sparkle.framework"
-    assert "third_party/teleport_sparkle" in str(p)
+    # as_posix(): str() on a Windows Path yields backslashes.
+    assert "third_party/teleport_sparkle" in p.as_posix()
 
 
 def test_verify_sha256_matches(tmp_path):

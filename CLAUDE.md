@@ -45,6 +45,9 @@ src/                       overlay 源码 → 构建期链接为 chromium/src/te
   gn/args/dev.mac.gn       开发期 GN args 模板(updater 关,env=dev)
   gn/args/staging.mac.gn   staging 渠道模板(链式 import release.mac.gn,仅覆盖 env=staging)
   gn/args/release.mac.gn   official 渠道 GN args 模板(updater 开,env=release)
+  gn/args/dev.win.gni      Windows dev 的架构无关参数(**非模板**,供下面两个 import)
+  gn/args/dev.win.x64.gn   Windows x64 dev 模板(→ out/win-x64-dev;企业实装架构)
+  gn/args/dev.win.arm64.gn Windows arm64 dev 模板(→ out/win-arm64-dev;ARM64 宿主原生跑)
 scripts/                   Python 编排(系统 py 3.9 无 pytest → 用 uv)
   bootstrap.py             建/定位 chromium 检出 + 建两个链接(可 --skip-sync)
   sync.py                  gclient sync 到 CHROMIUM_VERSION + 版本校验
@@ -150,6 +153,31 @@ uv run python scripts/package.py --channel staging --rehearse    # 演练:真实
 python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重生背景(uv run --with pillow)
 ```
 
+### Windows(P1 进行中:目标是 `chrome.exe` 编出来)
+
+完整搭建步骤、ARM64 宿主专项、与 macOS 的差异一览见 **`docs/windows-build-setup.md`**。
+
+```powershell
+$env:DEPOT_TOOLS_WIN_TOOLCHAIN='0'          # 用本机 VS,别拉 Google 内部工具链
+# TELEPORT_CHROMIUM_ROOT 指向大容量卷(如 D:\workspace\chromium);别设 TELEPORT_CHROMIUM_DIR
+
+uv run python scripts/bootstrap.py --skip-sync   # 建两条链接:注入链接=符号链接(需开发者模式),build/=junction
+uv run python scripts/apply_patches.py           # overlay,幂等
+uv run pytest                                    # 工具脚本单测
+
+Set-Location $env:TELEPORT_CHROMIUM_ROOT\151.0.7922\src
+# 在 ARM64 宿主上先验 arm64、再验 x64:x64 产物只能模拟跑,拿结论慢;且绝大多数坑与架构无关。
+# 不要并行两个全量构建——16 vCPU + 模拟工具链,并行只会互相拖慢。
+gn gen out/win-arm64-dev --args='import("//teleport/gn/args/dev.win.arm64.gn")'
+gn gen out/win-x64-dev   --args='import("//teleport/gn/args/dev.win.x64.gn")'
+autoninja -C out/win-arm64-dev obj/teleport/teleport/teleport_startup.obj  # 快速验证:只编我们的 TU(35 个,分钟级)
+autoninja -C out/win-arm64-dev chrome                # 主构建
+autoninja -C out/win-arm64-dev teleport_unittests    # 注意:闭包 ~45.8k 步,约等于 chrome 的七八成
+# arm64 全绿之后再走一遍 x64(-C out/win-x64-dev)
+```
+
+**`package.py` 在 Windows 上不可用**(dev 分支写死 `Teleport.app`),打包/签名/分发/自动升级整条链路是后续 phase。
+
 ## 关键 gotcha
 
 - **chromium 检出位置**:默认按**发布分支**派生,`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`(取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`)——几百 GB 检出不该绑定在每个 worktree 里,且换分支时路径自动跟着 `CHROMIUM_VERSION` 变化,不用手改任何变量。`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖这条派生规则(向后兼容 / CI),但**一旦设置就覆盖一切**——每次执行升级相关脚本前先 `unset TELEPORT_CHROMIUM_DIR` 确认它是空的,否则会悄悄对着上一次会话残留的旧路径操作而不报错。同一发布分支内的 PATCH 级安全补丁(如 `.76 → .132`)复用同一检出目录;里程碑跃迁(`MAJOR`/`BUILD` 变化)落到新目录,旧检出(含全部构建缓存)原地保留作回退底座,永不迁移或删除。完整流程见 `docs/chromium-upgrade-runbook.md`。
@@ -205,11 +233,30 @@ python scripts/gen_dmg_background.py             # 改 dmg 文案/布局后重�
 - **隧道路由表来自 bind 响应,不再来自 `AutoSelectCertificateForUrls`**:`POST https://gate.<D>/tunnel/bind` 的响应体里的 `routable_origins` 数组(结构化条目 `{host, port, include_subdomains, blocked}`)是路由白名单的**唯一**来源;`teleport_tunnel_logic.cc::ParseRoutableOrigins` 解析+校验+排除 edge/gate+去重后交给 `BuildTunnelProxyConfig` 产出 `CustomProxyConfig`。旧路径(从 content-settings 的 `[*.]host` 模式推导)已删,连同 `DeriveRoutableOrigins` 这个符号——**它在旧文档/旧 TD 里还会出现,那是历史,不是现状**。`AutoSelectCertificateForUrls` 策略**仍在读值门里、别当残留删掉**:它不再供给路由表,但它是让网络栈愿意在 gate 的 mTLS 握手上出示设备证书的那个条件。响应体上限 `kMaxBindBodyBytes = 64 KiB` 与服务端截断预算 48 KiB 是**跨仓成对常量,任何一侧改动必须同批改另一侧**(超限不是截断而是整个 bind 失败),理由与算术见 `docs/verification/2026-08-16-payload-budget.md`。响应体**无签名**,host 校验是唯一补偿(`TD-TUNNEL-BIND-RESPONSE-UNSIGNED`,该条目已按实际判据重写)。
 - **`teleport://tunnel` 是隧道诊断页**:显示派生后的实际状态(纳管/策略/编排/凭据/到期时刻、生效路由表、**被跳过条目及原因**、最近 CONNECT 结果与 authority),并提供手动重绑。它存在的意义是让「路由表到底变成了什么」第一次可见——静默丢弃(C-2)正是本次改动要消灭的缺陷,所以**每一条拒绝都必须可上报**。页面 handler 编在 `//chrome/browser/ui/webui`,经 `teleport_tunnel_logic.h` 的 callback seam 取状态,**不得** include `teleport_tunnel_service.h`(会成 GN 环,普通 `gn gen` 就报)。
 - **隧道的纯逻辑必须留在 `teleport_tunnel_logic.{h,cc}`**:`teleport_tunnel_service.cc` 经 `patches/chrome/browser/BUILD.gn.patch` 编进 `chrome/browser`,轻量 `teleport_unittests` **链不到它的符号**(`TD-TUNNEL-UNITTEST-WIRING`),写进去的东西只能靠重型 `unit_tests` 覆盖。协议常量同理——`kMaxBindBodyBytes` 就是为了能被钉住才从 service 的匿名 namespace 搬进 logic 头的。
+- **Windows 上工作区行尾是硬要求,不是风格问题**:Git for Windows 默认 `core.autocrlf=true`,clone 出来的**整棵树都是 CRLF**,而索引仍是 LF——`git status` 全程干净,看不出任何异常。后果是 `patches/*.patch` 在磁盘上带 CRLF,对着 LF 的 chromium 检出既不能正向 `git apply` 也不能 `--reverse --check`;而 `apply_patches.py` 恰恰用后者判定「已应用」,于是它在一棵**完全正常**的树上报 `patch does not apply cleanly`。两道防线:① 仓库根 `.gitattributes` 的 `* text=auto eol=lf` 把工作区行尾钉死,不再依赖每人的 `core.autocrlf`;② **所有生成进检出的文件一律走 `_lib.write_text_lf()`**(`chrome/VERSION`、引擎版本头、品牌重写后的 grd/xtb、导出的 patch)——`Path.write_text()` 以 `newline=None` 打开,会把换行翻译成 `os.linesep`。新增「往检出里写文件」的代码时**别用 `Path.write_text()`**。
+- **Windows 上 overlay 注入链接必须是真符号链接,不能是目录联接(junction)——siso 不穿越 junction**(2026-08-22 实测):`mklink /J` 建的联接,`gn gen` 能完美解析并报出全部 ~31.5k targets,然后 siso 在**编译任何东西之前**死于 `error in depfile ...: deps input "../../../../teleport/BUILD.gn" not exist: store resolve next dir teleport failed`——这条错误里没有半个字提到链接或权限。换成 `mklink /D` 的真符号链接(reparse tag 从 `0xa0000003` 变成 `0xa000000c`)siso 立刻正常。siso 是 Go 写的,Go 标准库对这两种 reparse point 的语义历来就不一样。**因此 `create_dir_link(..., traversed_by_build=True)` 在 Windows 上只建符号链接,建不了就硬失败并给出两条出路**(开开发者模式 / 提权跑一次 `mklink /D`),**绝不回退到 junction**——回退等于把一个当场的清晰错误换成上面那个又晚又费解的。反过来,`<repo>/build → out` 这条链接构建系统从不走进去,继续用免权限的 junction。
+- **Windows out 目录必须正好在 `out/` 下一层**(`out/win-x64-dev` ✅,`out/win/x64/dev` ❌):Chromium 把 MIDL 的生成产物**签进仓库**(`third_party/win_build_output/midl/…`),构建期跑一遍 midl.exe 再与签入基线**逐字节比对**,不一致即失败。而 midl.exe 会把 `.idl` 的路径原样写进生成文件的注释里,签入基线里是 `../../third_party/…`——那是 out 目录在 `out/<名字>` 时的相对路径。照搬 macOS 的 `out/mac/arm64/dev` 分层会让它变成 `../../../../third_party/…`,于是**每个 MIDL target 都失败**,报的是「midl.exe output different from files in …」加一段只有注释行不同的 diff,完全看不出是目录深度问题。macOS 不跑 MIDL,所以那边分几层都无所谓——这条只约束 Windows。
+- **git 把 junction 当普通目录**:`git status --porcelain` 对 junction 报 `?? teleport/`(带尾斜杠),对符号链接报 `?? teleport`。`export_patches.is_injected_artifact()` 因此对路径做 `rstrip("/")`(现在注入链接已是符号链接,这条是给早期 junction 检出兜底)。同理 `patch_paths()`/`branding_paths()` 用 `as_posix()` 而非 `str()`——git 恒输出正斜杠,拿 Windows 的反斜杠去比会**全不匹配**,而失败形态不是崩溃,是每个文件都被判成「未分类」从而在健康的树上触发安全阀。
+- **depot_tools 的 `gclient`/`gn`/`autoninja` 必须经 `_lib.depot_tool()` 解析**:三者都同时存在「无扩展名的 POSIX 脚本」和「`.bat`」两份,而 `subprocess`(不带 `shell=True`)走 CreateProcess,**只会补 `.exe`、不查 PATHEXT**,于是裸名字命中 sh 脚本并以「not a valid Win32 application」失败。`shutil.which` 会查 PATHEXT,返回 `.bat`。
+- **`gclient sync --no-history` 的检出一个 tag 都没有**:depth-1 浅克隆压根不协商 tag ref,`--with_tags` 无从带回。所以 `sync.py` 的版本校验先查本地 tag,查不到就 `git ls-remote` 向 origin 取(只读 ref 广播、不传对象),而不是把「本地没这个 tag」当成「检出错了」。chromium 的发布 tag 是**轻量 tag**,`refs/tags/<t>` 直接指向 commit,没有 `^{}` 那行。
+- **ARM64 Windows 宿主缺 `Debuggers\x64`**:SDK 安装器按宿主架构过滤载荷,ARM64 上只装 `Debuggers\arm64`;但 Chromium 总会额外实例化一套 x64 宿主工具链(`win_clang_x64`),`vs_toolchain.py:_CopyDebugger()` 对每套工具链都按 `Debuggers\<target_cpu>` 取 dbghelp/dbgcore/symsrv——**所以 `target_cpu="arm64"` 也照样卡在缺 x64 那份上**。取法见 `docs/windows-build-setup.md` §2.4(从微软 SDK 载荷 CDN 取 MSI + `msiexec /a` 展开,不需要第二台机器)。
+- **在 ARM64 宿主上编 x64,MSVC 运行时 DLL 会被拷成宿主架构的——本机永远测不出来**(2026-08-23 实测,已 patch `build/vs_toolchain.py`):`_CopyUCRTRuntime()` 上游**只对 `target_cpu == 'arm64'` 特判**去 VC redist 取,x86/x64 一律用宿主的 `C:\Windows\System32`。这个假设只在「宿主架构 == 目标架构」时成立。ARM64 宿主上编 x64 时,557 个 DLL 里有 5 个是错的:`msvcp140` / `msvcp140_atomic_wait` / `vccorlib140` / `vcruntime140` 直接是 **ARM64**,`vcruntime140_1` 是 x64 但**依赖 `RtlIsEcCode`**(只有 ARM64 Windows 的 ntdll 才导出这个符号)。**构建绿、本地冒烟也绿**——那 4 个 ARM64 的根本不会被加载(Chromium 用自带 libc++,不用 MSVC 的 STL),EC 版那个在 ARM64 宿主上加载正常;直到把产物拷到真 x64 机器才炸:「无法定位程序输入点 RtlIsEcCode 于动态链接库 VCRUNTIME140_1.dll 上」。patch 把「优先用**目标 CPU** 的 VC redist」从 arm64 专属推广到所有架构,redist 不存在时才回退 System32。**核对方法**:产物目录里所有 `*.dll` 的 PE machine 都应是 `0x8664`,且无一含 `RtlIsEcCode` 字符串。
+- **便携解压的 Windows 产物必须显式授 AppContainer ACL,否则浏览器进程 FATAL**(2026-08-23 真 x64 Win10 实测):Chromium 部分子进程用 **AppContainer** 沙箱,`sandbox_win.cc:798` 在启动前 `AccessCheck` **AppContainer SID 对 `chrome.exe` 的读+执行**;不通过就返回 `SBOX_ERROR_CREATE_APPCONTAINER_ACCESS_CHECK`,上层 `sandbox_win.cc:591` 的 `DCHECK(false)` 命中 → **整个浏览器进程死**。
+  - **判据是目录 ACL 里有没有 AppContainer 授权,与「是否共享目录」无关**——这一点极易误判。实测:`C:\` 根、`C:\Users\<user>`、`AppData\Local`、`D:\` 根**全都没有**;只有 `C:\Program Files` 这类由安装程序/系统设好的位置才有。所以「换个非共享目录」「挪到 C 盘」都不解决问题。
+  - **迷惑现象:先能正常渲染,多开几个页面才崩**——最初的渲染进程不走 AppContainer,直到某个用它的子进程按需启动才触发。
+  - **解法**(非提权即可,已验证子文件能继承到 `(I)(RX)`):
+    ```
+    icacls <dir> /grant "*S-1-15-2-1:(OI)(CI)(RX)" /T   # ALL APPLICATION PACKAGES
+    icacls <dir> /grant "*S-1-15-2-2:(OI)(CI)(RX)" /T   # ALL RESTRICTED APPLICATION PACKAGES(LPAC)
+    ```
+    **必须用 SID**:英文名在中文系统上是「所有应用程序包」,写英文名匹配不到。
+  - **这是便携解压包特有的**:正式安装包由 installer 负责设这些 ACL,所以将来的 Windows 打包 phase 必须覆盖这一步(TD-042)。另注意 DCHECK 构建把它放大成了浏览器崩溃;release 构建里只是子进程启动失败、功能静默不可用。
+- **搬运 Windows 构建产物用 `gn desc <out> //chrome:chrome runtime_deps`**,不要手挑文件——那是 GN 自己维护的运行时闭包,改构建参数/升基线后自动跟着变。唯一要做的过滤是**剔掉 `.pdb`**:实测 8367 MB 里符号占 6817 MB(81%),运行完全用不到(要在对端调崩溃再单独拷,文件名一一对应)。剩下 1550 MB 中 1344 MB 是 550 个 DLL,那是 `is_component_build=true` 的代价。
 - **`gn check` 在本树是红的(既有 overlay 违规,28 处/19 文件)**,`gn gen` 不跑它,所以日常构建一直绿。**不要引用「gn check 会兜住坏依赖边」作为设计依据**——它兜不住。默认 `--error-limit` 会在 10 条截断并打印「Too many errors」,只看默认输出会误以为只有一处违规。详见 `TD-OVERLAY-GN-CHECK-VIOLATIONS`。
 
 ## 目标平台
 
-Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙等),MVP 暂不。**目前仅 macOS(Apple Silicon)跑通构建**。
+Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙等),MVP 暂不。**macOS(Apple Silicon)构建 + 渠道包全链路已跑通;Windows P1 已达成并在真实 x64 硬件上验证**(x64 `chrome.exe` 编出;`teleport_unittests` 169/169;在真 x64 Windows 10 上沙箱开启下页面正常渲染、关于页显示 `0.2.0.1-dev` / 「闪现」。构建机是 ARM64 虚拟机,其沙箱异常已定性为环境特有,见 TD-041;便携包需授 AppContainer ACL,见 TD-042),见 `docs/windows-build-setup.md`。Linux 未开始。
 
 ## 开发工作流
 
@@ -221,7 +268,8 @@ Windows、macOS、Linux(企业以 Windows 为主);未来适配国产 OS(鸿蒙�
 ## 待定 / 后续 phase
 
 - 后端服务代号(在 fairyland 内)、浏览器↔后端**策略下发协议**(传输/格式/鉴权)。
-- Windows / Linux 构建(注入从 symlink 换 junction 或受管检出)、国产 OS 适配。
+- ~~Windows 构建的注入方式(symlink 换 junction 或受管检出)~~ → **已定**:仍是符号链接,Windows 上需 `SeCreateSymbolicLinkPrivilege`(开发者模式);junction 被 siso 拒绝,受管/拷贝检出不需要了。见「关键 gotcha」。Windows 剩余工作见 `docs/windows-build-setup.md` §6 与 TD-040。
+- Linux 构建、国产 OS 适配。
 - ~~代码签名、打包、分发、自动更新~~ → **macOS canary 已完成**(Sparkle 自动升级 + Developer ID 签名 + Apple 公证 + 样式 dmg + OSS 分发,实测升级闭环)。剩:Windows/Linux 签名与分发、多通道(beta/stable)、全静默后台升级、未来企业版 Omaha 4。
 - CI(构建缓存与产物策略)。
 - 完整 rebrand(各平台图标/安装包等)。

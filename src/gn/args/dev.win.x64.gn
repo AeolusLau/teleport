@@ -1,0 +1,11 @@
+# Dev build args for the teleport overlay on Windows x64.
+# Out dir: out/win-x64-dev.
+#
+# x64 is the architecture enterprise Windows fleets actually run, so this is the
+# template that produces the artifact the product ships. It builds fine from an
+# ARM64 Windows host (Chromium documents that host explicitly); the resulting
+# chrome.exe then runs under x64 emulation on such a host, which is adequate for
+# smoke tests but is not representative of its performance on real x64 hardware.
+import("//teleport/gn/args/dev.win.gni")
+
+target_cpu = "x64"

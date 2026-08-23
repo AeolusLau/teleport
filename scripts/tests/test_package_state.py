@@ -1,4 +1,7 @@
+import sys
 from pathlib import Path
+
+import pytest
 
 import _package_state as ps
 
@@ -37,6 +40,12 @@ def test_app_content_digest_changes_on_rename(tmp_path):
     assert ps.app_content_digest(app) != d1
 
 
+@pytest.mark.skipif(
+    sys.platform != "darwin",
+    reason="Exercises the Versions/Current symlink inside a macOS .app bundle. "
+           "Creating a file symlink on Windows needs SeCreateSymbolicLinkPrivilege "
+           "(Developer Mode or elevation), and there is no .app to fingerprint "
+           "there anyway -- the packaging path this covers is macOS-only.")
 def test_app_content_digest_reflects_symlink_target(tmp_path):
     app = _make_app(tmp_path)
     link = app / "Contents" / "Current"

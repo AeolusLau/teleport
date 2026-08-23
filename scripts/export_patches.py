@@ -44,7 +44,7 @@ from pathlib import Path
 import bootstrap
 import branding_strings
 import fetch_sparkle
-from _lib import chromium_src, repo_root
+from _lib import chromium_src, repo_root, write_text_lf
 
 # Written at overlay time by generate_version.py.
 _VERSION_GENERATED = (
@@ -71,7 +71,23 @@ _INJECTED_PREFIX = fetch_sparkle.LINK_RELPATH + "/"
 
 
 def is_injected_artifact(path: str) -> bool:
-    return path in _INJECTED_EXACT or path.startswith(_INJECTED_PREFIX)
+    """True for the two untracked artifacts bootstrap.py / fetch_sparkle.py plant
+    in every working checkout.
+
+    The trailing-slash strip covers a checkout whose overlay link is a Windows
+    directory JUNCTION rather than a symlink. git sees a junction as an ordinary
+    directory, so `git status --porcelain` reports it as "teleport/" -- with the
+    slash git appends to any untracked directory -- where a symlink reports
+    "teleport". Without the strip the recognizer misses it and the safety valve
+    refuses every export on a perfectly healthy bootstrapped checkout.
+
+    bootstrap.py now always plants a real symlink (siso will not traverse a
+    junction -- see _lib.create_dir_link), so on a freshly bootstrapped tree the
+    slash form no longer occurs. The strip stays because checkouts created
+    before that change still carry a junction, and this is the cheapest possible
+    way to keep working on them.
+    """
+    return path.rstrip("/") in _INJECTED_EXACT or path.startswith(_INJECTED_PREFIX)
 
 
 def rebase_in_progress(src: Path) -> bool:
@@ -98,19 +114,28 @@ def rebase_in_progress(src: Path) -> bool:
 
 
 def patch_paths(root: Path) -> set[str]:
-    """Upstream paths covered by patches/, derived from the tree itself."""
+    """Upstream paths covered by patches/, derived from the tree itself.
+
+    as_posix(), not str(): every path in these sets is compared against a path
+    that came out of `git status --porcelain` in the chromium checkout, and git
+    always emits forward slashes regardless of platform. str() on a Windows Path
+    yields backslashes, so nothing would ever match -- and the failure mode is
+    not a crash but classify_change() returning "unclassified" for EVERY changed
+    file, which trips the three-way safety valve on a completely healthy export.
+    """
     base = Path(root) / "patches"
     return {
-        str(p.relative_to(base))[: -len(".patch")]
+        p.relative_to(base).as_posix()[: -len(".patch")]
         for p in base.rglob("*.patch") if p.is_file()
     }
 
 
 def branding_paths(root: Path) -> set[str]:
+    # as_posix() for the same reason as patch_paths above.
     base = Path(root) / "branding"
     if not base.exists():
         return set()
-    return {str(p.relative_to(base)) for p in base.rglob("*") if p.is_file()}
+    return {p.relative_to(base).as_posix() for p in base.rglob("*") if p.is_file()}
 
 
 def version_generated_paths(root: Path) -> set[str]:
@@ -260,7 +285,7 @@ def export(root: Path, src: Path, tag: str) -> list[str]:
         dest = Path(root) / "patches" / f"{rel}.patch"
         dest.parent.mkdir(parents=True, exist_ok=True)
         if not dest.exists() or dest.read_text() != diff:
-            dest.write_text(diff)
+            write_text_lf(dest, diff)
             rewritten.append(rel)
     return rewritten
 

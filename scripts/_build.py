@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 
-from _lib import chromium_src, repo_root
+from _lib import chromium_src, depot_tool, repo_root
 
 # Matches a `teleport_deployment_env = "dev"|"staging"|"release"` line the way
 # GN writes it back into args.gn (and the way our gn/args/*.mac.gn templates
@@ -68,8 +69,33 @@ def resolve_channel(name: str) -> Channel:
 _GN_ARG_VALUE_RE = re.compile(r'^\s*(\w+)\s*=\s*"?([^"\n]*?)"?\s*$')
 
 
+# Chromium vendors the gn binary per host platform under buildtools/. The
+# directory name is the HOST's, not the target's -- gn is the tool being run, so
+# a Windows host reads buildtools/win/gn.exe whether it is generating an x64 or
+# an arm64 out dir.
+_GN_BIN_BY_HOST = {
+    "darwin": ("mac", "gn"),
+    "win32": ("win", "gn.exe"),
+    "linux": ("linux64", "gn"),
+}
+
+
 def gn_bin():
-    return chromium_src() / "buildtools" / "mac" / "gn"
+    """Path to the vendored gn for this host.
+
+    Hardcoding buildtools/mac here was not merely wrong off macOS, it was
+    wrong QUIETLY: the sole caller (effective_gn_arg) catches OSError from a
+    missing binary and returns None, and assert_release_endpoints_consistent
+    reads None as "cannot establish what this out dir bakes" -- a refusal. So a
+    non-mac host would not have crashed, it would have failed every
+    distributable build with a message about a stale args.gn, pointing the
+    operator at the wrong file entirely.
+    """
+    try:
+        subdir, exe = _GN_BIN_BY_HOST[sys.platform]
+    except KeyError:
+        raise RuntimeError(f"no vendored gn path known for host {sys.platform!r}")
+    return chromium_src() / "buildtools" / subdir / exe
 
 
 def effective_gn_arg(out: str, arg: str) -> str | None:
@@ -225,7 +251,10 @@ def ensure_gn_gen(out: str, channel: Channel, *, distributing: bool) -> None:
         return
     print(f"gn gen {out} (args.gn missing; seeding from {channel.gn_args})")
     subprocess.run(
-        ["gn", "gen", out,
+        # depot_tool(), not a bare "gn"/"autoninja": on Windows a bare name
+        # resolves to depot_tools' extensionless POSIX script rather than the
+        # .bat, and fails as "not a valid Win32 application".
+        [depot_tool("gn"), "gen", out,
          f'--args=import("//teleport/gn/args/{channel.gn_args}")'],
         cwd=src, check=True,
     )
@@ -238,6 +267,6 @@ def build(out: str, channel: Channel, *, distributing: bool) -> None:
     no default)."""
     ensure_gn_gen(out, channel, distributing=distributing)
     subprocess.run(
-        ["autoninja", "-C", out, *channel.targets],
+        [depot_tool("autoninja"), "-C", out, *channel.targets],
         cwd=chromium_src(), check=True,
     )

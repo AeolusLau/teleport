@@ -1,0 +1,65 @@
+# Shared body of the Windows dev build args, imported by dev.win.x64.gn and
+# dev.win.arm64.gn -- which add nothing but `target_cpu`.
+#
+# A .gni rather than a .gn on purpose: everything here is architecture-neutral,
+# so this file is NOT a usable args template by itself (a `gn gen` seeded from
+# it would silently take host_cpu). The two .gn siblings are the templates; this
+# is the include. Splitting it this way rather than copying the body follows the
+# same reasoning staging.mac.gn records: two near-identical templates drift the
+# first time either is touched, and the drift reads as mere disagreement with
+# nothing marking which side is right.
+target_os = "win"
+
+# Fast iteration: release-ish codegen, component build, minimal symbols. Mirrors
+# dev.mac.gn. On Windows symbol_level=1 is also what keeps the PDBs to a size
+# that fits alongside a second architecture's out dir on the same volume.
+is_debug = false
+is_component_build = true
+symbol_level = 1
+blink_symbol_level = 0
+v8_symbol_level = 0
+
+is_official_build = false
+use_remoteexec = false
+
+# Upstream Blink ships a shape-cache consistency self-check behind
+# EXPENSIVE_DCHECKS (ng_shape_cache.h, upstream crbug.com/486945341) that
+# false-fires on CJK text with font fallback and aborts the renderer. The bug is
+# in Blink, not in anything platform-specific, so it applies here exactly as it
+# does on macOS (see dev.mac.gn); is_official_build=false otherwise defaults
+# enable_expensive_dchecks to true. Drop only the expensive verification class;
+# regular DCHECKs stay on.
+enable_expensive_dchecks = false
+
+# Pin every base::Feature to its compiled default. Without this a non-official
+# build applies testing/variations/fieldtrial_testing_config.json and force-
+# enables a batch of in-progress features; on macOS that produced a hard renderer
+# abort. Same reasoning, same fix, and it also means Windows dev runs never need
+# --disable-field-trial-config.
+disable_fieldtrial_testing_config = true
+
+# Proprietary codecs: enables Chromium's gated codec paths and ships the bundled
+# FFmpeg with the proprietary decoders (H.264/AVC, AAC, MP3). Patent-encumbered,
+# enabled deliberately for this product.
+#
+# Deliberately NOT carrying over dev.mac.gn's enable_platform_* block (HEVC,
+# Dolby Vision, AC-3/E-AC-3, AC-4, DTS, MPEG-H). Those select platform decoder
+# integrations, and on Windows they route through MediaFoundation rather than
+# VideoToolbox/AudioToolbox -- a different code path with its own build deps
+# that has never been compiled in this tree. Enabling them belongs in the media
+# parity pass, not in the build that is establishing whether Windows compiles at
+# all; turning them on here would mean debugging codec plumbing inside a
+# first-build failure. See docs/tech-debt.md.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+
+# NOTE: no enable_update_notifications here, unlike dev.mac.gn. That flag exists
+# to light the toolbar/app-menu "relaunch to update" indicator, which is driven
+# by the Sparkle bridge -- macOS-only, and Windows has no updater in this tree
+# yet. Upstream defaults it to is_chrome_branded (false here), which is the
+# honest value while there is nothing that can report an update.
+
+# Bake the dev enterprise endpoints (fairyland.io DM/enroll/register-handler
+# URLs + kDevPolicyKey verification root). See teleport.gni for the other two
+# environments.
+teleport_deployment_env = "dev"

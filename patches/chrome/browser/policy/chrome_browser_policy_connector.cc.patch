@@ -1,17 +1,33 @@
 diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
-index c475e2858878b..2eff15e73db52 100644
+index c475e28588..9d1d130f9f 100644
 --- a/chrome/browser/policy/chrome_browser_policy_connector.cc
 +++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
-@@ -54,6 +54,8 @@
+@@ -42,6 +42,13 @@
+ #include "content/public/common/content_switches.h"
+ #include "extensions/buildflags/buildflags.h"
+ #include "services/network/public/cpp/shared_url_loader_factory.h"
++// teleport: TELEPORT_ENV_IS_RELEASE gates IsCommandLineSwitchSupported() below,
++// which is platform-independent code. This include must therefore be
++// unconditional: parked inside the #elif BUILDFLAG(IS_MAC) branch it silently
++// vanishes on every other platform, and the failure is not a missing include
++// but "function-like macro 'BUILDFLAG_INTERNAL_TELEPORT_ENV_IS_RELEASE' is not
++// defined" -- pointing at the use site, hundreds of lines away from the cause.
++#include "teleport/teleport_policy_buildflags.h"
+ 
+ #if BUILDFLAG(IS_WIN)
+ #include "base/win/registry.h"
+@@ -54,6 +61,10 @@
  #include "base/strings/sys_string_conversions.h"
  #include "components/policy/core/common/policy_loader_mac.h"
  #include "components/policy/core/common/preferences_mac.h"
++// teleport: kManagedPrefsBundleId is read only by the mac policy-domain
++// override below, so this include is correctly mac-only. The buildflags header
++// is NOT -- see the unconditional include above.
 +#include "teleport/common/teleport_enterprise_enrollment.h"
-+#include "teleport/teleport_policy_buildflags.h"
  #elif BUILDFLAG(IS_ANDROID)
  #include "chrome/browser/policy/chrome_browser_cloud_management_controller_android.h"
  #include "components/policy/core/common/android/android_combined_policy_provider.h"
-@@ -103,9 +105,16 @@ void ChromeBrowserPolicyConnector::Init(
+@@ -103,9 +114,16 @@ void ChromeBrowserPolicyConnector::Init(
      PrefService* local_state,
      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
    PolicyLogger::GetInstance()->EnableLogDeletion();
@@ -30,7 +46,7 @@ index c475e2858878b..2eff15e73db52 100644
    auto device_management_service =
        std::make_unique<DeviceManagementService>(std::move(configuration));
    device_management_service->ScheduleInitialization(
-@@ -243,9 +252,27 @@ bool ChromeBrowserPolicyConnector::IsCommandLineSwitchSupported() const {
+@@ -243,9 +261,27 @@ bool ChromeBrowserPolicyConnector::IsCommandLineSwitchSupported() const {
      return true;
    }
  
@@ -58,7 +74,7 @@ index c475e2858878b..2eff15e73db52 100644
  }
  
  // static
-@@ -331,8 +358,16 @@ ChromeBrowserPolicyConnector::CreatePlatformProvider() {
+@@ -331,8 +367,16 @@ ChromeBrowserPolicyConnector::CreatePlatformProvider() {
  #elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
    CFStringRef bundle_id = CFSTR("com.google.ChromeForTesting");
  #else

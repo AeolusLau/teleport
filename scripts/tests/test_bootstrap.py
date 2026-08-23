@@ -3,6 +3,7 @@ from pathlib import Path
 
 import _lib
 import bootstrap
+from tests.conftest import requires_symlinks
 
 
 def test_gclient_template_enables_pgo_profiles():
@@ -42,6 +43,8 @@ def test_ensure_gclient_is_noop_when_var_present(tmp_path):
     assert p.read_text() == sentinel
 
 
+@requires_symlinks  # bootstrap plants the overlay injection link, which must
+                    # be a real symlink (siso will not traverse a junction).
 def test_bootstrap_repoints_stale_build_link(tmp_path: Path, monkeypatch):
     """A build/ link left over from the previous baseline must be repointed,
     not raise."""

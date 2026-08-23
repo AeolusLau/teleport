@@ -325,3 +325,55 @@ def test_guard_refuses_when_gn_cannot_resolve_the_env(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="could not resolve"):
         _build.assert_release_endpoints_consistent(
             "out/x", _build.resolve_channel("canary"), distributing=True)
+
+
+# --- Windows portability: tool resolution + vendored gn path --------------
+
+@pytest.fixture(autouse=True)
+def _identity_depot_tool(monkeypatch):
+    """Every gn/autoninja assertion in this module names the LOGICAL tool. In
+    production _build resolves that name through _lib.depot_tool, which returns
+    an absolute path (gn.bat / autoninja.bat on Windows). Stubbing it to identity
+    keeps those assertions about argv SHAPE rather than about where depot_tools
+    happens to be installed on the machine running the tests -- the resolution
+    itself is covered by the test below."""
+    monkeypatch.setattr(_build, "depot_tool", lambda name: name)
+
+
+def test_gn_gen_and_autoninja_resolve_through_depot_tool(tmp_path, monkeypatch):
+    """Both call sites must go through depot_tool(). A bare name reaches
+    CreateProcess on Windows, which only appends .exe and never consults
+    PATHEXT, so it selects depot_tools' extensionless POSIX script and fails as
+    "not a valid Win32 application"."""
+    asked = []
+    monkeypatch.setattr(_build, "depot_tool",
+                        lambda name: (asked.append(name), f"/dt/{name}")[1])
+    calls = []
+    monkeypatch.setattr(_build.subprocess, "run",
+                        lambda argv, **kw: calls.append((argv, kw)))
+    monkeypatch.setattr(_build, "chromium_src", lambda: tmp_path)
+    _build.build("out/x", _build.resolve_channel("dev"), distributing=False)
+    assert asked == ["gn", "autoninja"]
+    assert [argv[0] for argv, _ in calls] == ["/dt/gn", "/dt/autoninja"]
+
+
+def test_gn_bin_follows_the_host_not_a_hardcoded_mac_path(tmp_path, monkeypatch):
+    """buildtools/<host>/gn -- keyed on the HOST, since gn is the tool being run,
+    not the thing being built. Hardcoding mac here did not merely fail off macOS,
+    it failed QUIETLY: effective_gn_arg catches the OSError from a missing binary
+    and returns None, and assert_release_endpoints_consistent reads None as
+    "cannot establish what this out dir bakes" -- refusing the build with a
+    message about a stale args.gn that is not in fact the problem."""
+    monkeypatch.setattr(_build, "chromium_src", lambda: tmp_path)
+    for platform, rel in [("win32", ("win", "gn.exe")),
+                          ("darwin", ("mac", "gn")),
+                          ("linux", ("linux64", "gn"))]:
+        monkeypatch.setattr(_build.sys, "platform", platform)
+        assert _build.gn_bin() == tmp_path / "buildtools" / rel[0] / rel[1]
+
+
+def test_gn_bin_rejects_an_unknown_host(tmp_path, monkeypatch):
+    monkeypatch.setattr(_build, "chromium_src", lambda: tmp_path)
+    monkeypatch.setattr(_build.sys, "platform", "aix")
+    with pytest.raises(RuntimeError, match="aix"):
+        _build.gn_bin()

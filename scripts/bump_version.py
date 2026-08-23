@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _lib import repo_root
+from _lib import repo_root, write_text_lf
 from _publish import current_branch
 from _release import parse_semver, read_teleport_version
 
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     current = read_teleport_version(root)
     new_version = bump(current, args.part)
 
-    (root / "TELEPORT_VERSION").write_text(new_version + "\n")
+    write_text_lf(root / "TELEPORT_VERSION", new_version + "\n")
     commit_version(root, new_version)
 
     print(f"bumped {args.part}: {current} -> {new_version}")

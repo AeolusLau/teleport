@@ -4,14 +4,27 @@ from pathlib import Path
 import pytest
 
 import _lib
+from tests.conftest import requires_symlinks
 
 
-def test_create_dir_link_creates_symlink(tmp_path: Path):
+def _is_dir_link(p: Path) -> bool:
+    """True for whichever link kind create_dir_link makes on this host.
+
+    Path.is_symlink() is False for a Windows junction -- junctions carry a
+    different reparse tag -- so asserting is_symlink() would demand the one link
+    kind create_dir_link deliberately does NOT use there: a real symlink needs
+    SeCreateSymbolicLinkPrivilege, a junction needs none, and that is what lets
+    bootstrap.py run unelevated.
+    """
+    return p.is_symlink() or (p.is_dir() and os.path.realpath(p) != str(p))
+
+
+def test_create_dir_link_creates_a_directory_link(tmp_path: Path):
     target = tmp_path / "target"
     target.mkdir()
     link = tmp_path / "link"
     _lib.create_dir_link(link, target)
-    assert link.is_symlink()
+    assert _is_dir_link(link)
     assert Path(os.path.realpath(link)) == target.resolve()
 
 
@@ -39,7 +52,7 @@ def test_create_dir_link_replaces_empty_dir(tmp_path: Path):
     link = tmp_path / "link"
     link.mkdir()  # empty real dir (e.g., a stray out/)
     _lib.create_dir_link(link, target)
-    assert link.is_symlink()
+    assert _is_dir_link(link)
 
 
 def test_create_dir_link_nonempty_dir_raises(tmp_path: Path):
@@ -170,3 +183,85 @@ def test_sha256_of_known_vectors(tmp_path):
     assert _lib.sha256_of(abc) == (
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     )
+
+
+# --- Windows portability -------------------------------------------------
+
+def test_write_text_lf_keeps_lf_on_every_host(tmp_path: Path):
+    """Path.write_text opens with newline=None, which translates every linefeed
+    to os.linesep -- CRLF on Windows. Files this repo generates into the chromium
+    checkout are then compared byte for byte by `git apply --reverse --check`,
+    which is how apply_patches.py decides a patch is already applied; a CRLF
+    rewrite breaks idempotency on a tree that is correctly patched."""
+    p = tmp_path / "f.txt"
+    _lib.write_text_lf(p, "a\nb\n")
+    assert p.read_bytes() == b"a\nb\n"
+
+
+def test_write_text_lf_round_trips_utf8(tmp_path: Path):
+    p = tmp_path / "f.txt"
+    _lib.write_text_lf(p, "闪现\n")
+    assert p.read_bytes() == "闪现\n".encode("utf-8")
+
+
+def test_depot_tool_resolves_through_which(monkeypatch):
+    """A bare "gclient"/"gn"/"autoninja" passed to subprocess is not runnable on
+    Windows: depot_tools ships each as both an extensionless POSIX script and a
+    .bat, and CreateProcess only ever appends .exe -- it never consults PATHEXT,
+    so it picks the sh script and fails as "not a valid Win32 application"."""
+    monkeypatch.setattr(_lib.shutil, "which", lambda name: f"/dt/{name}.bat")
+    assert _lib.depot_tool("gclient") == "/dt/gclient.bat"
+
+
+def test_depot_tool_raises_when_not_on_path(monkeypatch):
+    monkeypatch.setattr(_lib.shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match="depot_tools"):
+        _lib.depot_tool("gn")
+
+
+@requires_symlinks
+def test_create_dir_link_traversed_by_build_is_a_real_symlink(tmp_path: Path):
+    """The overlay injection link must be a SYMLINK, not a junction: siso walks
+    into it, and it will not traverse a junction. os.path.islink() distinguishes
+    the two on Windows (a junction is a mount-point reparse tag, not a symlink
+    one), so this asserts the stronger property, unlike _is_dir_link above."""
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "link"
+    _lib.create_dir_link(link, target, traversed_by_build=True)
+    assert os.path.islink(link)
+    assert Path(os.path.realpath(link)) == target.resolve()
+
+
+def test_create_dir_link_symlink_failure_is_actionable(tmp_path: Path, monkeypatch):
+    """Windows without SeCreateSymbolicLinkPrivilege must fail HERE, naming both
+    remedies -- not fall back to a junction. The junction failure surfaces much
+    later, from siso, as `store resolve next dir ... failed`, long after `gn gen`
+    has reported ~31.5k targets and with nothing in the message connecting it to
+    a link type or a privilege."""
+    monkeypatch.setattr(_lib, "is_windows", lambda: True)
+
+    def _denied(*a, **kw):
+        raise OSError(1314, "A required privilege is not held by the client")
+
+    monkeypatch.setattr(_lib.os, "symlink", _denied)
+    with pytest.raises(RuntimeError) as e:
+        _lib.create_dir_link(tmp_path / "link", tmp_path, traversed_by_build=True)
+    msg = str(e.value)
+    assert "Developer Mode" in msg          # remedy 1
+    assert "mklink /D" in msg               # remedy 2
+    assert "siso" in msg                    # why a junction is not accepted
+
+
+def test_create_dir_link_convenience_link_does_not_need_the_privilege(
+        tmp_path: Path, monkeypatch):
+    """The build/ -> out link is never walked by the build, so it stays a
+    junction: requiring elevation for it would be a cost that buys nothing."""
+    calls = []
+    monkeypatch.setattr(_lib, "is_windows", lambda: True)
+    monkeypatch.setattr(_lib.os, "symlink",
+                        lambda *a, **kw: pytest.fail("must not symlink"))
+    monkeypatch.setattr(_lib.subprocess, "run",
+                        lambda argv, **kw: calls.append(argv))
+    _lib.create_dir_link(tmp_path / "link", tmp_path)
+    assert calls and calls[0][:4] == ["cmd", "/c", "mklink", "/J"]

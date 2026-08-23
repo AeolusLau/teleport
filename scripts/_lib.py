@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,43 @@ def deps_cache_dir() -> Path:
     if env:
         return Path(env)
     return Path.home() / ".cache" / "teleport" / "deps"
+
+
+def depot_tool(name: str) -> str:
+    """Absolute path to a depot_tools launcher (`gclient`, `gn`, `autoninja`).
+
+    Resolved with shutil.which rather than passed to subprocess as a bare name.
+    depot_tools ships each of these twice -- an extensionless POSIX shell script
+    and a `.bat` -- and on Windows the shell script is the one a bare name finds:
+    CreateProcess (what subprocess uses without shell=True) only ever appends
+    .exe, it does not consult PATHEXT, so it matches the extensionless file and
+    fails with "not a valid Win32 application". shutil.which does apply PATHEXT
+    and returns the .bat. On POSIX it simply returns the shell script, so the
+    call site is identical on both platforms.
+    """
+    exe = shutil.which(name)
+    if exe is None:
+        raise RuntimeError(
+            f"{name} not found on PATH -- add depot_tools to PATH "
+            f"(https://chromium.googlesource.com/chromium/tools/depot_tools.git)")
+    return exe
+
+
+def write_text_lf(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Write `content` with LF endings, whatever the host's line separator is.
+
+    Path.write_text opens in text mode with newline=None, which translates every
+    "\n" to os.linesep -- on Windows that silently rewrites the file with CRLF.
+    Every file this repo generates into the checkout is subsequently compared
+    against, or diffed into, an LF artifact: `git apply --reverse --check` is how
+    apply_patches.py decides a patch is already applied, and it needs the context
+    lines to match byte for byte. A CRLF rewrite of a patched file therefore does
+    not corrupt the build -- it breaks idempotency, and the second
+    apply_patches.py run fails with "patch does not apply cleanly" on a tree that
+    is in fact correctly patched.
+    """
+    with open(path, "w", encoding=encoding, newline="\n") as f:
+        f.write(content)
 
 
 def sha256_of(path: Path) -> str:
@@ -86,12 +124,56 @@ def is_windows() -> bool:
     return os.name == "nt"
 
 
-def create_dir_link(link: Path, target: Path) -> None:
+_SYMLINK_REQUIRED_HELP = """\
+{link}
+  -> {target}
+
+must be a real SYMBOLIC LINK on Windows, and creating one needs
+SeCreateSymbolicLinkPrivilege, which this process does not hold.
+
+A directory junction (mklink /J) needs no privilege and is what this script
+uses for links the build system never walks through -- but it will NOT do for
+this one. siso's filesystem layer refuses to traverse a junction, and it does so
+LATE and opaquely: `gn gen` resolves the junction perfectly and reports all
+~31.5k targets, then the build dies before compiling anything with
+
+    error in depfile "out/.../build.ninja.d": deps input
+    "../../../../teleport/BUILD.gn" not exist: store resolve next dir <name> failed
+
+which says nothing about junctions or privileges. Falling back to a junction
+here would trade one clear error for that one, so this fails now instead.
+
+Two ways to fix it, either is enough:
+
+  1. Turn on Developer Mode (Settings -> System -> For developers). Symbolic
+     link creation then works unelevated, and this script needs no special
+     treatment ever again. This is the option to pick.
+
+  2. Create the link once from an ELEVATED prompt -- the privilege is only
+     needed to CREATE it, after which everything uses it unprivileged:
+
+       cmd /c mklink /D "{link}" "{target}"
+
+     Then re-run this script; it will find the link already correct and move on.
+"""
+
+
+def create_dir_link(link: Path, target: Path, *,
+                    traversed_by_build: bool = False) -> None:
     """Create a directory link named `link` pointing at `target`.
 
-    POSIX: symlink. Windows: directory junction (`mklink /J`) — needs no
-    privilege and works for same-volume dirs. Idempotent when the link already
-    points at `target`; raises if it points elsewhere or a real file is in the way.
+    POSIX: always a symlink. Windows: a directory junction (`mklink /J`) by
+    default, because a junction needs no privilege; but a real symbolic link
+    when `traversed_by_build` is set.
+
+    That distinction is not cosmetic. The build system walks INTO the overlay
+    injection link, and siso will not traverse a junction; it will traverse a
+    symlink. Links that exist purely as a convenience for humans (the repo's
+    build/ -> out shortcut) are never walked by the build and stay junctions, so
+    the privileged path is required only where it actually buys something.
+
+    Idempotent when the link already points at `target`; raises if it points
+    elsewhere or a real file is in the way.
     """
     link = Path(link)
     target = Path(target).resolve()
@@ -107,13 +189,19 @@ def create_dir_link(link: Path, target: Path) -> None:
         else:
             raise RuntimeError(f"{link} exists and is not an empty dir or link")
     link.parent.mkdir(parents=True, exist_ok=True)
-    if is_windows():
+    if is_windows() and not traversed_by_build:
         subprocess.run(
             ["cmd", "/c", "mklink", "/J", str(link), str(target)],
             check=True, capture_output=True, text=True,
         )
-    else:
+        return
+    try:
         os.symlink(target, link, target_is_directory=True)
+    except OSError as e:
+        if not is_windows():
+            raise
+        raise RuntimeError(
+            _SYMLINK_REQUIRED_HELP.format(link=link, target=target)) from e
 
 
 def repoint_dir_link(link: Path, target: Path) -> None:

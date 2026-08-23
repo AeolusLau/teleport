@@ -26,7 +26,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _lib import chromium_dir, chromium_src, create_dir_link, repo_root, repoint_dir_link
+from _lib import (chromium_dir, chromium_src, create_dir_link, repo_root,
+                  repoint_dir_link, write_text_lf)
 
 # Name of the symlink this script creates at <chromium>/src/teleport, pointing
 # at <repo>/src. Exported as a named constant (not just a literal below) so
@@ -67,7 +68,7 @@ def ensure_gclient(path: Path) -> None:
     if path.exists() and "checkout_pgo_profiles" in path.read_text():
         return
     verb = "updated" if path.exists() else "wrote"
-    path.write_text(GCLIENT_SOLUTION)
+    write_text_lf(path, GCLIENT_SOLUTION)
     print(f"{verb} {path} (enabled checkout_pgo_profiles)")
 
 
@@ -106,7 +107,11 @@ def main(argv: list[str] | None = None) -> int:
     # Expose them at the repo root via a build/ -> src/out link (not the reverse).
     out = src / "out"
     out.mkdir(parents=True, exist_ok=True)
-    create_dir_link(src / SRC_LINK_NAME, root / "src")
+    # traversed_by_build: the build system walks INTO this one, so on Windows it
+    # must be a real symlink -- siso will not follow a junction. The build/ link
+    # below is only a human convenience (nothing walks through it), so it stays
+    # a junction and needs no privilege. See _lib.create_dir_link.
+    create_dir_link(src / SRC_LINK_NAME, root / "src", traversed_by_build=True)
     repoint_dir_link(root / "build", out)
     print(f"bootstrap complete: {src}/{SRC_LINK_NAME} -> {root}/src, {root}/build -> {out}")
     return 0

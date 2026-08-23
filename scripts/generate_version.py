@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from _lib import chromium_src, repo_root
+from _lib import chromium_src, repo_root, write_text_lf
 
 _FOUR_SEG_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)\.(\d+)$")
 
@@ -62,10 +62,16 @@ def engine_header_content(engine_version: str) -> str:
 
 
 def _write_if_changed(path: Path, content: str) -> bool:
-    if path.exists() and path.read_text() == content:
+    # Compared as BYTES, written as LF. read_text() would normalize a CRLF file
+    # back to LF before comparing, so a file that had once been written with the
+    # host line separator would compare equal to the LF content forever and
+    # never get repaired. Byte comparison sees the difference; write_text_lf
+    # stops it from being introduced in the first place.
+    encoded = content.encode("utf-8")
+    if path.exists() and path.read_bytes() == encoded:
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content)
+    write_text_lf(path, content)
     return True
 
 
