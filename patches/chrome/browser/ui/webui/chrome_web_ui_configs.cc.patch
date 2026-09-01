@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
-index 184305a45acc2..7ebda12a3d772 100644
+index a574524816991..e4fe4c0c39336 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 +++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
-@@ -19,6 +19,8 @@
- #include "chrome/browser/ui/webui/browsing_topics/browsing_topics_internals_ui.h"
+@@ -18,6 +18,8 @@
+ #include "chrome/browser/ui/webui/bluetooth_internals/bluetooth_internals_ui.h"  // nogncheck
  #include "chrome/browser/ui/webui/chrome_finds_internals/chrome_finds_internals_ui.h"
  #include "chrome/browser/ui/webui/chrome_urls/chrome_urls_ui.h"
 +#include "teleport/browser/webui/teleport_enroll_ui.h"
@@ -11,7 +11,7 @@ index 184305a45acc2..7ebda12a3d772 100644
  #include "chrome/browser/ui/webui/commerce/commerce_internals_ui_config.h"
  #include "chrome/browser/ui/webui/components/components_ui.h"
  #include "chrome/browser/ui/webui/connectors_internals/connectors_internals_ui.h"
-@@ -259,6 +261,8 @@ void RegisterChromeWebUIConfigs() {
+@@ -257,6 +259,8 @@ void RegisterChromeWebUIConfigs() {
    map.AddWebUIConfig(
        std::make_unique<chrome_finds_internals::ChromeFindsInternalsUIConfig>());
    map.AddWebUIConfig(std::make_unique<chrome_urls::ChromeUrlsUIConfig>());

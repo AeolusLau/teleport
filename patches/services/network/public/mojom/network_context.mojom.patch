@@ -1,8 +1,8 @@
 diff --git a/services/network/public/mojom/network_context.mojom b/services/network/public/mojom/network_context.mojom
-index 09da137f59543..1b031e01d5222 100644
+index abddef1d201fc..d8ab4416ce16a 100644
 --- a/services/network/public/mojom/network_context.mojom
 +++ b/services/network/public/mojom/network_context.mojom
-@@ -136,6 +136,14 @@ struct CustomProxyConfig {
+@@ -137,6 +137,14 @@ struct CustomProxyConfig {
    // to the CONNECT request. Headers here will overwrite matching headers on
    // the CONNECT request if a custom proxy is used.
    HttpRequestHeaders connect_tunnel_headers;
@@ -17,7 +17,7 @@ index 09da137f59543..1b031e01d5222 100644
  };
  
  // Observer of custom proxy connections, especially for when errors occur.
-@@ -147,9 +155,13 @@ interface CustomProxyConnectionObserver {
+@@ -148,9 +156,13 @@ interface CustomProxyConnectionObserver {
    OnFallback(ProxyChain bad_chain, int32 net_error);
  
    // Called when the response headers for the proxy tunnel request have been

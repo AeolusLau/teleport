@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
-index 99c63b6d6b11f..f04ebed09be83 100644
+index cb38ff470dc94..5dcac49da8064 100644
 --- a/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
 +++ b/chrome/browser/ui/webui/chrome_urls/chrome_urls_handler.cc
 @@ -16,6 +16,7 @@
@@ -10,7 +10,7 @@ index 99c63b6d6b11f..f04ebed09be83 100644
  #include "url/gurl.h"
  
  namespace chrome_urls {
-@@ -95,6 +96,12 @@ void ChromeUrlsHandler::GetUrls(GetUrlsCallback callback) {
+@@ -93,6 +94,12 @@ void ChromeUrlsHandler::GetUrls(GetUrlsCallback callback) {
    }
    // Sort the URLs.
    std::sort(webui_urls.begin(), webui_urls.end(), &CompareWebuiUrlInfos);

@@ -81,13 +81,22 @@ Chromium 的 `src` 仓库本身(不含 DEPS 第三方子仓)打包对象约 **66
 unset TELEPORT_CHROMIUM_DIR                                                          # 见 §5 环境变量陷阱
 export TELEPORT_CHROMIUM_ROOT="${TELEPORT_CHROMIUM_ROOT:-$HOME/workspace/chromium}"  # 显式建立,下面命令按字面展开这个变量才不会踩空(见 §5)
 
-mkdir -p "$TELEPORT_CHROMIUM_ROOT"/151.0.7922      # 按新发布分支号建目录
-git clone --local /path/to/old-checkout/src \
-                  "$TELEPORT_CHROMIUM_ROOT"/151.0.7922/src
+mkdir -p "$TELEPORT_CHROMIUM_ROOT"/<new-branch>    # 按新发布分支号建目录,如 152.0.7977
 
-cd "$TELEPORT_CHROMIUM_ROOT"/151.0.7922/src
-git fetch origin tag 151.0.7922.76                 # 拉新基线 tag 及其增量对象(只这一部分走网络)
-git checkout 151.0.7922.76
+# --no-checkout:clone 默认会 checkout 旧基线的工作树(~40 万文件),而下一步马上又要
+# checkout 新 tag,等于白写一遍。硬链接发生在 .git/objects,与 checkout 无关,跳过是安全的。
+git clone --local --no-checkout /path/to/old-checkout/src \
+                                "$TELEPORT_CHROMIUM_ROOT"/<new-branch>/src
+
+cd "$TELEPORT_CHROMIUM_ROOT"/<new-branch>/src
+
+# 必做,且极易漏:`git clone --local` 把 origin 设成了**源检出的本地路径**,不是上游。
+# 照抄下一行的 `git fetch origin tag <new-tag>` 只会去旧检出里找,而旧检出没有新 tag,
+# 报的是「couldn't find remote ref」,看不出跟 origin 指向有关。
+git remote set-url origin https://chromium.googlesource.com/chromium/src.git
+
+git fetch origin tag <new-tag>                    # 拉新基线 tag 及其增量对象(只这一部分走网络)
+git checkout <new-tag>
 
 # 之后正常走项目的 gclient 编排:
 cd "$TELEPORT_CHROMIUM_ROOT"/151.0.7922
@@ -157,6 +166,36 @@ uv run python scripts/rebase_overlay.py --from-tag 148.0.7778.180 --onto-tag 151
 - **上游对同一处做了结构性重构**(如本次 `static_library("browser")` → `source_set("browser")` 拆分)→ 需要判断改动该落在新结构的哪个位置,记录选了什么、否决了什么,以及为什么。
 - **枚举值/资源 ID 撞车**(如本次 `ProfileManagementFlowController::Step` 新增值与我们的自定义值重号)→ 换成上游未占用的值(**建议选一个远高于当前上游最大值的预留值**,减少下次升级再撞车的概率;本次改成 12,已知 M152 大概率再撞,教训见 §5)。
 - **上游脚本改了真值判断逻辑**(如 `MAJOR=0` 相关的两个 codegen patch)→ **禁止盲目接受三方合并结果**,必须逐条按原语义重新核对,自动合并成功不代表语义仍然正确。
+
+**`git rebase --continue` 报「You must edit all merge conflicts」但 `git status` 说 all conflicts fixed —— index 与工作树脱节**(2026-08-29 M151→M152 实测):
+
+症状是两者直接矛盾:`git status` 明写 `(all conflicts fixed: run "git rebase --continue")`,`git ls-files -u` 与 `git diff --diff-filter=U` 都是空,而 `git rebase --continue` 反复只吐那一行错误(exit 1)。此时 index 仍停在 `orig-head`(**旧**基线 + overlay)的树,工作树却已经是正确的「新基线 + overlay」。
+
+**判据(决定性,不要靠猜)**:
+
+```bash
+IDX=$(git write-tree)
+git diff-tree -r --name-only "$IDX" <old-tag>^{tree} | wc -l   # 若这个数很小(≈overlay 路径数)
+git diff-tree -r --name-only "$IDX" <new-tag>^{tree} | wc -l   # 而这个数很大(数万),index 就是脱节的
+```
+
+逐文件佐证更直观:随便挑一个 overlay 从不触碰、但上游在这两个里程碑之间改过的文件(如 `.clang-format`),比较 `git ls-files --stage <f>` 的 blob 与两个 tag 各自的 blob。
+
+**修复**:
+
+```bash
+git read-tree <new-tag>                 # index := 新基线(不动工作树)
+git status --porcelain -uno             # 安全阀:见下
+git add --pathspec-from-file=<overlay 路径集文件>
+git rebase --continue                   # 一次成功
+```
+
+**安全阀不可省**:`read-tree` 之后先看 `git status --porcelain -uno`,它列出的路径集必须与 overlay 路径集(patch 目标 ∪ branding 目标 ∪ 版本生成物)**双向 `comm` 差集为空**——这才证明工作树确实是干净的 rebase 结果、而不是掺了别的东西。本次实测 156 == 156、两个方向都空。跳过这一步直接 `git add` 等于闭眼提交一棵没人看过的树。
+
+另外两条相关的小坑:
+
+- **`git checkout --ours <path>` 在 rebase 冲突里取到的是 overlay 侧**,与「ours = 正在 rebase 到的分支」的直觉相反。取值前先看清内容,别按直觉用。
+- **BSD 的 `xargs` 不支持 `-a <file>`**(macOS 自带即 BSD 版)。批量暂存用 `git add --pathspec-from-file=<f>`。
 
 冲突全部解决、`git rebase --continue` 到底之后:
 
@@ -238,7 +277,9 @@ autoninja -C out/mac/arm64/dev unit_tests net_unittests services_unittests compo
 # 5/5 —— patches/chrome/browser/policy/browser_dm_token_storage_mac_unittest.cc.patch
 
 ./out/mac/arm64/dev/services_unittests --gtest_filter='*NetworkServiceProxyDelegate*'
-# 3/3 —— patches/services/network/network_service_proxy_delegate_unittest.cc.patch
+# M151 时 3/3;**M152 实测 24/24**(上游自己扩了这个套件)—— 数字会变是正常的,
+# 关键是 --gtest_list_tests 的匹配数与实际执行数一致。
+# patches/services/network/network_service_proxy_delegate_unittest.cc.patch
 
 ./out/mac/arm64/dev/net_unittests --gtest_filter='All/HttpNetworkTransactionTest.ForwardProxy*'
 # 12/12(4 个参数化用例 x 3 组实例化)—— patches/net/http/http_network_transaction_unittest.cc.patch,
@@ -247,6 +288,13 @@ autoninja -C out/mac/arm64/dev unit_tests net_unittests services_unittests compo
 ./out/mac/arm64/dev/components_unittests --gtest_filter='UserAgentUtilsTest.*' --single-process-tests
 # 23/23 —— patches/components/embedder_support/user_agent_utils_unittest.cc.patch
 # --single-process-tests 是必需项,不是可选优化,见上面陷阱 3
+
+./out/mac/arm64/dev/unit_tests --gtest_filter='*TeleportTunnel*'
+# M152 实测 37/37 —— 这条测的是 //teleport 自己的 teleport_tunnel_service_unittest.cc。
+# 它经 patches/chrome/test/BUILD.gn.patch 编进上游 unit_tests,**不在轻量 teleport_unittests 里**
+# (被测的 teleport_tunnel_service.cc 编在 chrome/browser,轻量二进制链不到它,见
+# TD-TUNNEL-UNITTEST-WIRING)。M151 那轮的清单里没有这条,因为 Track T 是之后才落的;
+# 下次升级同样要问一句:自上次升级以来,有没有新的 overlay 测试挂进了上游测试二进制。
 ```
 
 跑 `net_unittests`/`unit_tests` 等**完整**上游套件(而非只跑我们的补丁覆盖 filter)时,还会撞到 §5 的「out 目录深度陷阱」——凡是加载源码树测试数据的上游用例都会失败,与本次升级无关,是这套项目 out 目录布局的固有问题,处置办法见 §5。
@@ -422,7 +470,32 @@ $TELEPORT_CHROMIUM_DIR                                       # 仍可整体覆�
 
 ---
 
-## 本次(M148 148.0.7778.180 → M151 151.0.7922.76)实测数据:下次升级的预期基准
+## 历次里程碑升级实测数据:下次升级的预期基准
+
+> **两次并列的意义**:M151 那次的规模不是常态。M152 这次几乎是「顺滑」的一端(0 个 overlay 源码修复、0 新增 patch、编译一次过),M151 是另一端(Lit 迁移删文件、图标重命名、多轮修复)。排期时按两者之间估,不要只锚定其中一次。
+
+### M151 151.0.7922.76 → M152 152.0.7977.65(2026-08-29)
+
+| 项 | 数据 |
+|---|---|
+| patch 目标被上游改动 | 57 / 121 |
+| **patch / branding 目标被上游删除或改名** | **0 / 0**(M151 那次分别是 3 和 3) |
+| 逐 patch dry-run | 111 CLEAN / 10 3WAY / **0 CONFLICT** |
+| 真实 `rebase --onto` 冲突 | **8 个文件 / 10 个 hunk** |
+| patch 增删 | 121 → 121(59 重写,**0 新增,0 删除**) |
+| overlay 源码(`src/**`)需修文件 | **0** |
+| 需新增的上游修补 patch | **0** |
+| 上游注入点 | **无漂移**,仍是 `chrome/browser/BUILD.gn` 的 `source_set("core")` |
+| 新检出耗时 | clone(硬链接,`--no-checkout`)1.7s + fetch tag 45s + checkout 全树 43s + `gclient sync` 23m41s |
+| 构建 | `//teleport` 单目标 36m;全量 `chrome`+`teleport_unittests` 27m;**一次过,零编译错误** |
+| G1 幂等 | 三次 `apply_patches.py`,工作树 diff sha256 完全一致 |
+| G3 | teleport_unittests 168/168;pytest 362/362;DMToken 5/5;ProxyDelegate 24/24;ForwardProxy 12/12;UserAgentUtils 23/23;TeleportTunnel 37/37 |
+| G3 附带收获 | pytest 的 grdp 注册安全阀**真的抓到 2 个 M152 新引入的品牌泄漏**(`enterprise_strings.grdp` 新增 message、`extensions_chromium_strings.grdp` 新拼入 grd),这是该安全阀在真实升级中的首次生效 |
+| G4 | **PASS**(自动化 + 人工点击全过;纳管全链路与 picker 纳管步骤因需 fairyland 服务端 / gate 开启未做,具名记录) |
+| G5 | **全链路通过**:构建 + 签名 + Sparkle 重签 + 样式 dmg + 公证 + staple,Gatekeeper 报 `Notarized Developer ID`(M151 那轮只到构建,签名/公证/dmg 全未做)。中途踩到 notary 凭据读不到的坑(条目在 iCloud 钥匙串,`security` 与 `notarytool` 都取不到,重跑 `store-credentials` 一分钟解决,见 smoke_check.md)。首次 release 构建暴露一个**与本次升级无关**的潜伏缺陷(`cloud_policy_validator.cc` 的 unused variable,随部署环境三态进入 main,dev 构建结构性抓不到)—— 见 TD-026 的实证段落 |
+| 意外耗时点 | `rebase --continue` 因 index 与工作树脱节而卡住(见 G1 的专门段落);两处 runbook 命令本身有误(clone 后 origin 指向旧检出);G5 首次构建撞上上述潜伏缺陷 |
+
+### M148 148.0.7778.180 → M151 151.0.7922.76(2026-08-06)
 
 | 项 | 数据 |
 |---|---|

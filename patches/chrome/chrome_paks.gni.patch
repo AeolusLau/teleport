@@ -1,8 +1,8 @@
 diff --git a/chrome/chrome_paks.gni b/chrome/chrome_paks.gni
-index 2bd694fc07dfd..e85ad2f132d8d 100644
+index e18c99499d08f..39e1d762aa139 100644
 --- a/chrome/chrome_paks.gni
 +++ b/chrome/chrome_paks.gni
-@@ -577,6 +577,8 @@ template("chrome_extra_paks") {
+@@ -582,6 +582,8 @@ template("chrome_extra_paks") {
          "$root_gen_dir/chrome/app_home_resources.pak",
          "$root_gen_dir/chrome/app_settings_resources.pak",
          "$root_gen_dir/chrome/browser_switch_resources.pak",
@@ -11,7 +11,7 @@ index 2bd694fc07dfd..e85ad2f132d8d 100644
          "$root_gen_dir/chrome/on_device_translation_internals_resources.pak",
          "$root_gen_dir/chrome/signin_history_sync_optin_resources.pak",
          "$root_gen_dir/chrome/updater_resources.pak",
-@@ -587,6 +589,8 @@ template("chrome_extra_paks") {
+@@ -592,6 +594,8 @@ template("chrome_extra_paks") {
          "//chrome/browser/resources/browser_switch:resources",
          "//chrome/browser/resources/signin/history_sync_optin:resources",
          "//chrome/browser/resources/updater:resources",

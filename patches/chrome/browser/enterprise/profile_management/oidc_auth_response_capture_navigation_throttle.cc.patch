@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
-index fbfd3835bae18..fdf84838981cf 100644
+index 8983025e78335..f549d2049cf9e 100644
 --- a/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
 +++ b/chrome/browser/enterprise/profile_management/oidc_auth_response_capture_navigation_throttle.cc
 @@ -31,6 +31,12 @@
@@ -42,12 +42,10 @@ index fbfd3835bae18..fdf84838981cf 100644
  
    // Inserting more supported URLs should be only available on Canary and Dev
    // for security.
-@@ -225,9 +232,48 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
+@@ -225,6 +232,53 @@ ThrottleCheckResult OidcAuthResponseCaptureNavigationThrottle::
      RecordOidcInterceptionFunnelStep(
          OidcInterceptionFunnelStep::kSuccessfulInfoParsed);
  
-+    interception_triggered_ = true;
-+
 +    // teleport build: reroute ALL captured D-domain register-handler OIDC to
 +    // in-place enrollment; the upstream new-profile interceptor is
 +    // unreachable in this product. Its consent dialog
@@ -57,6 +55,13 @@ index fbfd3835bae18..fdf84838981cf 100644
 +    // self-driven in-place registrar, which enrolls the CURRENT profile
 +    // without any dialog, and let the page proceed.
 +    if (!teleport::IsEnrolled(profile)) {
++      // interception_triggered_ is the once-only guard read at the top of this
++      // method. Upstream sets it only on the DEFER path -- M152 moved it below
++      // the interceptor call so an async interception that never started stays
++      // retryable -- but this path unconditionally hands the payload to the
++      // registrar, so it is always "triggered" and must not be re-entered for
++      // the same navigation.
++      interception_triggered_ = true;
 +      VLOG(1) << "[teleport-enroll] rerouting captured X-Profile-"
 +                 "Registration-Payload to in-place registrar";
 +      content::WebContents* wc = navigation_handle()->GetWebContents();
@@ -86,9 +91,8 @@ index fbfd3835bae18..fdf84838981cf 100644
 +      return PROCEED;
 +    }
 +
-     // Kick off interceptor with Oidc token containing encrypted user info, the
-     // interceptor will automatically choose the correct registration method.
--    interception_triggered_ = true;
-     interceptor->MaybeInterceptOidcAuthentication(
-         navigation_handle()->GetWebContents(),
-         ProfileManagementOidcTokens(
++    // Kick off interceptor with Oidc token containing encrypted user info, the
++    // interceptor will automatically choose the correct registration method.
+     const bool async_mode = base::FeatureList::IsEnabled(
+         profile_management::features::kOidcNavigationThrottleAsyncMode);
+ 

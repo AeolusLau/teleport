@@ -1,5 +1,5 @@
 diff --git a/services/network/network_service_proxy_delegate_unittest.cc b/services/network/network_service_proxy_delegate_unittest.cc
-index 6f533552a44c9..220923507780d 100644
+index 105c49784d907..b3bfee1fd399a 100644
 --- a/services/network/network_service_proxy_delegate_unittest.cc
 +++ b/services/network/network_service_proxy_delegate_unittest.cc
 @@ -50,6 +50,7 @@ MATCHER_P2(Contain,
@@ -23,7 +23,7 @@ index 6f533552a44c9..220923507780d 100644
    }
  
   private:
-@@ -165,6 +167,34 @@ TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToTunnelRequest) {
+@@ -166,6 +168,34 @@ TEST_F(NetworkServiceProxyDelegateTest, AddsHeadersToTunnelRequest) {
    EXPECT_THAT(result.value(), Contain("connect", "baz"));
  }
  
@@ -58,7 +58,7 @@ index 6f533552a44c9..220923507780d 100644
  TEST_F(NetworkServiceProxyDelegateTest, OnResolveProxySuccessHttpProxy) {
    auto config = mojom::CustomProxyConfig::New();
    config->rules.ParseFromString("http=foo");
-@@ -493,17 +523,46 @@ TEST_F(NetworkServiceProxyDelegateTest, OnTunnelHeadersReceivedObserved) {
+@@ -494,17 +524,46 @@ TEST_F(NetworkServiceProxyDelegateTest, OnTunnelHeadersReceivedObserved) {
    auto delegate = CreateDelegate(std::move(config));
  
    EXPECT_FALSE(TestObserver()->HeadersReceivedArgs());

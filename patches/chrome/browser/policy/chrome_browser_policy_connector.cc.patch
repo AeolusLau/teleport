@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
-index c475e28588..9d1d130f9f 100644
+index c475e2858878b..9d1d130f9f496 100644
 --- a/chrome/browser/policy/chrome_browser_policy_connector.cc
 +++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
 @@ -42,6 +42,13 @@

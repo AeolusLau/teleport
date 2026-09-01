@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
-index 0b56a0a794734..d0ee7e2d51088 100644
+index 7703641eb892e..e1555a3d28745 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
 +++ b/chrome/browser/ui/views/profiles/profile_picker_flow_controller.h
-@@ -39,6 +39,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
+@@ -43,6 +43,11 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
        StepSwitchFinishedCallback switch_finished_callback,
        base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback);
  
@@ -14,7 +14,7 @@ index 0b56a0a794734..d0ee7e2d51088 100644
    void CancelSigninFlow() override;
  
    std::u16string GetFallbackAccessibleWindowTitle() const override;
-@@ -66,6 +71,18 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
+@@ -70,6 +75,18 @@ class ProfilePickerFlowController : public ProfileManagementFlowControllerImpl {
        bool success,
        const ForceSigninUIError& error);
  

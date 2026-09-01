@@ -1,8 +1,8 @@
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index 973a46b2a34bb..cb00f25ffa3d2 100644
+index a33fe738ba4a3..b4f7fd274989a 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
-@@ -31,6 +31,7 @@ import("//tools/resources/generate_resource_allowlist.gni")
+@@ -32,6 +32,7 @@ import("//tools/resources/generate_resource_allowlist.gni")
  import("//tools/v8_context_snapshot/v8_context_snapshot.gni")
  import("//ui/gl/features.gni")
  import("//v8/gni/v8.gni")
@@ -10,7 +10,7 @@ index 973a46b2a34bb..cb00f25ffa3d2 100644
  
  assert(!is_fuchsia, "Fuchsia shouldn't use anything in //chrome")
  
-@@ -498,7 +499,7 @@ if (is_win) {
+@@ -505,7 +506,7 @@ if (is_win) {
      info_plist = "app/app-Info.plist"
      args = [
        "--breakpad=0",
@@ -19,7 +19,7 @@ index 973a46b2a34bb..cb00f25ffa3d2 100644
        "--bundle_id=$chrome_mac_bundle_id",
      ]
      if (enable_updater) {
-@@ -544,6 +545,11 @@ if (is_win) {
+@@ -552,6 +553,11 @@ if (is_win) {
        deps += [ ":chromium_updater_privileged_helper" ]
      }
  
@@ -31,7 +31,7 @@ index 973a46b2a34bb..cb00f25ffa3d2 100644
      if (enable_stripping) {
        # At link time, preserve the global symbols specified in the .exports
        # file. All other global symbols will be marked as private. The default
-@@ -698,6 +704,15 @@ if (is_win) {
+@@ -706,6 +712,15 @@ if (is_win) {
      }
    }
  
@@ -47,7 +47,7 @@ index 973a46b2a34bb..cb00f25ffa3d2 100644
    action("clean_up_old_versions") {
      script = "//chrome/tools/build/mac/clean_up_old_versions.py"
  
-@@ -854,6 +869,7 @@ if (is_win) {
+@@ -876,6 +891,7 @@ if (is_win) {
      deps = [ ":chrome_helper_plist" ]
      info_plists = get_target_outputs(":chrome_helper_plist") +
                    [ "app/helper-alerts-Info.plist" ]
@@ -55,7 +55,7 @@ index 973a46b2a34bb..cb00f25ffa3d2 100644
    }
  
    # Create and bundle an InfoPlist.strings for the alert helper app.
-@@ -1087,7 +1103,7 @@ if (is_win) {
+@@ -1127,7 +1143,7 @@ if (is_win) {
      args = [
        "--breakpad=0",
        "--keystone=0",

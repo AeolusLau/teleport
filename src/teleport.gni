@@ -56,8 +56,10 @@ declare_args() {
   teleport_release_policy_key_is_real = false
 
   # Named escape hatch for "I know the roots are placeholders; I only want to
-  # exercise the build/sign/package machinery." It stamps TeleportUnpublishable
-  # into the app's Info.plist, which package.py --distribute refuses outright.
+  # exercise the build/sign/package machinery." Setting it makes package.py
+  # stamp TeleportUnpublishable into the app's Info.plist (_package.py, at
+  # packaging time -- NOT at build time, so a bare `autoninja` produces an app
+  # without the stamp), and package.py --distribute then refuses outright.
   # It exists so that validating the pipeline is an explicit, greppable,
   # self-disarming act rather than an ad-hoc `gn gen` override left behind in
   # args.gn forever — which is exactly how TD-026 played out.

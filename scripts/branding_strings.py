@@ -470,6 +470,7 @@ _GRD_TARGETS = (
             "collaboration_strings.grdp",
             "commerce_strings.grdp",
             "contextual_cueing_strings.grdp",
+            "enterprise_strings.grdp",
             "error_page_strings.grdp",
             "heavy_ad_intervention_strings.grdp",
             "history_strings.grdp",
@@ -541,7 +542,9 @@ _GRD_TARGETS = (
             "zh-CN": "extensions/strings/extensions_strings_zh-CN.xtb",
             "zh-TW": "extensions/strings/extensions_strings_zh-TW.xtb",
         },
-        "grdp": (), "inject": (), "sweep_chrome": True,
+        "grdp": ("extensions_chromium_strings.grdp",),
+        "inject": (),
+        "sweep_chrome": True,
     },
     {
         # No zh xtb files upstream (translations section intentionally empty per

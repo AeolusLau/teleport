@@ -74,6 +74,16 @@ def _stub_distributable(monkeypatch, order, *, distribute):
         "git_remote": "origin",
     }
     monkeypatch.setattr(package._config, "load_channel_config", lambda path, ch: dict(cfg))
+    # Must be stubbed: effective_gn_arg shells out to `gn args <out>` against the
+    # REAL checkout. Left unstubbed, these tests read whatever the developer last
+    # generated -- and a release out dir produced through the placeholder-key
+    # escape hatch (which every baseline upgrade's G5 creates) makes package.main
+    # correctly refuse to --distribute, failing six tests that are not about that
+    # guard at all. The guard has its own coverage in
+    # test_distribute_refuses_a_placeholder_ack_build, which stubs this to "true".
+    monkeypatch.setattr(package._build, "effective_gn_arg",
+                        lambda out, arg: None if "placeholder_ack" in arg
+                        else "release")
     monkeypatch.setattr(package._package, "assert_baked_version",
                         lambda app, v: order.append(("assert_baked_version", v)))
     monkeypatch.setattr(package._package, "inject_sparkle_keys",

@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/policy/configuration_policy_handler_list_factory.cc b/chrome/browser/policy/configuration_policy_handler_list_factory.cc
-index 1de30b0c4bf3d..f5bbb8eb558e8 100644
+index cb5407568f376..74fd6326c4a61 100644
 --- a/chrome/browser/policy/configuration_policy_handler_list_factory.cc
 +++ b/chrome/browser/policy/configuration_policy_handler_list_factory.cc
-@@ -152,6 +152,7 @@
+@@ -155,6 +155,7 @@
  #include "media/media_buildflags.h"
  #include "pdf/buildflags.h"
  #include "printing/buildflags/buildflags.h"
@@ -10,7 +10,7 @@ index 1de30b0c4bf3d..f5bbb8eb558e8 100644
  
  #if BUILDFLAG(IS_ANDROID)
  #include "chrome/browser/first_run/android/first_run_prefs.h"
-@@ -3119,7 +3120,12 @@ std::unique_ptr<ConfigurationPolicyHandlerList> BuildHandlerList(
+@@ -3149,7 +3150,12 @@ std::unique_ptr<ConfigurationPolicyHandlerList> BuildHandlerList(
  #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || \
      BUILDFLAG(IS_LINUX)
    signin_legacy_policies.push_back(std::make_unique<SimplePolicyHandler>(
@@ -22,5 +22,5 @@ index 1de30b0c4bf3d..f5bbb8eb558e8 100644
 +      // Map it to the enrollment gate instead, matching BrowserSignin=Force.
 +      key::kForceBrowserSignin, teleport::prefs::kRequireEnrollmentToBrowse,
        base::Value::Type::BOOLEAN));
+ #endif
  
-   handlers->AddHandler(std::make_unique<CloudUserOnlyPolicyChecker>(

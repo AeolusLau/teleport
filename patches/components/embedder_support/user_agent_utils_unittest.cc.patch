@@ -1,5 +1,5 @@
 diff --git a/components/embedder_support/user_agent_utils_unittest.cc b/components/embedder_support/user_agent_utils_unittest.cc
-index 64b27b57c2d6e..7f91834b3b0d6 100644
+index a0696b7bff77e..aecf67292779d 100644
 --- a/components/embedder_support/user_agent_utils_unittest.cc
 +++ b/components/embedder_support/user_agent_utils_unittest.cc
 @@ -25,6 +25,7 @@
@@ -68,7 +68,7 @@ index 64b27b57c2d6e..7f91834b3b0d6 100644
  
    EXPECT_TRUE(ContainsBrandVersion(metadata.brand_full_version_list,
                                     chromium_brand_full_version));
-@@ -866,11 +873,12 @@ TEST_F(UserAgentUtilsTest, GenerateBrandVersionListAdditionalBrandVersions) {
+@@ -871,11 +878,12 @@ TEST_F(UserAgentUtilsTest, GenerateBrandVersionListAdditionalBrandVersions) {
    // Confirm version is correct generated.
    EXPECT_THAT(metadata.SerializeBrandMajorVersionList(),
                testing::HasSubstr("v=\"" +
@@ -83,7 +83,7 @@ index 64b27b57c2d6e..7f91834b3b0d6 100644
  }
  
  TEST_F(UserAgentUtilsTest,
-@@ -1001,7 +1009,7 @@ TEST_F(UserAgentUtilsTest, GetProductAndVersion) {
+@@ -1006,7 +1014,7 @@ TEST_F(UserAgentUtilsTest, GetProductAndVersion) {
    EXPECT_TRUE(re2::RE2::FullMatch(product, kChromeProductVersionRegex,
                                    &major_version, &minor_version,
                                    &build_version));
@@ -92,7 +92,7 @@ index 64b27b57c2d6e..7f91834b3b0d6 100644
    EXPECT_EQ(minor_version, "0");
    EXPECT_NE(build_version, "0");
    // Patch version cannot be tested as it would be set in a release branch.
-@@ -1015,7 +1023,7 @@ TEST_F(UserAgentUtilsTest, GetProductAndVersion) {
+@@ -1020,7 +1028,7 @@ TEST_F(UserAgentUtilsTest, GetProductAndVersion) {
    EXPECT_TRUE(re2::RE2::FullMatch(product, kChromeProductVersionRegex,
                                    &major_version, &minor_version,
                                    &build_version, &patch_version));
@@ -101,7 +101,7 @@ index 64b27b57c2d6e..7f91834b3b0d6 100644
    EXPECT_EQ(minor_version, "0");
    EXPECT_EQ(build_version, "0");
    EXPECT_EQ(patch_version, "0");
-@@ -1027,7 +1035,7 @@ TEST_F(UserAgentUtilsTest, GetUserAgent) {
+@@ -1032,7 +1040,7 @@ TEST_F(UserAgentUtilsTest, GetUserAgent) {
    std::string minor_version;
    EXPECT_TRUE(re2::RE2::PartialMatch(ua, kChromeProductVersionRegex,
                                       &major_version, &minor_version));

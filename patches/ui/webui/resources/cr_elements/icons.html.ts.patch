@@ -1,5 +1,5 @@
 diff --git a/ui/webui/resources/cr_elements/icons.html.ts b/ui/webui/resources/cr_elements/icons.html.ts
-index a89979c25afb9..55f21c6cead63 100644
+index 92823a2e06f16..2320e1e710538 100644
 --- a/ui/webui/resources/cr_elements/icons.html.ts
 +++ b/ui/webui/resources/cr_elements/icons.html.ts
 @@ -115,7 +115,7 @@ div.innerHTML = getTrustedHTML`

@@ -1,8 +1,8 @@
 diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
-index 5c0d36402d728..d01be22c2014a 100644
+index 7e4c3abea6cc6..dd06011d0876c 100644
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
-@@ -18288,6 +18288,17 @@ Please help our engineers fix this problem. Tell us what happened right before y
+@@ -18219,6 +18219,17 @@ Please help our engineers fix this problem. Tell us what happened right before y
        Exit Incognito
      </message>
  

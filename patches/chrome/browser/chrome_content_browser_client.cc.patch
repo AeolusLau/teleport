@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
-index cbac8ed6171b7..679b881bb2c10 100644
+index 8436913e6145a..c6f23dfcc24cc 100644
 --- a/chrome/browser/chrome_content_browser_client.cc
 +++ b/chrome/browser/chrome_content_browser_client.cc
-@@ -779,6 +779,8 @@
+@@ -789,6 +789,8 @@
  #include "chrome/browser/printing/print_preview_dialog_controller.h"
  #endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
  
@@ -11,7 +11,7 @@ index cbac8ed6171b7..679b881bb2c10 100644
  #include "base/win/windows_h_disallowed.h"
  
  using blink::mojom::EffectiveConnectionType;
-@@ -5160,6 +5162,12 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
+@@ -5110,6 +5112,12 @@ void ChromeContentBrowserClient::BrowserURLHandlerCreated(
      part->BrowserURLHandlerCreated(handler);
    }
  

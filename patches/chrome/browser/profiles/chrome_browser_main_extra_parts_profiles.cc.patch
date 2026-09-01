@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
-index faa78dde106bd..4151cd3f067c3 100644
+index 71127aff75a34..5b005d452fce9 100644
 --- a/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
 +++ b/chrome/browser/profiles/chrome_browser_main_extra_parts_profiles.cc
-@@ -511,6 +511,7 @@
+@@ -521,6 +521,7 @@
  #include "chrome/browser/enterprise/signin/oidc_authentication_signin_interceptor_factory.h"
  #include "chrome/browser/enterprise/signin/profile_token_web_signin_interceptor_factory.h"
  #include "chrome/browser/enterprise/signin/user_policy_oidc_signin_service_factory.h"
@@ -10,7 +10,7 @@ index faa78dde106bd..4151cd3f067c3 100644
  #include "chrome/browser/policy/cloud/profile_token_policy_web_signin_service_factory.h"
  #include "chrome/browser/search_integrity/search_integrity_factory.h"  // nogncheck
  #include "chrome/browser/signin/accounts_policy_manager_factory.h"
-@@ -1342,6 +1343,7 @@ void ChromeBrowserMainExtraPartsProfiles::
+@@ -1360,6 +1361,7 @@ void ChromeBrowserMainExtraPartsProfiles::
  #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
    policy::UserPolicyOidcSigninServiceFactory::GetInstance();
  #endif

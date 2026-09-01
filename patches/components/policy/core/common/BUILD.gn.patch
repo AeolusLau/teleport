@@ -1,8 +1,8 @@
 diff --git a/components/policy/core/common/BUILD.gn b/components/policy/core/common/BUILD.gn
-index a09be30459452..a46421ee8d8b1 100644
+index 26362533b4095..74ea343ca9c24 100644
 --- a/components/policy/core/common/BUILD.gn
 +++ b/components/policy/core/common/BUILD.gn
-@@ -236,6 +236,7 @@ source_set("internal") {
+@@ -238,6 +238,7 @@ source_set("internal") {
    ]
  
    deps = [
@@ -10,7 +10,7 @@ index a09be30459452..a46421ee8d8b1 100644
      "//base:i18n",
      "//build:android_buildflags",
      "//components/account_id",
-@@ -497,7 +498,10 @@ static_library("test_support") {
+@@ -500,7 +501,10 @@ static_library("test_support") {
  
  source_set("common_constants") {
    configs += [ "//components/policy:component_implementation" ]

@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/profiles/profile_picker.h b/chrome/browser/ui/profiles/profile_picker.h
-index f32c4a46c50e9..1ccd2e8a514bf 100644
+index 2b00b041d1232..d6e209bd59d49 100644
 --- a/chrome/browser/ui/profiles/profile_picker.h
 +++ b/chrome/browser/ui/profiles/profile_picker.h
-@@ -255,6 +255,17 @@ class ProfilePicker {
+@@ -262,6 +262,17 @@ class ProfilePicker {
        base::OnceCallback<void(bool)> switch_finished_callback,
        base::OnceCallback<void(const ForceSigninUIError&)> on_error_callback);
  

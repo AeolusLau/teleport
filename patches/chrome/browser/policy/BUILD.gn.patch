@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/policy/BUILD.gn b/chrome/browser/policy/BUILD.gn
-index 0c87ecef80282..45396fea45afa 100644
+index d6bafa4aa26b3..cfa535eadee2a 100644
 --- a/chrome/browser/policy/BUILD.gn
 +++ b/chrome/browser/policy/BUILD.gn
-@@ -930,6 +930,7 @@ source_set("impl") {
+@@ -1216,6 +1216,7 @@ source_set("impl") {
    ]
  
    deps = [

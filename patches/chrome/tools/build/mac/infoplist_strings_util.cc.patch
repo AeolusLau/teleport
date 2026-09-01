@@ -1,8 +1,8 @@
 diff --git a/chrome/tools/build/mac/infoplist_strings_util.cc b/chrome/tools/build/mac/infoplist_strings_util.cc
-index f7f70ae956cad..6fe39529c373e 100644
+index f52b1cf14e846..b5c19dfdf1fc7 100644
 --- a/chrome/tools/build/mac/infoplist_strings_util.cc
 +++ b/chrome/tools/build/mac/infoplist_strings_util.cc
-@@ -179,8 +179,11 @@ int main(int argc, char* const argv[]) {
+@@ -177,8 +177,11 @@ int main(int argc, char* const argv[]) {
  
      // For now, assume this is ok for all languages. If we need to, this could
      // be moved into generated_resources.grd and fetched.

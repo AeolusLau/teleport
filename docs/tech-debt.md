@@ -260,7 +260,10 @@
 - **登记日期**:2026-08-06 · **优先级**:**发布阻塞项**——用户已裁定,**必须在 M152 升级前解决**,不是可以无限期搁置的普通 medium。
 - **背景**:上游 M151 把 177 个图标文件重命名为 `*_old.icon`,新增 202 个图标,配合新引入的 `features::kRoundedIcons`/`features::kDesktopGlowUp`(`chrome/browser/about_flags.cc` 的 `rounded-icons`/`desktop-glow-up` flag):关闭时沿用被改名的 `*_old.icon` 路径(=我们已覆盖的那批),打开时改用**新增的**、未被覆盖的路径(如 `components/omnibox/browser/vector_icons/chrome_product.icon`)。本仓库现有 3 个 `branding/` 覆盖(浏览器 logo + 两个 omnibox product 图标)在 rebase 时随上游 rename 检测自动跟到了新的 `*_old.icon` 路径(内容逐字节确认未变,`export_patches.py` 安全阀曾报出这 3 个未分类改动,核实后 `git mv` 到位),但这只覆盖了 `kRoundedIcons`/`kDesktopGlowUp` **关闭**时的路径。
 - **影响**:一旦这两个 feature 被打开,任务管理器、omnibox、应用菜单、PDF 查看器、会话恢复 infobar、默认浏览器 infobar 等 20+ 处 UI 会显示 **Chrome 原版 logo**,而不是 Teleport 品牌——对「企业安全浏览器」的品牌一致性是硬伤,也是用户可感知的信任问题。
-- **当前处置**:无(用户已裁定登记为技术债,不在本轮 M151 基线升级里修)。**当前休眠**:`kRoundedIcons` 与 `kDesktopGlowUp` 均 `FEATURE_DISABLED_BY_DEFAULT`,本项目又经 `disable_fieldtrial_testing_config=true` 把全部 `base::Feature` 钉死在编译期默认值(见 CLAUDE.md「fieldtrial_testing_config 已在构建期关掉」),所以在不显式传 `--enable-features=DesktopGlowUp`/`RoundedIcons` 的前提下,今天的构建不会触发这条路径。**触发条件**:显式命令行传上述 `--enable-features`,或上游在后续里程碑把默认值翻成 `FEATURE_ENABLED_BY_DEFAULT`(功能从实验转正式的常见路径——今天休眠不等于永远休眠)。
+- **当前处置**:无。**2026-08-29 用户再次裁定推迟**:M151→M152 基线升级中不修,继续登记为技术债。
+  - **休眠前提已在 M152 上复核仍成立**:`ui/base/ui_base_features.cc` 中 `kDesktopGlowUp`(:513)与 `kRoundedIcons`(:521)**仍为 `FEATURE_DISABLED_BY_DEFAULT`**,叠加本项目 `disable_fieldtrial_testing_config=true`(编译期钉死),该泄漏路径在 M152 上依旧不会被触发。
+  - **M152 新增同族 feature `kWebUIRoundedIcons`**(`ui_base_features.cc:522`,同样默认关闭)——将来核查 202 个新增图标时需把它一并纳入范围。
+  - 原条目写的「必须在 M152 升级前解决」这一时限**已过期**:M152 升级已完成而本条未解决。时限应重新理解为「**发版前必须解决**」——它是发布阻塞项,不是升级阻塞项,当前由 TD-026 挡着发布这一事实**顺带**掩盖了它。TD-026 一旦解除,本条就是下一个拦路的。**当前休眠**:`kRoundedIcons` 与 `kDesktopGlowUp` 均 `FEATURE_DISABLED_BY_DEFAULT`,本项目又经 `disable_fieldtrial_testing_config=true` 把全部 `base::Feature` 钉死在编译期默认值(见 CLAUDE.md「fieldtrial_testing_config 已在构建期关掉」),所以在不显式传 `--enable-features=DesktopGlowUp`/`RoundedIcons` 的前提下,今天的构建不会触发这条路径。**触发条件**:显式命令行传上述 `--enable-features`,或上游在后续里程碑把默认值翻成 `FEATURE_ENABLED_BY_DEFAULT`(功能从实验转正式的常见路径——今天休眠不等于永远休眠)。
 - **将来方向**:需要先系统性核查 202 个新增图标里哪些实际展示产品 logo(不是所有新增图标都是 logo,可能还有布局/间距变体),再逐一补齐对应的 Teleport 品牌矢量资产(设计产出,非工程一次性能解决,需要提前排期)。**这是下一次(M152)升级前的阻塞项,必须解决,不是可以再往后拖的常规技术债**。
 - **关键引用**:`branding/chrome/app/vector_icons/browser_logo_old.icon`、`branding/components/omnibox/browser/vector_icons/{product_old.icon,product_chrome_refresh_old.icon}`、`components/omnibox/browser/vector_icons/chrome_product.icon`(新增、未覆盖)、`chrome/browser/about_flags.cc`(`rounded-icons`/`desktop-glow-up`)、`.superpowers/sdd/2026-08-06-chromium-milestone-upgrade/task-7-report.md` §6.3。
 
@@ -272,6 +275,9 @@
 - **影响**:任何人在任意基线上尝试 `gn gen` 一个 `teleport_deployment_env="release"` 的配置都会在这一步直接失败;`staging` 同理(其 KMS 公钥待 fairyland T5 的 DKMS 导出)。
 - **当前处置**:本次会话**没有**设置 `teleport_release_policy_key_is_real=true`——那样做等于把占位密钥当真密钥烤进构建产物,恰好是这道 fail-closed 防线存在的目的要阻止的事。为了验证本次 M151 升级需要证明的部分(PGO / Sparkle 链接 / 签名 / 公证 / dmg 出包在新基线上依然工作),改为使用具名逃生口 `teleport_policy_key_placeholder_ack=true`(2026-08-10 引入):产物 Info.plist 被烙上 `TeleportUnpublishable`,且 `package.py --distribute` 硬拒。当年那种「临时覆盖 + 留在 args.gn 里」的做法正是本条技术债长期无人察觉的原因,现已不再需要。
 - **与 `assert_release_endpoints_consistent` 的交互(闸门语义已按发布意图重新收口)**:这个 override 会作为显式文本留在 `<out>/args.gn` 里,被 `scripts/_build.py` 的 `assert_release_endpoints_consistent()` 检测到并与渠道模板比对。该函数的判定轴是**是否真的要 `--distribute`**,不是"渠道是否可发布":`--distribute` 撞上不一致的 override 时硬失败(`SystemExit`,这是这道闸门存在的全部意义,不可弱化);不带 `--distribute` 的验证性运行(例如本条目描述的机制验证,或 `--skip-build`——它本身已经硬拒绝和 `--distribute` 同时出现)撞上同样的不一致时只打印具名 `WARNING` 并继续,不阻断。这条语义是在一次事后复核中收紧的:早先版本按"渠道是否可发布"判定,会连这条 TD-026 工作区所需要的、不带 `--distribute` 的验证性 `package.py --channel canary` 运行也一并拦下,导致「用 override 验证机制」这条处置路径本身走不通——即用来堵住发布风险的闸门,堵住了闸门本该放行的验证场景。修复后两者不再冲突:发布路径依旧被硬性拦截,验证路径被放行且带醒目警告。
+- **2026-08-29 新增实证:这道长期阻断已经开始产生次生缺陷**。M151→M152 升级的 G5 用具名逃生口跑 release 构建时,撞到一个**与本次升级无关**的编译错误:`components/policy/core/common/cloud/cloud_policy_validator.cc` 的 `GetCurrentPolicyVerificationKeys()` 在函数开头无条件取 `command_line`,而它的两个读取点分别包在 `#if BUILDFLAG(IS_CHROMEOS)` 与 `#if !BUILDFLAG(TELEPORT_ENV_IS_RELEASE)` 里——**macOS + release 这一组合把两块都编译掉**,变量成为未使用,触发 `-Werror,-Wunused-variable`。该缺陷随 commit `73457eb`(部署环境三态)进入 `main`,`dev` 构建永远编不到这条路径,因此潜伏至今才由第一次 release 构建暴露。已在 M152 升级分支修复(`[[maybe_unused]]` + 注释说明为何 dev 抓不到)。
+  - **这条实证的意义不在于这个具体的编译错误**(它一分钟就能修),而在于它证明了**「release 配置长期无人构建」本身是一个会持续产出缺陷的状态**:任何只在 `is_official_build=true` / `teleport_env_is_release` 下成立的代码路径,现在都没有任何一道关卡会走到。编译错误是最良性的一类后果——它至少会响。同类潜伏问题里更危险的是那些能编过、但只在 release 下行为不同的(策略验签根集合的选取正是这一类)。
+  - **可立即降低风险的做法(不依赖 KMS 根密钥就位)**:把「带具名逃生口的 release 构建」纳入例行——至少每次基线升级的 G5 必做(本次即如此),将来 CI 建起来后作为一个常驻 job。它不产出可发布产物,但能持续证明 release 配置**编得出来**。
 - **将来方向**:这是密钥管理流程的事,不是升级流程能解决的——需要走 KMS + 离线仪式产出真实生产根密钥,把 `kReleasePolicyKey`/`kPolicyVerificationKeyHash` 替换为真实值后才能解除。在此之前,任何需要出正式 release 包的场景都会撞上这道闸门,应提前规划密钥仪式的时间。
 - **关键引用**:`src/teleport.gni:18-36`、`src/gn/args/release.mac.gn:60`、commit `1adc884`(纳管强制锁 Layer 1)、`scripts/_build.py`(`assert_release_endpoints_consistent`)、`docs/chromium-upgrade-runbook.md` §G5、`.superpowers/sdd/2026-08-06-chromium-milestone-upgrade/progress.md`(Task 12/G5 记录)、`.superpowers/sdd/2026-08-06-chromium-milestone-upgrade/g5-report.md`。
 
@@ -301,19 +307,6 @@
 - **当前处置**:无(Task 7 rebase 时刻意不单方面删除,留给后续做范围决策)。
 - **将来方向**:需要一次性决策:①确认这个函数确实没有其他潜在用途(如未来是否还需要按信任主机白名单校验重定向),若确认无用则删除函数本体(测试里对应的 `EnterpriseTrustedRedirectHosts()` 断言一并删,`EnrollUrl`/`RegisterHandlerUrl` 的断言保留);②若认为将来可能复用,至少加注释说明当前孤儿状态,避免被当作「有效防护」误读。属清理性小改动,可随手处理,不必等到下次里程碑升级。
 - **关键引用**:`src/common/teleport_enterprise_urls.h`、`src/common/teleport_enterprise_urls.cc`、`src/common/teleport_enterprise_urls_unittest.cc:17-23`(`DelegatesToDeploymentDerivation`)、`.superpowers/sdd/2026-08-06-chromium-milestone-upgrade/task-7-report.md` §3.2。
-
-### TD-030 `ProfileManagementFlowController::Step::kTeleportEnrollment` 的自定义枚举值会在下次里程碑升级再次撞车
-
-- **登记日期**:2026-08-06 · **优先级**:P2(不是今天的问题,是下一次里程碑升级**必然**会重新踩的坑,现在花小成本可以永久解决)
-- **背景**:`ProfileManagementFlowController::Step` 是一个**会上报 UMA 指标**的枚举(`LINT.ThenChange(.../profile/enums.xml:ProfileManagementFlowStep)`),本项目在其中追加了自定义值 `kTeleportEnrollment` 承载纳管步骤。M148→M151 升级时,上游新增了 `kFeatureShowcase = 10`、`kFinishOrContinue = 11`,恰好与我们原来的 `kTeleportEnrollment = 10` 数值相撞——复用上游已占用的数值会让 UMA 指标口径错乱。本次 rebase 把值改成了 `kTeleportEnrollment = 12`(选一个**当时**高于全部上游已用值的数字),`kMaxValue` 同步跟随。
-- **影响**:`12` 只是「比 M151 已用值都大」,不是「预留给我们、上游承诺不会用」的值——上游完全可能在 M152(或更早的中间版本)继续往这个枚举里追加新步骤,一旦追加到 12 或更高,同样的撞车会再发生一次,需要再手动挑一个新数字、再改一次 `kMaxValue`、再核对 UMA 口径。这是一个**会在每次遇到该文件冲突的里程碑升级里重复出现**的手工步骤,不是一次性修好的问题。
-- **当前处置**:无(本次仅解决了 M148→M151 这一次撞车)。
-- **将来方向**:把 `kTeleportEnrollment` 改成一个**远超上游当前增长速度、预留出充分余量**的高值(例如 100 或更高;上游这个枚举目前个位数增长,预留到三位数几乎不可能在可预见的里程碑内被追上),一次性终结这类重复撞车。改动只涉及这一个枚举值 + 对应 UMA 桶重新校准(若已上报过带 `12` 的数据需评估历史数据兼容性;若尚未正式发布则没有历史包袱,直接改)。
-- **关键引用**:`patches/chrome/browser/ui/views/profiles/profile_management_flow_controller.h.patch`(`kTeleportEnrollment = 12`)、`.superpowers/sdd/2026-08-06-chromium-milestone-upgrade/task-7-report.md` §3.4。
-
----
-
-> **以下 TD-031 ~ TD-036 来自同一次 M148→M151 基线升级分支的**终审全量评审**(2026-08-06,fix-wave 阶段登记)**。均为评审发现、判定为需要更多设计考量而不在本轮 fix wave 里直接修的问题——按用户指示登记为技术债,而非就地打补丁。
 
 ### TD-031 `export_patches.py` 无法区分「合法小改动」与「modify/delete 冲突误用 `git add` 复活了整个文件」
 
@@ -508,6 +501,15 @@
 ---
 
 ## 已结清
+
+### TD-030 `ProfileManagementFlowController::Step::kTeleportEnrollment` 的自定义枚举值会在里程碑升级反复撞车(已解决)
+
+- **登记日期**:2026-08-06 · **结清日期**:2026-08-29 · **优先级**:P2
+- **背景**:`ProfileManagementFlowController::Step` 是**会上报 UMA** 的枚举,本项目追加自定义值 `kTeleportEnrollment` 承载纳管步骤。M148→M151 时上游新增 `kFeatureShowcase = 10` / `kFinishOrContinue = 11`,与我方当时的 `= 10` 撞号,改成了 `= 12`——但那只是「比当时的最大值大 1」,本条登记时即预言下次必然再撞。
+- **预言应验**:M151→M152 升级中,上游把 **12 号给了 `kDeviceSignalsDisclaimer`**,与我方 `kTeleportEnrollment = 12` 正面撞车,`rebase --onto` 在该文件停下——距上次撞车恰好一个里程碑。
+- **处置(本次升级内一并了结)**:`kTeleportEnrollment` 改为 **100**,`kMaxValue` 跟随;并在代码注释里写明**为什么不再取「当前最大值 +1」**——上游这个枚举按每里程碑一两个的速度增长,100 留出的余量足以覆盖可预见的多个里程碑,而 +1 的选法保证一个里程碑内复发。同批解决的还有随之冲突的两处 switch(`first_run_flow_controller.cc` 与 `profile_management_flow_controller.cc`),两侧 case 并存。
+- **无历史数据包袱**:产品尚未正式发布,不存在已上报的 `12` 桶需要兼容。
+- **关键引用**:`patches/chrome/browser/ui/views/profiles/profile_management_flow_controller.h.patch`(`kTeleportEnrollment = 100`)、commit `32cadb4`(M152 基线升级)。
 
 ### TD-005 release 构建下 Google 登录按钮可见且通向失败流程(已解决:菜单面)
 

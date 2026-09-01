@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/webui/BUILD.gn b/chrome/browser/ui/webui/BUILD.gn
-index 9ad30f708e9cb..9c2be996ef64a 100644
+index 9623fff2d1efc..a21b5884e805f 100644
 --- a/chrome/browser/ui/webui/BUILD.gn
 +++ b/chrome/browser/ui/webui/BUILD.gn
 @@ -8,6 +8,7 @@ import("//components/enterprise/buildflags/buildflags.gni")

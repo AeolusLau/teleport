@@ -1,35 +1,35 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_menu_view.cc b/chrome/browser/ui/views/profiles/profile_menu_view.cc
-index d0f61863c6dae..74e9e1ad1f611 100644
+index f918a7ec35082..876daffc2ef0a 100644
 --- a/chrome/browser/ui/views/profiles/profile_menu_view.cc
 +++ b/chrome/browser/ui/views/profiles/profile_menu_view.cc
-@@ -23,6 +23,7 @@
+@@ -22,6 +22,7 @@
  #include "chrome/app/vector_icons/vector_icons.h"
  #include "chrome/browser/browser_process.h"
  #include "chrome/browser/enterprise/browser_management/browser_management_service.h"
 +#include "chrome/browser/enterprise/browser_management/management_identity.h"
  #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
  #include "chrome/browser/enterprise/util/managed_browser_utils.h"
- #include "chrome/browser/feature_engagement/tracker_factory.h"
-@@ -83,6 +84,7 @@
+ #include "chrome/browser/profiles/batch_upload/batch_upload_service.h"
+@@ -71,6 +72,7 @@
  #include "components/autofill/core/browser/metrics/autofill_settings_metrics.h"
  #include "components/autofill/core/common/autofill_features.h"
  #include "components/feature_engagement/public/feature_constants.h"
 +#include "components/prefs/pref_service.h"
- #include "components/signin/core/browser/signin_error_controller.h"
  #include "components/signin/public/base/consent_level.h"
  #include "components/signin/public/base/signin_metrics.h"
-@@ -99,6 +101,10 @@
+ #include "components/signin/public/base/signin_pref_names.h"
+@@ -83,6 +85,10 @@
+ #include "components/sync/service/sync_service.h"
+ #include "components/user_education/common/new_badge/new_badge_controller.h"
  #include "components/vector_icons/vector_icons.h"
- #include "device/fido/public/features.h"
- #include "net/base/url_util.h"
 +#include "teleport/browser/enterprise/teleport_enrollment_gate.h"
 +#include "teleport/browser/enterprise/teleport_voluntary_signin.h"
 +#include "teleport/common/teleport_pref_names.h"
 +#include "teleport/common/teleport_signin_entry_logic.h"
- #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/l10n/l10n_util.h"
  #include "ui/base/models/image_model.h"
-@@ -429,6 +435,25 @@ void ProfileMenuView::OnSigninButtonClicked(
+ #include "ui/base/ui_base_features.h"
+@@ -417,6 +423,25 @@ void ProfileMenuView::OnSigninButtonClicked(
                                                     access_point);
  }
  
@@ -55,7 +55,7 @@ index d0f61863c6dae..74e9e1ad1f611 100644
  void ProfileMenuView::OnSignoutButtonClicked() {
    DCHECK(ChromeSigninClientFactory::GetForProfile(&profile())
               ->IsClearPrimaryAccountAllowed())
-@@ -692,10 +717,69 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
+@@ -713,10 +738,69 @@ ProfileMenuView::GetIdentitySectionParams(const ProfileAttributesEntry& entry) {
      }
    }
  
@@ -122,13 +122,13 @@ index d0f61863c6dae..74e9e1ad1f611 100644
 +  // IsEnrolled() profile falls through the teleport branch above into the
 +  // sign-in CTA when eligible, so this hunk only fires for the remaining
 +  // (non-regular-profile / web-app) dasherless combinations.
-   if (is_dasherless_profile) {
+   if (entry.IsDasherlessManagement()) {
 -    params.subtitle =
 -        l10n_util::GetStringUTF16(IDS_PROFILES_DASHER_FEATURE_DISABLED_TITLE);
      return params;
    }
  
-@@ -1038,6 +1122,13 @@ void ProfileMenuView::MaybeBuildChromeAccountSettingsButton() {
+@@ -1059,6 +1143,13 @@ void ProfileMenuView::MaybeBuildChromeAccountSettingsButton() {
  void ProfileMenuView::MaybeBuildChromeAccountSettingsButtonWithSync() {
    CHECK(!profile().IsGuestSession());
  

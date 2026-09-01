@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/common/cloud/cloud_policy_validator.cc b/components/policy/core/common/cloud/cloud_policy_validator.cc
-index f41974db1e593..009638301a964 100644
+index f41974db1e593..78d6c53f63019 100644
 --- a/components/policy/core/common/cloud/cloud_policy_validator.cc
 +++ b/components/policy/core/common/cloud/cloud_policy_validator.cc
 @@ -22,6 +22,7 @@
@@ -10,7 +10,7 @@ index f41974db1e593..009638301a964 100644
  #include "components/policy/core/common/cloud/cloud_policy_util.h"
  #include "components/policy/core/common/policy_logger.h"
  #include "components/policy/core/common/policy_switches.h"
-@@ -302,32 +303,39 @@ CloudPolicyValidatorBase::CloudPolicyValidatorBase(
+@@ -302,32 +303,45 @@ CloudPolicyValidatorBase::CloudPolicyValidatorBase(
        dm_token_option_(DM_TOKEN_REQUIRED),
        device_id_option_(DEVICE_ID_REQUIRED),
        canonicalize_user_(false),
@@ -22,9 +22,16 @@ index f41974db1e593..009638301a964 100644
  // static
 -std::optional<std::string>
 -CloudPolicyValidatorBase::GetCurrentPolicyVerificationKey() {
+-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
 +std::vector<std::string>
 +CloudPolicyValidatorBase::GetCurrentPolicyVerificationKeys() {
-   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
++  // Both readers below are conditionally compiled: the ChromeOS test-image
++  // switch, and the Teleport non-release switch added right after it. A release
++  // build on a non-ChromeOS platform compiles both out and leaves this variable
++  // unused, which is -Werror,-Wunused-variable. Only official builds turn that
++  // into a failure, which is why dev builds never surfaced it.
++  [[maybe_unused]] base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
  #if BUILDFLAG(IS_CHROMEOS)
 -  // Empty `verification_key_` is only allowed on Chrome OS test image when
 -  // policy key verification is disabled via command line flag.
@@ -59,7 +66,7 @@ index f41974db1e593..009638301a964 100644
  }
  
  // static
-@@ -442,18 +450,17 @@ void CloudPolicyValidatorBase::RunChecks() {
+@@ -442,18 +456,17 @@ void CloudPolicyValidatorBase::RunChecks() {
  // |new_public_key| in the policy blob.
  bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
  #if BUILDFLAG(IS_CHROMEOS)
@@ -83,7 +90,7 @@ index f41974db1e593..009638301a964 100644
        CheckPublicKeyVerificationData(
            policy_->new_public_key_verification_data(),
            policy_->new_public_key())) {
-@@ -483,8 +490,8 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
+@@ -483,8 +496,8 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
      return false;
    }
  
@@ -94,7 +101,7 @@ index f41974db1e593..009638301a964 100644
            policy_->new_public_key_verification_signature_deprecated())) {
      UMA_HISTOGRAM_ENUMERATION(kMetricKeySignatureVerification,
                                MetricKeySignatureVerification::kFailed);
-@@ -503,6 +510,29 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
+@@ -503,6 +516,29 @@ bool CloudPolicyValidatorBase::CheckNewPublicKeyVerificationSignature() {
    return true;
  }
  
@@ -124,7 +131,7 @@ index f41974db1e593..009638301a964 100644
  bool CloudPolicyValidatorBase::CheckVerificationKeySignatureDeprecated(
      const std::string& key,
      const std::string& verification_key,
-@@ -630,15 +660,13 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckInitialKey() {
+@@ -630,15 +666,13 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckInitialKey() {
  
  CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckCachedKey() {
  #if BUILDFLAG(IS_CHROMEOS)
@@ -143,7 +150,7 @@ index f41974db1e593..009638301a964 100644
        CheckPublicKeyVerificationData(new_cached_key_, cached_key_)) {
      UMA_HISTOGRAM_ENUMERATION(kMetricKeySignatureVerification,
                                MetricKeySignatureVerification::kSuccess);
-@@ -653,8 +681,7 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckCachedKey() {
+@@ -653,8 +687,7 @@ CloudPolicyValidatorBase::Status CloudPolicyValidatorBase::CheckCachedKey() {
        << PolicyTypeLogPrefix(policy_type_, settings_entity_id_)
        << "Cached key new signature verification failed";
  

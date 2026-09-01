@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/resources/settings/people_page/people_page.html b/chrome/browser/resources/settings/people_page/people_page.html
-index 43d3787472585..5a9bd38578981 100644
+index 6d53381f8ddda..68fb919e6f34a 100644
 --- a/chrome/browser/resources/settings/people_page/people_page.html
 +++ b/chrome/browser/resources/settings/people_page/people_page.html
-@@ -184,7 +184,14 @@
+@@ -185,7 +185,14 @@
              label="$i18n{importTitle}"
              on-click="onImportDataClick_"></cr-link-row>
  

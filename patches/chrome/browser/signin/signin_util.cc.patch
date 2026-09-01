@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/signin/signin_util.cc b/chrome/browser/signin/signin_util.cc
-index dc230d613b038..db02cbc627555 100644
+index a95f4834c3752..d853eed3196dd 100644
 --- a/chrome/browser/signin/signin_util.cc
 +++ b/chrome/browser/signin/signin_util.cc
 @@ -46,6 +46,7 @@

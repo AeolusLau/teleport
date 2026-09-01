@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/enterprise/profile_management/profile_management_features.cc b/chrome/browser/enterprise/profile_management/profile_management_features.cc
-index 20f10bb81c771..86ffe662bb40a 100644
+index 26d52e38b9208..d940f38669736 100644
 --- a/chrome/browser/enterprise/profile_management/profile_management_features.cc
 +++ b/chrome/browser/enterprise/profile_management/profile_management_features.cc
 @@ -20,8 +20,11 @@ BASE_FEATURE(kOidcEnrollmentTimeout,

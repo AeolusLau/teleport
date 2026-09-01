@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/net/profile_network_context_service.cc b/chrome/browser/net/profile_network_context_service.cc
-index c30ac8186a526..443b012528ee8 100644
+index c9ae7f58abdc9..e4a5fd44888ce 100644
 --- a/chrome/browser/net/profile_network_context_service.cc
 +++ b/chrome/browser/net/profile_network_context_service.cc
 @@ -99,6 +99,8 @@
@@ -11,7 +11,7 @@ index c30ac8186a526..443b012528ee8 100644
  #include "third_party/blink/public/common/features.h"
  
  #if BUILDFLAG(IS_CHROMEOS)
-@@ -1636,6 +1638,24 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
+@@ -1638,6 +1640,24 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
      }
    }
  #endif  // BUILDFLAG(IS_CHROMEOS)

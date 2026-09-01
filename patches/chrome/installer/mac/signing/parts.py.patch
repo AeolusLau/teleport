@@ -1,5 +1,5 @@
 diff --git a/chrome/installer/mac/signing/parts.py b/chrome/installer/mac/signing/parts.py
-index 17665f76d3d0d..9103dcd94de89 100644
+index d6f110e3296f5..0e45e5e98d3dc 100644
 --- a/chrome/installer/mac/signing/parts.py
 +++ b/chrome/installer/mac/signing/parts.py
 @@ -111,6 +111,58 @@ def get_parts(config):

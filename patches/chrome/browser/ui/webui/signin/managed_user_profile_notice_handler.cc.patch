@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
-index 1ba5d5ac4b88d..d1a827b53cb60 100644
+index 842eb435f8ce8..02936a3ac2f2c 100644
 --- a/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
 +++ b/chrome/browser/ui/webui/signin/managed_user_profile_notice_handler.cc
-@@ -499,16 +499,22 @@ base::DictValue ManagedUserProfileNoticeHandler::GetProfileInfoValue() {
+@@ -533,16 +533,22 @@ base::DictValue ManagedUserProfileNoticeHandler::GetProfileInfoValue() {
        dict.Set("proceedLabel", l10n_util::GetStringUTF8(IDS_DONE));
        break;
      case ManagedUserProfileNoticeUI::ScreenType::kEnterpriseOIDC:

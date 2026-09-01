@@ -1,17 +1,20 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_management_flow_controller.h b/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
-index 3c6617787c3ef..28ec3e203a7d0 100644
+index 881d69279650b..2c4d3560c3184 100644
 --- a/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
 +++ b/chrome/browser/ui/views/profiles/profile_management_flow_controller.h
-@@ -73,7 +73,13 @@ class ProfileManagementFlowController
-     // the First Run Experience.
-     kFinishOrContinue = 11,
+@@ -78,7 +78,16 @@ class ProfileManagementFlowController
+     // part of any profile creation flow.
+     kDeviceSignalsDisclaimer = 12,
  
--    kMaxValue = kFinishOrContinue,
+-    kMaxValue = kDeviceSignalsDisclaimer,
 +    // teleport: hosts the GAIA-free enterprise OIDC enrollment page for a
-+    // force-signin-locked, not-yet-enrolled profile. Numbered above every
-+    // upstream value: this is a logged UMA enum, so the overlay must never
-+    // reuse a value upstream has assigned.
-+    kTeleportEnrollment = 12,
++    // force-signin-locked, not-yet-enrolled profile. This is a logged UMA enum,
++    // so the overlay must never reuse a value upstream has assigned. Numbered
++    // far above upstream's range rather than at "current max + 1": upstream
++    // grows this enum by one or two per milestone, and the +1 choice made at
++    // M151 collided again one milestone later when M152 assigned 12 to
++    // kDeviceSignalsDisclaimer. 100 leaves headroom for decades of milestones.
++    kTeleportEnrollment = 100,
 +
 +    kMaxValue = kTeleportEnrollment,
    };

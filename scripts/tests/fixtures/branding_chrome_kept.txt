@@ -1,7 +1,6 @@
 Chrome Apps
 Chrome Browser
 Chrome Enterprise
-Chrome Extension
 Chrome Remote
 Chrome Root
 Chrome Web

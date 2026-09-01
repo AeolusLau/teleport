@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index bfc8555485593..3c0023e672b88 100644
+index e1d0017fc823e..e947007abd5d5 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
-@@ -864,6 +864,26 @@ source_set("core") {
+@@ -871,6 +871,26 @@ source_set("core") {
      "unexpire_flags.cc",
      "unexpire_flags.h",
      "universal_web_contents_observers.cc",
@@ -29,7 +29,7 @@ index bfc8555485593..3c0023e672b88 100644
    ]
  
    configs += [
-@@ -877,6 +897,9 @@ source_set("core") {
+@@ -884,6 +904,9 @@ source_set("core") {
    }
  
    deps = [
@@ -39,7 +39,7 @@ index bfc8555485593..3c0023e672b88 100644
      ":active_use_util",
      ":after_startup_task_utils",
      ":bad_message",
-@@ -1492,6 +1515,12 @@ source_set("core") {
+@@ -1508,6 +1531,12 @@ source_set("core") {
        "platform_util_mac.mm",
        "process_singleton_mac.mm",
        "shell_integration_mac.mm",
@@ -52,7 +52,7 @@ index bfc8555485593..3c0023e672b88 100644
      ]
  
      deps += [
-@@ -4918,6 +4947,10 @@ group("browser_generated_files") {
+@@ -4924,6 +4953,10 @@ group("browser_generated_files") {
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:attestation_ca_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:google_key_proto",
        "//chrome/browser/enterprise/connectors/device_trust/attestation/common/proto:interface_proto",

@@ -1,20 +1,20 @@
 diff --git a/chrome/test/BUILD.gn b/chrome/test/BUILD.gn
-index 9e2dc913343f7..df67c2ffb3ef5 100644
+index a7bd79373d003..4fd5077b4fe23 100644
 --- a/chrome/test/BUILD.gn
 +++ b/chrome/test/BUILD.gn
-@@ -5586,6 +5586,7 @@ test("unit_tests") {
-     "../browser/enterprise/reporting/report_request_queue_generator_unittest.cc",
-     "../browser/enterprise/reporting/report_scheduler_unittest.cc",
-     "../browser/enterprise/signin/interstitials/managed_profile_required_page_unittest.cc",
+@@ -5087,6 +5087,7 @@ test("unit_tests") {
+     "../browser/chrome_content_browser_client_parts_unittest.cc",
+     "../browser/chrome_content_browser_client_unittest.cc",
+     "../browser/command_updater_impl_unittest.cc",
 +    "//teleport/browser/enterprise/teleport_tunnel_service_unittest.cc",
-     "../browser/enterprise/util/managed_browser_utils_unittest.cc",
      "../browser/file_select_helper_unittest.cc",
      "../browser/font_family_cache_unittest.cc",
-@@ -5822,6 +5823,7 @@ test("unit_tests") {
+     "../browser/font_pref_change_notifier_unittest.cc",
+@@ -5195,6 +5196,7 @@ test("unit_tests") {
      ":test_support",
      ":test_support_unit",
      "//base:base_stack_sampling_profiler_test_util",
 +    "//teleport",
      "//base/test:test_support",
-     "//chrome:dependencies",
      "//chrome:resources",
+     "//chrome:strings",

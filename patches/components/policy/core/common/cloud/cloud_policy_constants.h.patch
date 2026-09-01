@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/common/cloud/cloud_policy_constants.h b/components/policy/core/common/cloud/cloud_policy_constants.h
-index 00f2112912..177c3c857d 100644
+index 7569d49096a27..47fc178948b80 100644
 --- a/components/policy/core/common/cloud/cloud_policy_constants.h
 +++ b/components/policy/core/common/cloud/cloud_policy_constants.h
 @@ -8,6 +8,8 @@
@@ -11,7 +11,7 @@ index 00f2112912..177c3c857d 100644
  
  #include "components/policy/policy_export.h"
  
-@@ -117,10 +119,38 @@ const char* GetChromeUserPolicyType();
+@@ -118,10 +120,38 @@ const char* GetChromeUserPolicyType();
  
  }  // namespace dm_protocol
  

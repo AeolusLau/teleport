@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/views/profiles/profile_picker_view.cc b/chrome/browser/ui/views/profiles/profile_picker_view.cc
-index b6b16dd30d29d..39c23e3dc8d60 100644
+index 39013f9b0d600..2149f71feb17a 100644
 --- a/chrome/browser/ui/views/profiles/profile_picker_view.cc
 +++ b/chrome/browser/ui/views/profiles/profile_picker_view.cc
-@@ -193,6 +193,17 @@ void ProfilePicker::SwitchToReauth(
+@@ -196,6 +196,17 @@ void ProfilePicker::SwitchToReauth(
    }
  }
  
@@ -20,7 +20,7 @@ index b6b16dd30d29d..39c23e3dc8d60 100644
  // static
  void ProfilePicker::SwitchToSignedOutPostIdentityFlow(
      std::optional<SkColor> profile_color) {
-@@ -708,6 +719,13 @@ void ProfilePickerView::SwitchToReauth(
+@@ -748,6 +759,13 @@ void ProfilePickerView::SwitchToReauth(
        std::move(on_error_callback));
  }
  

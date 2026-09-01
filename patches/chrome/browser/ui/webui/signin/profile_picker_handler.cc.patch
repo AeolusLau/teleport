@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/ui/webui/signin/profile_picker_handler.cc b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
-index 8bd4f536ab702..91d2e2db081c2 100644
+index 1bf97bcce5a67..e043f650c42a7 100644
 --- a/chrome/browser/ui/webui/signin/profile_picker_handler.cc
 +++ b/chrome/browser/ui/webui/signin/profile_picker_handler.cc
-@@ -63,6 +63,8 @@
+@@ -64,6 +64,8 @@
  #include "components/signin/public/base/signin_switches.h"
  #include "components/signin/public/identity_manager/account_info.h"
  #include "components/signin/public/identity_manager/tribool.h"
@@ -11,7 +11,7 @@ index 8bd4f536ab702..91d2e2db081c2 100644
  #include "components/startup_metric_utils/browser/startup_metric_utils.h"
  #include "components/sync/base/features.h"
  #include "content/public/browser/url_data_source.h"
-@@ -450,6 +452,20 @@ void ProfilePickerHandler::TryLaunchLockedProfile(
+@@ -454,6 +456,20 @@ void ProfilePickerHandler::TryLaunchLockedProfile(
      return;
    }
  
@@ -32,7 +32,7 @@ index 8bd4f536ab702..91d2e2db081c2 100644
    // Default profile, not yet active, fresh sign in is allowed as the profile
    // was not used yet. Default profile is the automatically created profile,
    // initial profile or after deleting the last profile for example.
-@@ -492,6 +508,16 @@ void ProfilePickerHandler::OnProfileLoadedForSwitchToReauth(Profile* profile) {
+@@ -496,6 +512,16 @@ void ProfilePickerHandler::OnProfileLoadedForSwitchToReauth(Profile* profile) {
                       weak_factory_.GetWeakPtr(), profile->GetPath()));
  }
  
@@ -49,7 +49,7 @@ index 8bd4f536ab702..91d2e2db081c2 100644
  void ProfilePickerHandler::DisplaySigninErrorDialog(
      const base::FilePath& profile_path,
      const std::variant<ForceSigninUIError, SigninUIError>& error) {
-@@ -528,6 +554,11 @@ void ProfilePickerHandler::HandleLaunchGuestProfile(
+@@ -532,6 +558,11 @@ void ProfilePickerHandler::HandleLaunchGuestProfile(
      const base::ListValue& args) {
    // TODO(crbug.com/40123459): Add check |IsGuestModeEnabled| once policy
    // checking has been added to the UI.
@@ -61,7 +61,7 @@ index 8bd4f536ab702..91d2e2db081c2 100644
    ProfilePicker::PickProfile(
        ProfileManager::GetGuestProfilePath(),
        ProfilePicker::ProfilePickingArgs{.open_settings = false,
-@@ -814,12 +845,30 @@ void ProfilePickerHandler::OnProfileStatisticsReceived(
+@@ -818,12 +849,30 @@ void ProfilePickerHandler::OnProfileStatisticsReceived(
  void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
    AllowJavascript();
    CHECK_EQ(1U, args.size());
@@ -97,7 +97,7 @@ index 8bd4f536ab702..91d2e2db081c2 100644
    std::vector<StepSwitchFinishedCallback> callbacks;
    callbacks.emplace_back(base::BindOnce(
        &ProfilePickerHandler::OnLoadSigninFinished, weak_factory_.GetWeakPtr()));
-@@ -831,6 +880,16 @@ void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
+@@ -835,6 +884,16 @@ void ProfilePickerHandler::HandleSelectNewAccount(const base::ListValue& args) {
            .value());
  }
  

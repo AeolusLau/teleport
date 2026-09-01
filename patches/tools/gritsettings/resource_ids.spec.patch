@@ -1,8 +1,8 @@
 diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
-index e1f3030f0c0cc..42cf26b77d15b 100644
+index 24ed276c40a30..cf92b1269f919 100644
 --- a/tools/gritsettings/resource_ids.spec
 +++ b/tools/gritsettings/resource_ids.spec
-@@ -1802,6 +1802,24 @@
+@@ -1798,6 +1798,24 @@
      "includes": [10140],
    },
  

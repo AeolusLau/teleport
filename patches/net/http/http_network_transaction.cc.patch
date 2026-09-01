@@ -1,8 +1,8 @@
 diff --git a/net/http/http_network_transaction.cc b/net/http/http_network_transaction.cc
-index f36a98f4bbf55..829070cb4ab1a 100644
+index c3fc06e7eb03e..2749af8e2f371 100644
 --- a/net/http/http_network_transaction.cc
 +++ b/net/http/http_network_transaction.cc
-@@ -42,6 +42,7 @@
+@@ -44,6 +44,7 @@
  #include "net/base/load_timing_internal_info.h"
  #include "net/base/net_errors.h"
  #include "net/base/proxy_chain.h"
@@ -10,7 +10,7 @@ index f36a98f4bbf55..829070cb4ab1a 100644
  #include "net/base/proxy_server.h"
  #include "net/base/transport_info.h"
  #include "net/base/upload_data_stream.h"
-@@ -1430,6 +1431,28 @@ int HttpNetworkTransaction::BuildRequestHeaders(
+@@ -1432,6 +1433,28 @@ int HttpNetworkTransaction::BuildRequestHeaders(
      modify_headers_callbacks_.Run(&request_headers_);
    }
  

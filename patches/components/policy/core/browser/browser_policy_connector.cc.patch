@@ -1,8 +1,8 @@
 diff --git a/components/policy/core/browser/browser_policy_connector.cc b/components/policy/core/browser/browser_policy_connector.cc
-index 14825f0f01dc4..d9ff3480355ad 100644
+index 6f234c0d5d242..74f4443736c02 100644
 --- a/components/policy/core/browser/browser_policy_connector.cc
 +++ b/components/policy/core/browser/browser_policy_connector.cc
-@@ -29,21 +29,25 @@
+@@ -28,21 +28,25 @@
  #include "components/policy/policy_constants.h"
  #include "components/prefs/pref_registry_simple.h"
  #include "components/signin/public/identity_manager/account_managed_status_finder.h"
@@ -38,7 +38,7 @@ index 14825f0f01dc4..d9ff3480355ad 100644
  
  // The URL suffix for the File Storage Server endpoint in DMServer. File Storage
  // Server receives the requests on this URL.
-@@ -103,17 +107,17 @@ bool BrowserPolicyConnector::ProviderHasPolicies(
+@@ -102,17 +106,17 @@ bool BrowserPolicyConnector::ProviderHasPolicies(
  
  std::string BrowserPolicyConnector::GetDeviceManagementUrl() const {
    return GetUrlOverride(switches::kDeviceManagementUrl,

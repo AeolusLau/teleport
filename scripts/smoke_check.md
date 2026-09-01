@@ -1,4 +1,4 @@
-# 构建与冒烟检查清单(macOS / M151)
+# 构建与冒烟检查清单(macOS / M152)
 
 本清单对应 spec §12 的 definition of done。检出位置默认按发布分支自动派生(`$TELEPORT_CHROMIUM_ROOT/<MAJOR.MINOR.BUILD>`,取 `CHROMIUM_VERSION` 前三段;`$TELEPORT_CHROMIUM_ROOT` 默认 `~/workspace/chromium`);`$TELEPORT_CHROMIUM_DIR` 仍可整体覆盖(仅用于非默认路径,用完需 `unset`)。
 
@@ -8,21 +8,21 @@
 export TELEPORT_CHROMIUM_ROOT="${TELEPORT_CHROMIUM_ROOT:-$HOME/workspace/chromium}"  # 显式建立,下面命令按字面展开
 python scripts/bootstrap.py --skip-sync             # 建链接(已 sync 过)
 python scripts/apply_patches.py                     # 应用 overlay 补丁 + 图标覆盖
-cd "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src   # <release_branch> = CHROMIUM_VERSION 前三段,如 151.0.7922
+cd "$TELEPORT_CHROMIUM_ROOT"/<release_branch>/src   # <release_branch> = CHROMIUM_VERSION 前三段,如 152.0.7977
 gn gen out/mac/arm64/dev --args='import("//teleport/gn/args/dev.mac.gn")'
 autoninja -C out/mac/arm64/dev chrome           # 首次数小时
 ```
 
 ## 冒烟检查
 
-| # | 命令 / 检查 | 期望 | 实测(151.0.7922.76) |
+| # | 命令 / 检查 | 期望 | 实测(152.0.7977.65) |
 |---|---|---|---|
 | 1 | `autoninja ... chrome` | 构建成功 | ✅ `The build has finished successfully.` |
 | 2 | `ls out/mac/arm64/dev/*.app` | `Teleport.app` + `Teleport Helper*.app`(ASCII) | ✅ |
 | 3 | `PlistBuddy -c 'Print :CFBundleIdentifier' Teleport.app/Contents/Info.plist` | `cn.douan.Teleport` | ✅ |
 | 4 | `cmp Teleport.app/Contents/Resources/app.icns branding/.../mac/app.icns` | 一致 | ✅ |
-| 5 | `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport 0.2.0.0`(产品版本,非引擎版本) | ✅ |
-| 6 | 启动并抓 banner(见下) | `[teleport] 闪现 overlay active (M151)`(里程碑由 `TELEPORT_ENGINE_VERSION_MAJOR` 派生,非字面量) | ✅ |
+| 5 | `Teleport.app/Contents/MacOS/Teleport --version` | `Teleport <TELEPORT_VERSION>`(产品版本,非引擎版本) | ✅ `Teleport 0.2.0.1` |
+| 6 | 启动并抓 banner(见下) | `[teleport] 闪现 overlay active (M<里程碑>)`(里程碑由 `TELEPORT_ENGINE_VERSION_MAJOR` 派生,非字面量) | ✅ `M152` |
 | 7 | `apply_patches.py` 重复运行 | 幂等、无报错 | ✅ |
 
 ### 抓启动 banner
@@ -35,7 +35,7 @@ BIN=out/mac/arm64/dev/Teleport.app/Contents/MacOS/Teleport
        --enable-logging --log-file=/tmp/tp.log --v=1 >/dev/null 2>&1 &
 PID=$!; sleep 12; kill "$PID"; wait "$PID" 2>/dev/null
 grep -a "\[teleport\]" /tmp/tp.log
-# 期望:...INFO:../../teleport/browser/teleport_startup.cc:23] [teleport] 闪现 overlay active (M151)
+# 期望:...INFO:../../teleport/browser/teleport_startup.cc:23] [teleport] 闪现 overlay active (M152)
 ```
 
 > dev/release 构建均已通过 GN `disable_fieldtrial_testing_config=true` 钉死字段试验,运行不再需要 `--disable-field-trial-config`(传了也是 no-op)。
@@ -150,3 +150,66 @@ GUI 目视(`chrome://settings/help`、`chrome://version`):zh-CN 显示「闪现�
 | 5 | **并排**:同装裸 `cn.douan.Teleport`(dev/未来 stable)与 `.canary` | 二者可同时运行、各自独立 profile、互不干扰 |
 | 6 | `codesign -dvvv "/Applications/Teleport Canary.app/Contents/Frameworks/.../Teleport Canary Helper (Alerts).app"` 抽查;`codesign --verify --deep --strict "/Applications/Teleport Canary.app"` | 嵌套 Alert Helper bundle id 以 `cn.douan.Teleport.canary` 为前缀;深度校验通过 |
 | 7 | 图标:Dock/Finder 显示的 canary 图标 | 与基底一致(本期最低复用,未做差异化) |
+
+
+## M152 基线升级冒烟(2026-08-29,dev 构建 `152.0.7977.65` / 产品版本 `0.2.0.1`)
+
+对应 `docs/chromium-upgrade-runbook.md` 的 G4 闸门。**本轮为 PASS**(M151 那轮受 keychain 弹窗阻塞只到 PARTIAL;本次未再触发)。
+
+自动化核实:
+
+| 检查 | 结果 |
+|---|---|
+| app bundle 名全 ASCII(`Teleport.app` + 4 个 Helper) | ✅ |
+| `CFBundleIdentifier` = `cn.douan.Teleport`、`CFBundleDisplayName` = 闪现 | ✅ |
+| `app.icns` 与 `branding/` 源逐字节一致 | ✅ |
+| `--version` → `Teleport 0.2.0.1` | ✅ |
+| 启动 banner → `[teleport] 闪现 overlay active (M152)` | ✅ |
+| `teleport_engine_version.h` = `152.0.7977.65`;Info.plist 无引擎版本泄漏 | ✅ |
+| `apply_patches.py` 幂等(三次工作树 diff sha256 一致) | ✅ |
+
+人工点击(**里程碑升级必须人工验的是「编译只能证明符号存在、证明不了行为」的那几处**;本轮这几处正是 rebase 冲突落点):
+
+| 检查 | 为什么这轮必须看 | 结果 |
+|---|---|---|
+| `chrome://version`:闪现 / `0.2.0.1` / UA `Chrome/152.0.0.0` / 全页无 `152.0.7977.65` | 引擎版本换了,UA 与产品版本的分离必须重验 | ✅ |
+| profile 菜单身份块:「登录」按钮 + 副标题,不与管理头部同时出现 | `profile_menu_view.cc` 本轮 3 处冲突,含 header/button 互斥逻辑 | ✅ |
+| dasherless 分支:无「这不是 Google 账号」类副标题 | 判据从 `is_dasherless_profile` 局部变量改为 `entry.IsDasherlessManagement()` | ✅ |
+| 关于页 `chrome://settings/help` | 版本展示与页脚链接 | ✅ |
+| `chrome://policy` 状态框 | 例行 | ✅ |
+| 菜单栏 / Dock 显示「闪现」+ Teleport 图标 | 例行 | ✅ |
+| 中文站点反复搜索不崩 | 确认 `enable_expensive_dchecks=false` 的处置在新基线上依然有效 | ✅ |
+| `--simulate-critical-update` 点亮工具栏升级角标 | `upgrade_detector_impl.cc` patch 本轮被重写(poller 门控在测试路径,防与 Sparkle 抢 BuildState) | ✅ |
+
+**未做(需外部条件,既非通过也非失败)**:
+
+- 纳管全链路(enroll → OIDC → 策略生效):需对端跑 fairyland 服务端。
+- picker 纳管步骤 + 返回按钮:需 `RequireEnrollmentToBrowse` gate 打开(默认 false)。
+
+
+## M152 G5:release 出包链路(2026-08-29,机制验证,产物不可发布)
+
+经具名逃生口 `teleport_policy_key_placeholder_ack=true` 构建(TD-026 未解除,正式 release 仍发不出)。**产物被烙 `TeleportUnpublishable`,`package.py --distribute` 硬拒。**
+
+```bash
+# 前置:fetch_sparkle 必须在 release 构建之前(Sparkle 是链接期依赖)
+uv run python scripts/fetch_sparkle.py
+gn gen out/mac/arm64/release --args='import("//teleport/gn/args/release.mac.gn") teleport_policy_key_placeholder_ack=true'
+autoninja -C out/mac/arm64/release chrome chrome/installer/mac   # 两个 target 都要
+uv run python scripts/package.py --channel canary --skip-build   # 走全自动路径,别手挑步骤
+```
+
+| 检查 | 结果 |
+|---|---|
+| 解析后的 args(用 `gn args --list` 读,不看 args.gn 文本):`chrome_pgo_phase=2` / `is_official_build=true` / `teleport_enable_updater=true` / `enable_update_notifications=true` | ✅ |
+| 烘焙版本 == `TELEPORT_VERSION`(`assert_baked_version`) | ✅ `0.2.0.1` |
+| `Sparkle.framework` 为真实目录(符号链接会在 dmg 里变死链)+ `LC_RPATH @loader_path/../../..` | ✅ |
+| 签名:Developer ID + secure timestamp | ✅ |
+| Sparkle 框架被我方 Developer ID 重签(`parts.py.patch`) | ✅ |
+| `codesign --verify --deep --strict` | ✅ PASS |
+| 样式 dmg:卷名 `Teleport Canary`、bundle id `cn.douan.Teleport.canary` | ✅ 120MB |
+| 公证 + staple | ✅ `Accepted`(2026-09-01);`stapler validate` 通过;Gatekeeper 报 `accepted / source=Notarized Developer ID` |
+
+> **凭据踩坑(2026-08-31)**:公证一度报 `No Keychain password item found for profile: teleport-notary`,而 Keychain Access 里明明看得到该条目。原因是它位于 **iCloud / 本地项目钥匙串**——`security` CLI 访问不到这类同步项(按 service、label、完整 account 三种查法全空),Keychain Access 点「显示密码」也静默失败。**不要在取回旧密码上耗时间**:app-specific password 可在 appleid.apple.com 随时新生成,重跑一次 `xcrun notarytool store-credentials <profile> --apple-id <邮箱> --team-id <TeamID>` 即可,一分钟解决。排除「钥匙串密码与登录密码不同步」用 `security show-keychain-info` + 读一条已知登录钥匙串条目来判定。
+
+> **不要手挑打包步骤**:直接调 `_package.sign_app()` 会跳过 `stage_channel_icons`,签名引擎的 `_replace_icons` 硬依赖 `Assets_<channel>.car`,表现为 `rsync` 退出码 11,看不出跟图标暂存有关。

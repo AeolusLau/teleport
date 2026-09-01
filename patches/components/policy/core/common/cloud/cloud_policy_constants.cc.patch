@@ -1,5 +1,5 @@
 diff --git a/components/policy/core/common/cloud/cloud_policy_constants.cc b/components/policy/core/common/cloud/cloud_policy_constants.cc
-index 7c2ec2e253633..5dd4a001e4cc4 100644
+index f896c5b3b7826..888777068e8d0 100644
 --- a/components/policy/core/common/cloud/cloud_policy_constants.cc
 +++ b/components/policy/core/common/cloud/cloud_policy_constants.cc
 @@ -8,6 +8,7 @@
@@ -10,7 +10,7 @@ index 7c2ec2e253633..5dd4a001e4cc4 100644
  
  #if BUILDFLAG(IS_ANDROID)
  #include "base/android/device_info.h"
-@@ -156,40 +157,176 @@ const char* GetChromeUserPolicyType() {
+@@ -158,40 +159,176 @@ const char* GetChromeUserPolicyType() {
  
  }  // namespace dm_protocol
  
